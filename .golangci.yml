@@ -21,6 +21,7 @@ linters:
     - unconvert
     - unparam
     - unused
+    - wsl_v5
   settings:
     revive:
       rules:
