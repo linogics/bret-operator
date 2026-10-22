@@ -1,0 +1,261 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: restoretests.restore.bret.linogics.io
+spec:
+  group: restore.bret.linogics.io
+  names:
+    kind: RestoreTest
+    listKind: RestoreTestList
+    plural: restoretests
+    shortNames:
+    - rtest
+    singular: restoretest
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.provider
+      name: Provider
+      type: string
+    - jsonPath: .status.lastRun.result
+      name: Last
+      type: string
+    - jsonPath: .status.nextRun
+      name: Next
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RestoreTest schedules restore runs and sets their policy.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec is the desired state of the test.
+            properties:
+              backupSelector:
+                description: BackupSelector chooses which backups the restores read
+                  from.
+                properties:
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: Labels selects backup objects that carry all of these
+                      labels.
+                    type: object
+                  name:
+                    description: Name is the name of one backup object.
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: name or labels must be set
+                  rule: has(self.name) || has(self.labels)
+              blueprintRef:
+                description: BlueprintRef names the check to run against each restored
+                  volume.
+                properties:
+                  name:
+                    description: Name is the name of the RestoreBlueprint in the same
+                      namespace.
+                    type: string
+                required:
+                - name
+                type: object
+              keepOnFailure:
+                default: false
+                description: KeepOnFailure keeps the check pod and restore objects
+                  when the final attempt fails.
+                type: boolean
+              overlapPolicy:
+                default: Skip
+                description: OverlapPolicy decides what happens when a trigger fires
+                  during a run.
+                enum:
+                - Skip
+                - Queue
+                - Replace
+                type: string
+              provider:
+                description: Provider is the backup tool that performs the restores.
+                enum:
+                - velero
+                - volsync
+                - kopiur
+                type: string
+              restoreWindow:
+                default: 45m
+                description: RestoreWindow is the deadline for each attempt.
+                type: string
+              retries:
+                default: {}
+                description: Retries defines how failed attempts are retried.
+                properties:
+                  backoff:
+                    default: 5m
+                    description: Backoff is the wait between attempts.
+                    type: string
+                  count:
+                    default: 0
+                    description: Count is the number of retries after the first attempt.
+                    format: int32
+                    maximum: 10
+                    minimum: 0
+                    type: integer
+                type: object
+              triggers:
+                description: Triggers defines what starts a run.
+                properties:
+                  afterBackup:
+                    description: AfterBackup starts a run after a matching backup
+                      completes.
+                    properties:
+                      delay:
+                        description: Delay is how long to wait after the backup completes
+                          before the run starts.
+                        type: string
+                    type: object
+                  cron:
+                    description: Cron is a 5-field cron schedule evaluated in UTC.
+                    pattern: ^(\S+\s+){4}\S+$
+                    type: string
+                  manual:
+                    default: false
+                    description: Manual enables starting a run by changing the run-now
+                      annotation.
+                    type: boolean
+                type: object
+            required:
+            - backupSelector
+            - blueprintRef
+            - provider
+            - restoreWindow
+            - retries
+            type: object
+          status:
+            description: Status is the observed state of the test.
+            properties:
+              conditions:
+                description: Conditions are the latest observations of the test state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              handledBackups:
+                description: HandledBackups lists backup names already used by an
+                  afterBackup trigger.
+                items:
+                  type: string
+                type: array
+              lastRun:
+                description: LastRun is the outcome of the most recent run.
+                properties:
+                  reason:
+                    description: Reason explains the result.
+                    type: string
+                  result:
+                    description: Result is the outcome of the run.
+                    enum:
+                    - Succeeded
+                    - Failed
+                    type: string
+                  time:
+                    description: Time is when the run finished.
+                    format: date-time
+                    type: string
+                required:
+                - result
+                - time
+                type: object
+              nextRun:
+                description: NextRun is when the next cron run is scheduled.
+                format: date-time
+                type: string
+              retainedResources:
+                description: RetainedResources lists objects kept after a failed run
+                  for debugging.
+                items:
+                  type: string
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

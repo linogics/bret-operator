@@ -1,0 +1,38 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - restore.bret.linogics.io
+  resources:
+  - restoreblueprints
+  - restores
+  - restoretests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - restore.bret.linogics.io
+  resources:
+  - restoreblueprints/finalizers
+  - restores/finalizers
+  - restoretests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - restore.bret.linogics.io
+  resources:
+  - restoreblueprints/status
+  - restores/status
+  - restoretests/status
+  verbs:
+  - get
+  - patch
+  - update

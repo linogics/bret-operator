@@ -1,0 +1,9 @@
+apiVersion: restore.bret.linogics.io/v1alpha1
+kind: RestoreTest
+metadata:
+  labels:
+    app.kubernetes.io/name: bret-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: restoretest-sample
+spec:
+  # TODO(user): Add fields here
