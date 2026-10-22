@@ -1,0 +1,66 @@
+# UNTESTED
+# Restore check for vaultwarden 1.32. SQLite in /data (db.sqlite3, attachments, icons).
+# One PVC. Not run.
+# TAG UNVERIFIED: python image tag could not be confirmed.
+# Canary contract: user bret-canary@example.invalid exists in the users table,
+# seeded before the backup.
+apiVersion: restore.bret.linogics.io/v1alpha1
+kind: RestoreBlueprint
+metadata:
+  name: vaultwarden
+  namespace: default
+spec:
+  restoreMount: /data
+
+  initContainers:
+  - name: sqlite-integrity
+    image: python:3.12-slim-bookworm  # TAG UNVERIFIED
+    command:
+      - python3
+      - -c
+      - |
+        import sqlite3
+        import sys
+
+        # Read-only open: the restored DB must pass integrity_check.
+        conn = sqlite3.connect("file:/data/db.sqlite3?mode=ro", uri=True)
+        if conn.execute("pragma integrity_check").fetchone()[0] != "ok":
+            sys.exit("integrity_check failed")
+
+        # Canary user must exist exactly once.
+        sql = "select count(*) from users where email = ?"
+        count = conn.execute(sql, ("bret-canary@example.invalid",)).fetchone()[0]
+        if count != 1:
+            sys.exit("canary user missing")
+        print("sqlite ok")
+
+  containers:
+  - name: app-start
+    image: vaultwarden/server:1.32.0
+    env:
+    - name: ROCKET_ADDRESS
+      value: 127.0.0.1
+    - name: ROCKET_PORT
+      value: "8080"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+
+        # Start the app in the background and stop it on exit.
+        /vaultwarden >/tmp/vw.log 2>&1 &
+        pid=$!
+        trap 'kill $pid 2>/dev/null || true' EXIT
+
+        # Migrations run on the restored DB while the port comes up (up to 120 s).
+        for i in $(seq 1 120); do
+          curl -fs -o /dev/null http://127.0.0.1:8080/alive && break
+          sleep 1
+        done
+
+        # The health endpoint must answer 200.
+        code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/alive || true)
+        test "$code" = 200
+
+  volumes: []

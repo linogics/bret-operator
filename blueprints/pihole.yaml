@@ -1,0 +1,41 @@
+# UNTESTED
+# DESIGN DELTA: restoredVolumes (not in design §7.1)
+# Two volumes: /etc/pihole (gravity.db, setupVars, custom.list) and /etc/dnsmasq.d.
+# Canary contract: adlist https://bret-canary.invalid/list.txt in gravity.db, and the line
+# "10.0.0.53 bret-canary.test" in /etc/pihole/custom.list, seeded before the backup.
+apiVersion: restore.bret.linogics.io/v1alpha1
+kind: RestoreBlueprint
+metadata:
+  name: pihole
+  namespace: default
+spec:
+  restoredVolumes:
+  - name: etc-pihole
+    mountPath: /etc/pihole
+  - name: dnsmasq
+    mountPath: /etc/dnsmasq.d
+
+  initContainers: []
+
+  containers:
+  - name: check
+    image: pihole/pihole:2024.07.0
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+
+        # gravity.db is structurally sound and holds the canary adlist.
+        sqlite3 /etc/pihole/gravity.db 'pragma integrity_check' | grep -qx ok
+        sql="select count(*) from adlist"
+        sql="$sql where address = 'https://bret-canary.invalid/list.txt'"
+        test "$(sqlite3 /etc/pihole/gravity.db "$sql")" = 1
+
+        # Canary local DNS record is present in the restored config.
+        grep -qx '10.0.0.53 bret-canary.test' /etc/pihole/custom.list
+
+        # dnsmasq config from the restored /etc/dnsmasq.d parses.
+        pihole-FTL dnsmasq-test
+
+  volumes: []

@@ -1,0 +1,47 @@
+# UNTESTED
+# DESIGN DELTA: restoredVolumes (not in design §7.1)
+# Two volumes: config (library.db, jellyfin.db) and media. Mount paths equal the image's paths
+# so library paths stored in the DB still resolve. Media may be very large (see INDEX.md).
+# Canary contract: /media/bret-canary/canary.txt and canary.sha256 (sha256sum format),
+# seeded before the backup.
+apiVersion: restore.bret.linogics.io/v1alpha1
+kind: RestoreBlueprint
+metadata:
+  name: jellyfin
+  namespace: default
+spec:
+  restoredVolumes:
+  - name: config
+    mountPath: /config
+  - name: media
+    mountPath: /media
+
+  initContainers: []
+
+  containers:
+  - name: check
+    image: jellyfin/jellyfin:10.9.11
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+
+        # Start the server on the restored config and stop it on exit.
+        /jellyfin/jellyfin --datadir /config >/tmp/jf.log 2>&1 &
+        pid=$!
+        trap 'kill $pid 2>/dev/null || true' EXIT
+
+        # Wait for the health endpoint to report Healthy (up to 150 s).
+        for i in $(seq 1 150); do
+          curl -fs http://127.0.0.1:8096/health 2>/dev/null | grep -q Healthy && break
+          sleep 1
+        done
+
+        # Server up on the restored config.
+        curl -fs http://127.0.0.1:8096/health | grep -q Healthy
+
+        # Canary media file must match its stored checksum.
+        (cd /media/bret-canary && sha256sum -c canary.sha256)
+
+  volumes: []

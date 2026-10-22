@@ -1,0 +1,104 @@
+# UNTESTED
+# Postgres data dir: PGDATA is <mount>/pgdata (same layout as the spike source).
+# pgdata-perms init sets 0700, Postgres refuses 2770 after restore (spike).
+# DESIGN DELTA: restoredVolumes (not in design §7.1)
+# Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+), gated by
+# startupProbe. Keeps running during the checks. Not in design §7.1 (see INDEX.md).
+# Secret nextcloud-db holds POSTGRES_PASSWORD for the source database.
+apiVersion: restore.bret.linogics.io/v1alpha1
+kind: RestoreBlueprint
+metadata:
+  name: nextcloud
+  namespace: default
+spec:
+  restoredVolumes:
+  - name: html
+    mountPath: /var/www/html
+  - name: pgdata
+    mountPath: /var/lib/postgresql/data
+
+  initContainers:
+  - name: pgdata-perms
+    image: busybox:1.37
+    securityContext:
+      runAsUser: 999
+      runAsGroup: 999
+    env:
+    - name: PGDATA
+      value: /var/lib/postgresql/data/pgdata
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+
+        # Postgres refuses a data dir that is not 0700 or 0750. Restore can leave it wider.
+        test -f "$PGDATA/PG_VERSION"
+        chmod 0700 "$PGDATA"
+  - name: postgres
+    image: postgres:17.12
+    restartPolicy: Always
+    securityContext:
+      runAsUser: 999
+      runAsGroup: 999
+    env:
+    - name: PGDATA
+      value: /var/lib/postgresql/data/pgdata
+    command: ["postgres", "-c", "listen_addresses=127.0.0.1"]
+    startupProbe:
+      exec:
+        command: ["pg_isready", "-h", "127.0.0.1"]
+      periodSeconds: 2
+      failureThreshold: 90
+
+  containers:
+  - name: check
+    image: nextcloud:29-apache
+    securityContext:
+      runAsUser: 33
+      runAsGroup: 33
+      fsGroup: 33
+    envFrom:
+    - secretRef:
+        name: nextcloud-db
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        cd /var/www/html
+
+        # Restored config points at the source DB host; the sidecar serves it on localhost.
+        sed -i "s/'dbhost' => '[^']*'/'dbhost' => '127.0.0.1'/" config/config.php
+
+        # Instance must report installed and pass the core integrity check.
+        php occ status | grep -q 'installed: true'
+        php occ integrity:check-core
+
+        # Canary: DB file size must equal the file on disk
+        # (catches DB and files from different points).
+        cat > /tmp/canary.php <<'PHP'
+        <?php
+        $pdo = new PDO(
+            'pgsql:host=127.0.0.1;dbname=nextcloud',
+            'nextcloud',
+            getenv('POSTGRES_PASSWORD'),
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+        );
+        $row = $pdo->query(
+            "select size from oc_filecache where path = 'files/bret-canary.txt'"
+        )->fetch();
+        if (!$row) {
+            fwrite(STDERR, "canary missing from oc_filecache\n");
+            exit(1);
+        }
+        $disk = filesize('/var/www/html/data/bret-canary/files/bret-canary.txt');
+        if ((int) $row['size'] !== $disk) {
+            fwrite(STDERR, "db size {$row['size']} != disk $disk\n");
+            exit(1);
+        }
+        echo "canary ok\n";
+        PHP
+        php /tmp/canary.php
+
+  volumes: []

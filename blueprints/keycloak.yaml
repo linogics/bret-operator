@@ -1,0 +1,90 @@
+# UNTESTED
+# Postgres data dir: PGDATA is <mount>/pgdata (same layout as the spike source).
+# pgdata-perms init sets 0700, Postgres refuses 2770 after restore (spike).
+# Restore check for keycloak 26.0. Database-only: state lives in an external PostgreSQL,
+# restored to /var/lib/postgresql/data. Not run.
+# TAG UNVERIFIED: keycloak tag could not be confirmed.
+# Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+), gated by
+# startupProbe. Not in design §7.1 (see INDEX.md).
+# Canary contract: realm bret-canary in the restored DB. Secret keycloak-db holds KC_DB_PASSWORD.
+apiVersion: restore.bret.linogics.io/v1alpha1
+kind: RestoreBlueprint
+metadata:
+  name: keycloak
+  namespace: default
+spec:
+  restoreMount: /var/lib/postgresql/data
+
+  initContainers:
+  - name: pgdata-perms
+    image: busybox:1.37
+    securityContext:
+      runAsUser: 999
+      runAsGroup: 999
+    env:
+    - name: PGDATA
+      value: /var/lib/postgresql/data/pgdata
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+
+        # Postgres refuses a data dir that is not 0700 or 0750. Restore can leave it wider.
+        test -f "$PGDATA/PG_VERSION"
+        chmod 0700 "$PGDATA"
+  - name: postgres
+    image: postgres:17.12
+    restartPolicy: Always
+    securityContext:
+      runAsUser: 999
+      runAsGroup: 999
+    env:
+    - name: PGDATA
+      value: /var/lib/postgresql/data/pgdata
+    command: ["postgres", "-c", "listen_addresses=127.0.0.1"]
+    startupProbe:
+      exec:
+        command: ["pg_isready", "-h", "127.0.0.1"]
+      periodSeconds: 2
+      failureThreshold: 90
+
+  containers:
+  - name: check
+    image: quay.io/keycloak/keycloak:26.0  # TAG UNVERIFIED
+    env:
+    - name: KC_DB
+      value: postgres
+    - name: KC_DB_URL
+      value: jdbc:postgresql://127.0.0.1:5432/keycloak
+    - name: KC_DB_USERNAME
+      value: keycloak
+    - name: KC_HEALTH_ENABLED
+      value: "true"
+    envFrom:
+    - secretRef:
+        name: keycloak-db
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+
+        # Start runs Liquibase migrations against the restored schema.
+        /opt/keycloak/bin/kc.sh start --http-enabled=true --hostname-strict=false \
+            >/tmp/kc.log 2>&1 &
+        pid=$!
+        trap 'kill $pid 2>/dev/null || true' EXIT
+
+        # Wait for readiness (up to 170 s), then require status UP.
+        for i in $(seq 1 170); do
+          curl -fs http://127.0.0.1:9000/health/ready >/dev/null 2>&1 && break
+          sleep 1
+        done
+        curl -fs http://127.0.0.1:9000/health/ready | grep -q '"status": "UP"'
+
+        # Canary realm must be served with its OIDC discovery document.
+        curl -fs \
+            http://127.0.0.1:8080/realms/bret-canary/.well-known/openid-configuration >/dev/null
+
+  volumes: []

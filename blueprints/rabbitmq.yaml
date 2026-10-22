@@ -1,0 +1,48 @@
+# UNTESTED
+# Restore check for rabbitmq 3.13 (management image). Files-only: mnesia dir, message store.
+# Not run.
+# Canary contract: queue bret.canary holding BRET_CANARY_MESSAGES messages,
+# seeded before the backup.
+apiVersion: restore.bret.linogics.io/v1alpha1
+kind: RestoreBlueprint
+metadata:
+  name: rabbitmq
+  namespace: default
+spec:
+  restoreMount: /var/lib/rabbitmq
+
+  initContainers: []
+
+  containers:
+  - name: check
+    image: rabbitmq:3.13-management
+    securityContext:
+      runAsUser: 999
+      fsGroup: 999
+    env:
+    - name: RABBITMQ_NODENAME
+      # Must equal the source node; mnesia is tied to it.
+      value: rabbit@rabbitmq-0.rabbitmq-headless
+    - name: BRET_CANARY_MESSAGES
+      value: "1"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+
+        # Start the broker in the background and stop it on exit.
+        rabbitmq-server -detached
+        trap 'rabbitmqctl stop >/dev/null 2>&1 || true' EXIT
+
+        # Node must boot, report running, and raise no local alarms.
+        rabbitmqctl await_startup --timeout 180
+        rabbitmq-diagnostics -q check_running
+        rabbitmq-diagnostics -q check_local_alarms
+
+        # Canary queue must hold the seeded message count.
+        count=$(rabbitmqctl list_queues -q name messages \
+            | awk '$1 == "bret.canary" {print $2}')
+        test "$count" = "$BRET_CANARY_MESSAGES"
+
+  volumes: []
