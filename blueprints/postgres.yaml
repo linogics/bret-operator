@@ -51,8 +51,10 @@ spec:
         trap 'pg_ctl -D "$PGDATA" -m fast stop || true' EXIT
 
         # Structural check of every btree index and heap page, all databases.
+        # amcheck is an extension. Create it in the scratch copy, not in the source.
         sql="select datname from pg_database where datallowconn"
         for db in $(psql -h /tmp -U postgres -tAc "$sql"); do
+          psql -h /tmp -U postgres -d "$db" -qc "create extension if not exists amcheck"
           pg_amcheck -h /tmp -U postgres -d "$db" --heapallindexed
         done
 
