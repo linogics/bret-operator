@@ -1,0 +1,96 @@
+name: Release
+
+# Runs on tags like v0.1.0 (or v0.2.0-rc.1). Publishes:
+#   - container image ghcr.io/linogics/bret-operator:<version> (amd64 and arm64)
+#   - Helm chart oci://ghcr.io/linogics/charts/bret-operator:<version>
+#   - GitHub release with dist/install.yaml (plain manifests) and the chart .tgz
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/linogics/bret-operator
+  CHART_REPO: oci://ghcr.io/linogics/charts
+
+jobs:
+  release:
+    name: Build and publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Releasing $VERSION"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: make test
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.VERSION }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build plain install manifests
+        run: make build-installer IMG=${{ env.IMAGE }}:${{ env.VERSION }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.22.1
+
+      - name: Package chart
+        run: make helm-package VERSION=$VERSION
+
+      - name: Push chart to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push "dist/bret-operator-$VERSION.tgz" "$CHART_REPO"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prerelease_flag=""
+          case "$VERSION" in *-*) prerelease_flag="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/install.yaml#install.yaml" \
+            "dist/bret-operator-$VERSION.tgz" \
+            --title "bret-operator $VERSION" \
+            --generate-notes \
+            $prerelease_flag

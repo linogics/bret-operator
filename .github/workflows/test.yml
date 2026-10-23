@@ -2,22 +2,37 @@ name: Tests
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
-    name: Run on Ubuntu
+  unit:
+    name: Unit and envtest
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
 
-      - name: Setup Go
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
-      - name: Running Tests
+      - name: Check go.mod is tidy
         run: |
           go mod tidy
-          make test
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Run tests
+        run: make test
+
+      - name: Upload coverage profile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: cover.out
+          if-no-files-found: ignore

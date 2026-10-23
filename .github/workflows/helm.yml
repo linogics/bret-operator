@@ -1,0 +1,41 @@
+name: Helm chart
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  chart:
+    name: Chart is in sync and lints
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.22.1
+
+      - name: Copy CRDs and RBAC into the chart
+        run: make helm-sync
+
+      - name: Fail if the chart drifted from config/
+        run: |
+          if [ -n "$(git status --porcelain -- charts)" ]; then
+            git status --porcelain -- charts
+            echo "Chart is out of sync with config/. Run: make helm-sync && git add charts"
+            exit 1
+          fi
+
+      - name: Lint and render
+        run: make helm-lint
