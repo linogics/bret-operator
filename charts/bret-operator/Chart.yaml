@@ -1,0 +1,23 @@
+apiVersion: v2
+name: bret-operator
+description: Kubernetes operator that tests backups by restoring them from Velero, VolSync or Kopiur and running a check against the restored data.
+type: application
+# Chart version and appVersion are set by `make helm-package VERSION=x.y.z` in the release workflow.
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.29.0-0"
+home: https://github.com/linogics/bret-operator
+icon: https://raw.githubusercontent.com/linogics/bret-operator/main/docs/bret.png
+sources:
+  - https://github.com/linogics/bret-operator
+keywords:
+  - backup
+  - restore
+  - velero
+  - volsync
+  - kopiur
+  - operator
+  - disaster-recovery
+maintainers:
+  - name: Tobias M.
+    url: https://github.com/linogics

@@ -1,0 +1,5 @@
+processor:
+  ignoreTypes:
+    - "(Restore|RestoreTest|RestoreBlueprint)List$"
+render:
+  kubernetesVersion: "1.33"

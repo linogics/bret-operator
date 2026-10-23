@@ -1,0 +1,15 @@
+bret-operator {{ .Chart.AppVersion }} is installed in namespace {{ .Release.Namespace }}.
+
+Check the manager:
+  kubectl -n {{ .Release.Namespace }} get deploy,pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "bret-operator.fullname" . }}
+
+CRDs installed: restores, restoretests, restoreblueprints (restore.bret.linogics.io/v1alpha1).
+Helm installs CRDs once. It does not upgrade or delete them. See docs/installation.md.
+
+Next steps: docs/getting-started.md
+{{- if .Values.metrics.enabled }}
+
+Metrics: service {{ include "bret-operator.fullname" . }}-metrics on port {{ .Values.metrics.port }}.
+{{- if .Values.metrics.secure }} Scraping needs a bearer token whose service account may GET the /metrics non-resource URL.{{- end }}
+{{- end }}

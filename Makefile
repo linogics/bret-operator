@@ -220,6 +220,40 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
+##@ Docs
+
+.PHONY: docs
+docs: crd-ref-docs helm-docs ## Regenerate the API reference (docs/reference/api.md) and the chart README.
+	$(CRD_REF_DOCS) --source-path=./api/v1alpha1 --config=docs/reference/crd-ref-docs.yaml --renderer=markdown --output-path=docs/reference/api.md
+	$(HELM_DOCS) --chart-search-root=charts
+
+.PHONY: docs-check
+docs-check: docs ## Fail if generated docs or chart files are out of date (CI gate).
+	@if [ -n "$$(git status --porcelain -- docs/reference charts)" ]; then \
+		echo "Generated docs or chart files are stale. Run 'make docs helm-sync' and commit the result."; \
+		git status --porcelain -- docs/reference charts; \
+		exit 1; \
+	fi
+
+##@ Helm
+
+CHART_DIR ?= charts/bret-operator
+
+.PHONY: helm-sync
+helm-sync: manifests ## Copy CRDs and RBAC rules from config/ into the Helm chart.
+	cp config/crd/bases/*.yaml $(CHART_DIR)/crds/
+	python3 hack/helm/sync_rbac.py config/rbac $(CHART_DIR)/templates
+
+.PHONY: helm-lint
+helm-lint: helm-sync ## Lint the Helm chart and render it with default values.
+	helm lint $(CHART_DIR) --strict
+	helm template bret $(CHART_DIR) >/dev/null
+
+.PHONY: helm-package
+helm-package: helm-lint ## Package the chart into dist/ with VERSION as chart and app version.
+	mkdir -p dist
+	helm package $(CHART_DIR) --destination dist --version $(VERSION) --app-version $(VERSION)
+
 ##@ Dependencies
 
 ## Location to install dependencies to
@@ -242,7 +276,21 @@ CONTROLLER_TOOLS_VERSION ?= v0.18.0
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
-GOLANGCI_LINT_VERSION ?= v2.1.0
+GOLANGCI_LINT_VERSION ?= v2.15.0
+CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
+CRD_REF_DOCS_VERSION ?= v0.3.0
+HELM_DOCS ?= $(LOCALBIN)/helm-docs
+HELM_DOCS_VERSION ?= v1.14.2
+
+.PHONY: crd-ref-docs
+crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
+$(CRD_REF_DOCS): $(LOCALBIN)
+	$(call go-install-tool,$(CRD_REF_DOCS),github.com/elastic/crd-ref-docs,$(CRD_REF_DOCS_VERSION))
+
+.PHONY: helm-docs
+helm-docs: $(HELM_DOCS) ## Download helm-docs locally if necessary.
+$(HELM_DOCS): $(LOCALBIN)
+	$(call go-install-tool,$(HELM_DOCS),github.com/norwoodj/helm-docs/cmd/helm-docs,$(HELM_DOCS_VERSION))
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
