@@ -1,135 +1,192 @@
-# Writing and using RestoreBlueprints
+# Writing RestoreBlueprints
 
-Status: design. The `RestoreBlueprint` type is a scaffold in the code. All blueprints in
-`blueprints/` are **UNTESTED**. None were run. Test each one on a kind cluster before use.
+A `RestoreBlueprint` is the check. It is a pod template. The operator creates a pod from it,
+mounts the restored volume, and runs it. The pod's exit code is the verdict. The operator does
+not read logs.
 
-## What a blueprint is
+- Exit code 0 from every check container: the check passes.
+- Any other exit code: the attempt fails.
 
-A `RestoreBlueprint` is a `PodSpec`-shaped template. The operator creates a pod from it,
-attaches the restored volume, and runs the pod. Pod exit code is the verdict:
+Any image and any language work: bash, Python, a Go binary, `psql`, `php occ`, `mysqlcheck`,
+anything that exits with a code. The check runs in its own image, not in the application image.
 
-- Every check container exits 0: the check passes.
-- Any non-zero exit: the attempt fails (design §7.1, §10).
+Start with [examples/restoreblueprint-minimal.yaml](../examples/restoreblueprint-minimal.yaml).
+It is the smallest check that works, and it is tested.
 
-The operator does not read logs or parse output. Only exit codes count.
-
-Any image and any language work. Bash, Python, a Go binary, `psql`, `php occ`, or anything else.
-
-## Single volume: restoreMount
-
-Use `restoreMount` for an app with one PVC.
+## Anatomy
 
 ```yaml
 apiVersion: restore.bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
-  name: postgres
-  namespace: default
+  name: orders-db-check
+  namespace: data
 spec:
-  restoreMount: /var/lib/postgresql/data
-  containers:
-  - name: check
-    image: postgres:16.4
-    command: [/bin/sh, -c, "..."]
+  restoreMount: /var/lib/postgresql/data     # one restored volume, mounted here
+  initContainers: []                         # run first, in order
+  containers:                                # the checks; all must exit 0
+    - name: check
+      image: postgres:17.12
+      command: ["/bin/sh", "-c", "pg_isready --version && ..."]
+  scratchVolumes: []                         # extra empty volumes, one per attempt
+  volumes: []                                # ConfigMaps and Secrets the pod needs
 ```
 
-The restored volume is mounted at `restoreMount` in every container.
+| Field | Required | Meaning |
+|---|---|---|
+| `restoreMount` | one of `restoreMount` or `restoredVolumes` | Mount path of the single restored volume. It is mounted in every init and check container. |
+| `restoredVolumes` | one of the two | List of `{name, mountPath}` for apps with several volumes. Each entry is its own restored volume. |
+| `initContainers` | no | Run before the checks. A native sidecar (see below) also goes here. |
+| `containers` | yes, at least one | The check containers. Exit code 0 means pass. |
+| `scratchVolumes` | no | `{name, mountPath, storageClassName, size}`. Empty PVCs created per attempt. |
+| `volumes` | no | Extra pod volumes, for example a ConfigMap with a check script. |
 
-## Several volumes: restoredVolumes (design delta, proposed)
+Set exactly one of `restoreMount` and `restoredVolumes`. The API rejects both or neither.
 
-Use `restoredVolumes` for an app with two or more PVCs. Each restored volume is its own
-PVC, restored from the same backup point. Mount each one at the path the app used in
-production. Then absolute paths in the app config still work.
+## Verdict rules
+
+- Pod `Succeeded`: pass. Pod `Failed`: fail. The operator reads the pod phase.
+- An init container that exits non-zero fails the attempt before the checks run.
+- A check that hangs is stopped by `restoreWindow` (see [restoretest-guide.md](restoretest-guide.md)).
+- Test each check with a broken input. Make the expected value wrong once and confirm exit 1.
+  The spike did this and the check failed as it should.
+
+## One volume: restoreMount
+
+Use `restoreMount` when the application has one volume.
+
+Key rule: the mount path must be the path the application used in production. Absolute paths in
+the application's config then still resolve on the restored copy.
+
+## Several volumes: restoredVolumes
+
+Use `restoredVolumes` when the application has two or more volumes, for example a web root
+plus a database directory:
 
 ```yaml
 spec:
   restoredVolumes:
-  - name: html
-    mountPath: /var/www/html
-  - name: pgdata
-    mountPath: /var/lib/postgresql/data
+    - name: html                 # the restored volume's key, see below
+      mountPath: /var/www/html
+    - name: mysql
+      mountPath: /var/lib/mysql
 ```
 
-Design §7.1 does not have this field. See [crds.md](crds.md#restoredvolumes-design-delta-proposed).
+How the names map to volumes: when you test with `hack/blueprint-test`, the restored PVC for
+the key `html` is named `r-html`. The operator's name mapping is planned with the controller.
 
-## Init containers and sidecars
+## Scratch volumes
 
-- `initContainers` run before the check containers, per design §7.1.
-- The blueprints also use init containers as native sidecars: `restartPolicy: Always`
-  plus a `startupProbe`. The sidecar keeps running while the checks run. This needs
-  Kubernetes 1.29 or later. The design does not have this yet. Used by `nextcloud.yaml`
-  (postgres) and `keycloak.yaml`, and mentioned for `wordpress` and `postgres`-backed apps.
-- Use a native sidecar when the check needs a database server running next to it.
+Some checks need space the restore does not give them. Examples: unpacking a dump, or a
+database that writes temporary files outside the restored data.
+
+```yaml
+spec:
+  scratchVolumes:
+    - name: work
+      mountPath: /work
+      storageClassName: fast-ssd   # empty = cluster default
+      size: 20Gi
+```
+
+Rules (design §7.1):
+
+- The operator creates one PVC per scratch volume per attempt, owned by the `Restore`.
+- Scratch PVCs are deleted with the attempt. With `keepOnFailure` they are kept.
+- `size` is required. Set it to what the check needs, not what the source had.
+- The restored volume's default size is the source volume's capacity. A restore into a volume
+  that is too small fails early with `InsufficientCapacity` (planned).
+
+## Native sidecars
+
+A check often needs a database server running next to it, for example Keycloak or Nextcloud
+checking against Postgres. Use a native sidecar: an init container with `restartPolicy: Always`.
+It starts before the checks and keeps running while they run. Kubernetes 1.29 or newer is
+required.
+
+```yaml
+spec:
+  initContainers:
+    - name: postgres
+      image: postgres:17.12
+      restartPolicy: Always
+      startupProbe:
+        exec:
+          command: ["/bin/sh", "-c", "pg_isready -h /tmp"]
+        periodSeconds: 2
+        failureThreshold: 60
+```
+
+Design §7.1 describes `initContainers` as run-to-completion. Native sidecars are an extension
+the blueprints use. The design needs a decision before the controller ships.
 
 ## Canary convention
 
-Every data app needs a canary. This proves the data is readable, not just present.
+A check that only starts the app proves little. The canary proves the data is readable and
+unchanged.
 
-1. Before the backup, the seeding job writes a canary. It is a row, file, document or
-   object. It holds a payload and the sha256 of that payload.
-2. The check reads the canary from the restored data and recomputes the sha256.
-3. The check passes only when the recomputed hash matches the stored one.
+1. Before the backup, the seed writes a canary: a row, file, document or object, with a
+   payload and the SHA-256 of that payload.
+2. The check reads the canary from the restored data and recomputes the SHA-256.
+3. The check passes only if the hashes match.
 
-Examples from the blueprints:
+Postgres example (from [blueprints/postgres.yaml](../blueprints/postgres.yaml)):
 
-- Postgres: table `bret_canary(id int, payload text, sha256 text)` in db `app`. Row `id=1`.
-  The check runs `encode(sha256(payload::bytea), 'hex')` and compares it to `sha256`.
-- Nextcloud: the DB size of `files/bret-canary.txt` in `oc_filecache` must equal the file
-  size on disk.
-- Other blueprints use the same idea with their own table, file or object.
+```sql
+select count(*) from bret_canary
+where id = 1 and encode(sha256(payload::bytea), 'hex') = sha256;
+```
 
-Canary names are written in the header comment of each YAML.
-
-## Negative check
-
-Test that a check can fail. Set the expected value wrong and confirm exit code 1. The spike
-did this with a wrong expected count, and the check exited 1. See
-[spike-findings.md](spike-findings.md).
+Name the canary in the header comment of your blueprint. The seed for it goes in
+`hack/blueprint-test/seeds/`.
 
 ## Secrets
 
-Blueprints read credentials from Secrets named in each YAML (for example `nextcloud-db`,
-`grafana-admin`, `minio-creds`, `n8n-secrets`). Provision them with the values from the
-source app. Encryption keys and admin passwords must match the source. If not, the check
-fails for a reason that has nothing to do with the backup.
+Credentials the check needs (database password, admin token, encryption key) come from a
+Secret in the `RestoreTest`'s namespace. Reference it with `env[].valueFrom.secretKeyRef`.
+
+Values must match the source. An encryption key or admin password that differs makes the check
+fail for a reason unrelated to the backup. Keep one Secret per application, and make the backup
+and the check read the same one.
 
 ## Pod security
 
-Each container sets `securityContext` to the UID the image uses. From `INDEX.md`: postgres
-999, mysql 999, nextcloud and wordpress 33, grafana 472, prometheus 65534, others 1000 or
-the image default.
+Set `securityContext.runAsUser` on each container to the UID the image runs as. Check the image
+with `docker run --rm <image> id` or the image's documentation.
 
-Do not set `fsGroup` on a database data directory. See
-[best-practices.md](best-practices.md) and the spike facts.
+Two rules from the spike:
 
-**Known conflicts in the current blueprints:** `postgres.yaml` and `nextcloud.yaml`
-set `fsGroup: 999` on the database containers. The spike showed this breaks Postgres
-startup on a restored data dir. Remove `fsGroup` from those containers, or chmod the data dir
-to 0700 in an init step, before running them.
+- **No `fsGroup` on a database data directory.** `fsGroup` changes the mode to `2770`. Postgres
+  refuses to start on that mode. Set `fsGroup` only on application writers that need it.
+- **Postgres family: set mode `0700` in an init container.** The blueprints in `blueprints/`
+  run a `pgdata-perms` init container as UID 999. It checks `PG_VERSION` exists and runs
+  `chmod 0700 "$PGDATA"`. Your data must live in `<mount>/pgdata`, which is the `PGDATA` in the
+  blueprint.
 
-## Using blueprints/ in this repo
+The backup side needs the same UID. See [backup-providers.md](backup-providers.md) for the
+mover security context on each tool.
 
-- `blueprints/INDEX.md` lists 20 apps. Each row gives the data kind, the volumes, the
-  restore field used, the check summary and open issues.
-- One YAML per app: `blueprints/<app>.yaml`.
-- Header comments: `# UNTESTED`, the canary contract, and any design delta.
-- To use one: check the image tag, provision the Secrets, fix the `fsGroup` issue
-  if the app is a database, then apply the `RestoreBlueprint` to the namespace of the
-  `RestoreTest`.
-- Only admins may create `RestoreBlueprint` objects. See the security section in the design.
+## Images and tags
 
-Tag status (from `INDEX.md`): many tags probed OK on Docker Hub or quay. These are not
-confirmed: elasticsearch, minio, minio/mc, python, keycloak.
+- Pin a tag, not `latest`.
+- The check image should match the app's major version. A database restored into a different
+  major version may not start.
+- Confirm the tag exists before you use it. `hack/blueprint-test` pulls the image as part of
+  its run.
 
-Note: `postgres.yaml` uses `postgres:16.4`. The spike used Postgres 17.12.
-The spike result does not cover 16.4.
+## Testing a blueprint
 
-## Postgres data dirs: the pgdata-perms init step
+Read [testing-blueprints.md](testing-blueprints.md). Short version:
 
-Restore can leave the Postgres data dir wider than Postgres accepts (2770 after an
-`fsGroup` on the mount). Postgres then refuses to start. The Postgres-family blueprints
-(`postgres.yaml`, `keycloak.yaml`, `nextcloud.yaml`) run a `pgdata-perms` init container
-first. It runs as uid 999, checks `PG_VERSION` exists, and sets the data dir to 0700.
+```bash
+# Run a check against restored PVCs you already have
+hack/blueprint-test/check.sh examples/restoreblueprint-minimal.yaml restore-test check-minimal data=my-restored-pvc
 
-The source must keep its data in `<mount>/pgdata`, matching `PGDATA` in the blueprint.
-These blueprints are UNTESTED. The init step is a convention until the operator does it.
+# Or run the whole round trip: seed, back up with Kopiur, restore, check
+hack/blueprint-test/roundtrip.sh minimal examples/seeds/minimal.yaml examples/restoreblueprint-minimal.yaml
+```
+
+## Catalog
+
+[blueprints/INDEX.md](../blueprints/INDEX.md) lists the 20 app blueprints, the volumes each one
+needs, the canary it uses, and its test status.

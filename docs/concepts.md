@@ -1,130 +1,144 @@
 # Concepts
 
-Status: design. Items marked **planned** are not in the code yet.
+This page explains what bret-operator does and the rules it follows. The schema is in
+[reference/api.md](reference/api.md). Behavior marked **planned** is design, not yet in the code.
 
-## What the operator does
+## The problem
 
-- It triggers restores. It creates the native restore object of the chosen tool
-  (Velero, VolSync or Kopiur), pointed at a scratch PVC.
-- It waits for the native restore to finish.
-- It runs your check (a `RestoreBlueprint`) in a pod that mounts the restored volume.
-- It uses the check's exit code as the verdict. Exit 0 passes. Anything else fails.
-- It writes the result to status, Events and metrics.
+A backup you never restored is a hope, not a backup. bret-operator restores your backups
+on a schedule, checks the restored data, and tells you when the check fails.
 
-It does not copy, deduplicate or store backup data. It does not install Velero,
-VolSync or Kopiur. You install them yourself.
+## The three objects
+
+| Kind | Short name | Purpose | Who writes it |
+|---|---|---|---|
+| `RestoreBlueprint` | `rblueprint` | The check: a pod template that runs against restored data. Exit code 0 means pass. | You, once per app. |
+| `RestoreTest` | `rtest` | The schedule and policy: which backups, which blueprint, when, how many retries. | You. |
+| `Restore` | `restore` | One restore attempt run: the native restore object plus the check pod. Created by hand or by a `RestoreTest`. | You, or the operator. |
+
+A typical setup has one `RestoreBlueprint` per application, and one `RestoreTest` per backup
+source that feeds it.
+
+## What the operator does, and what it does not do
+
+It does:
+
+- create the native restore object of the chosen tool (Velero `Restore`, VolSync
+  `ReplicationDestination`, or Kopiur `Restore`), pointed at a scratch volume,
+- wait for that restore to finish,
+- create the check pod from the blueprint, with the restored volume mounted,
+- take the check pod's exit code as the verdict,
+- write the result to `status`, to Events, and to Prometheus metrics (planned),
+- clean up pods and volumes, or keep them for debugging when you ask it to.
+
+It does not:
+
+- copy, deduplicate or store backup data,
+- install Velero, VolSync or Kopiur, or configure their storage,
+- read the check's logs or parse its output. Only the exit code counts.
 
 ## Providers
 
-| Provider | Native object the operator creates | Done signal | Backup-completed signal |
+| Provider | Native object created | Restore done when | Backup done when |
 |---|---|---|---|
-| `velero` | `velero.io/v1` `Restore` | `status.phase` = `Completed`, `PartiallyFailed` or `Failed` | `Backup` `status.phase` = `Completed` |
-| `volsync` | `volsync.backube/v1alpha1` `ReplicationDestination` (manual trigger) | `status.lastManualSync` matches the trigger | `ReplicationSource` `status.lastSyncTime` changes |
-| `kopiur` (alpha) | `kopiur.home-operations.com/v1alpha1` `Restore` | Kopiur `Restore` status phase `Completed` and condition `Ready` | Kopiur snapshot completion (exact signal to verify) |
+| `velero` | `velero.io/v1` `Restore` | `status.phase` is `Completed`, `PartiallyFailed` or `Failed` | `Backup` `status.phase` is `Completed` |
+| `volsync` | `volsync.backube/v1alpha1` `ReplicationDestination` with a manual trigger | `status.lastManualSync` matches the trigger | `ReplicationSource` `status.lastSyncTime` changes |
+| `kopiur` (alpha) | `kopiur.home-operations.com/v1alpha1` `Restore` | `status.phase` is `Completed` and condition `Ready` is `True` | `Snapshot` `status.phase` is `Succeeded` |
 
-Kopiur is alpha. The design notes open Kopiur issue kopiur#233 about restore.
-The Kopiur rows come from the spike. The exact backup-completion signal for Kopiur is
-not pinned yet, so it is **unverified**.
+Kopiur is alpha. The rows above are the ones the spike verified. Setup steps are in
+[backup-providers.md](backup-providers.md).
 
-## Scratch-PVC rule
+## The scratch-volume rule
 
-Every restore writes into a PVC that the operator creates for that attempt.
-The PVC is owned by the `Restore`. Live data is never a restore target in v1.
-In-place restore is a later design.
+Every restore writes into a volume the operator creates for that attempt. The volume is
+owned by the `Restore`. A restore never writes into a live application volume.
 
-The check pod mounts the scratch PVC. The check can read the restored data. It
-cannot write to the application's PVC.
+The check pod mounts the scratch volume. It can read the restored data. It cannot change
+the application's own volume.
 
-## Restore test lifecycle
+## The restore test lifecycle
 
-One attempt, in order (design §7.3):
+One attempt, in order:
 
-1. Create the scratch PVC, owned by the `Restore`.
-2. Call the provider to create the native restore object, targeting the scratch PVC.
-3. Wait until the native object is done, or until the deadline (`restoreWindow`).
-   On deadline: clean up the native object, delete the scratch PVC, set phase `Canceled`.
-4. When the native restore succeeds, create the check pod from the `RestoreBlueprint`.
-   The restored PVC is mounted at `restoreMount`.
-5. Wait for the pod to finish, or for the deadline.
-6. Pod exit 0: phase `Succeeded`.
-7. Pod exit not 0, or canceled: if attempts are left, wait `backoff` and start the next
-   attempt at step 1. If no attempts are left, phase `Failed`.
+1. Create the scratch volume, owned by the `Restore`.
+2. Create the native restore object, targeting the scratch volume.
+3. Wait until the native restore is done, or until `restoreWindow` runs out.
+   On timeout: delete the native object and the scratch volume, mark the attempt `Canceled`.
+4. Create the check pod from the `RestoreBlueprint`. The restored volume is mounted at the
+   blueprint's `restoreMount` (or at each `restoredVolumes` path).
+5. Wait for the check pod to finish, or for `restoreWindow` to run out.
+6. Exit code 0 from every check container: phase `Succeeded`.
+   Anything else: phase `Failed` for this attempt.
+7. If the attempt failed and `retries.count` is not used up: wait `retries.backoff`, then
+   start a new attempt at step 1. Otherwise phase `Failed`.
 8. Clean up. On `Succeeded`, or on `Failed` with `keepOnFailure: false`, delete the pod,
-   the PVC and the native object. On `Failed` with `keepOnFailure: true`, keep them
-   (see below).
+   the volume and the native object. With `keepOnFailure: true`, keep them (see below).
 
 ### Phases
 
-`Restore` phase: `Pending`, `Running`, `Succeeded`, `Failed`, `Canceled` (design §7.1).
+`Restore` phases: `Pending`, `Running`, `Succeeded`, `Failed`, `Canceled`.
 
-Native phases are different. Velero uses `Completed`. Kopiur uses `Completed`.
-Do not mix them up with the `Restore` phase.
+The native tools use other words. Velero and Kopiur say `Completed`. Do not mix them up with
+the operator's phases.
 
 ### Attempts and retries
 
-- `retries.count` is the number of extra attempts. `retries.backoff` is the wait between
-  attempts (design §7.1 example: `count: 2`, `backoff: 10m`).
-- The design example gives the test as up to 1 + `count` attempts. The exact count
-  rule is **unverified** until the controller exists.
-- Every retry and cancel writes an Event with a reason.
+- `retries.count` is the number of extra attempts after the first. The maximum is 10. The
+  default is 0.
+- `retries.backoff` is the wait between attempts. The default is `5m`.
+- Each retry and each cancel writes an Event with a reason (planned).
 
 ### restoreWindow
 
-`restoreWindow` is a deadline per attempt. It covers the native restore, the check pod
-and image pulls. A restore test cannot run longer than `restoreWindow` per attempt.
+`restoreWindow` is a deadline per attempt. It covers the native restore, the image pulls and
+the check pod. The default is `45m`. Set it higher for large volumes or slow image pulls.
 
 ### keepOnFailure
 
-When `keepOnFailure: true` and the last attempt fails, the operator keeps:
+With `keepOnFailure: true` and the last attempt failed, the operator keeps:
 
-- the check pod (logs and `kubectl exec` still work),
+- the check pod (its logs and `kubectl exec` still work),
 - the native restore object,
-- the scratch PVC (so the restored data stays).
+- the scratch volume, so the restored data stays readable.
 
-It sets the label `restore.bret.linogics.io/retained: "true"` and writes an Event.
-Retained resources are not deleted automatically. A user deletes them with
-`kubectl delete restore`. A `retainedFor` TTL is an open question.
+Kept resources get the label `restore.bret.linogics.io/retained: "true"` and an Event (planned).
+Kept resources are not deleted automatically. Delete them by hand, or delete the `Restore`.
 
 Earlier failed attempts are always cleaned up. Only the last attempt is kept.
 
 ### overlapPolicy
 
-Applies when a trigger fires while a run is in progress.
+Applies when a trigger fires while a run is still going.
 
-| Value | Behaviour |
+| Value | Behavior |
 |---|---|
-| `Skip` (default) | Write an Event and drop the tick. |
-| `Queue` | Keep one pending run. It starts when the current run ends. Extra ticks are dropped. |
-| `Replace` | Cancel the running attempt (same cleanup as a timeout), start a new one. |
+| `Skip` (default) | Write an Event and drop the trigger. |
+| `Queue` | Keep one pending run. It starts when the current run ends. Extra triggers are dropped. |
+| `Replace` | Cancel the running attempt (same cleanup as a timeout), then start a new one. |
 
-Manual triggers follow the same policy.
+Manual runs follow the same policy.
 
 ## Triggers
 
-| Trigger | How it works |
-|---|---|
-| `cron` | Standard 5-field cron, UTC. Each tick creates a `Restore` unless `overlapPolicy` blocks it. |
-| `afterBackup` | The operator watches the provider's backup objects. A backup that completes at time `T` starts a run at `T + delay`. Each backup name is recorded in status, so each backup runs once. |
-| `manual` | Set the annotation `restore.bret.linogics.io/run-now: "<nonce>"` on the `RestoreTest`. A new nonce starts one run. Reusing a nonce does nothing. No CLI needed. |
+A `RestoreTest` can use any mix of these triggers.
+
+| Trigger | Field | How it works |
+|---|---|---|
+| Schedule | `triggers.cron` | Standard 5-field cron, UTC. Each tick starts a run unless `overlapPolicy` says otherwise. |
+| After backup | `triggers.afterBackup.delay` | When a matching backup completes at time `T`, a run starts at `T + delay`. Each backup name is recorded in `status.handledBackups`, so each backup is tested once. |
+| Manual | `triggers.manual: true` | Set the annotation `restore.bret.linogics.io/run-now` on the `RestoreTest` to any new value. A new value starts one run. Reusing a value does nothing. |
+
+Example: a manual run needs no CLI. `kubectl annotate restoretest orders-db restore.bret.linogics.io/run-now="$(date +%s)" --overwrite`
 
 ## Scope
 
-Operator config (planned):
+Namespaces (planned):
 
-```yaml
-watchNamespaces: []      # empty = cluster-wide (default)
-# watchNamespaces: [data, billing]   # namespaced mode
-```
-
-- Empty list: cluster-wide. The `ClusterRole` is bound cluster-wide.
-- Non-empty list: the controller cache only sees those namespaces. A `Role` and
-  `RoleBinding` are created in each listed namespace. The Helm chart renders them.
-- Pods and PVCs always go in the namespace of the `Restore` or `RestoreTest`.
+- The operator watches all namespaces by default.
+- `watchNamespaces` in the chart values (planned) limits it to a list. Then the chart creates
+  `Role` and `RoleBinding` objects in each listed namespace.
+- A `RestoreTest` in a namespace that is not watched is ignored. The operator sets the
+  condition `WatchedNamespace` to `False` on it (planned).
+- Pods and volumes always live in the namespace of the `Restore` or `RestoreTest`.
 - Velero backups live in the Velero namespace (`velero` by default). The operator reads
-  backup objects there. In namespaced mode this is the one cross-namespace read
-  permission, and it must be documented.
-- Pitfall: a `RestoreTest` in a namespace missing from the list is ignored. The operator
-  logs a warning and sets condition `WatchedNamespace=False` if it sees one.
-
-Why hybrid: the controller cache and RBAC are set up at start-up. Adding namespaced
-mode later is expensive. The design builds both modes now.
+  backup objects there. In namespaced mode this is the one cross-namespace read it needs.
