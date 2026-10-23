@@ -70,4 +70,4 @@ Verified on a kind cluster. These facts drive the rules in
 - Velero PVC-only restore mapping (design §13.4).
 - Versity Gateway as S3 backend (design §13.1). Spike facts do not record it.
 - Kopiur backup-completion signal and the kopiur#233 restore issue.
-- Postgres 16.4 (used in `blueprints/postgres.yaml`).
+- Postgres 16.4 was never tested. `blueprints/postgres.yaml` now uses 17.12, the version the spike verified.
