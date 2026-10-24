@@ -1,5 +1,5 @@
-# UNTESTED
-# Restore check for mysql 8.4. Database-only, one PVC. Not run.
+# Round trip PASS and negative check FAIL on kind (2026-11-14), mysql 8.4.13.
+# Restore check for mysql 8.4. Database-only, one PVC.
 # Canary contract: table bret.canary(id int primary key, payload text, sha256 char(64)),
 # row id=1 with sha256 = sha2(payload, 256), seeded before the backup.
 apiVersion: restore.bret.linogics.io/v1alpha1
