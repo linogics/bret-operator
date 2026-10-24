@@ -1,6 +1,5 @@
-# UNTESTED
+# TESTED: round trip PASS, negative test FAIL as expected.
 # Restore check for prometheus v2.54.1. Files-only (TSDB blocks and WAL under /prometheus).
-# Not run.
 # Canary contract: metric bret_canary_seq, last written value BRET_CANARY_SEQ, within the
 # 10-year window below. The value is written by the seeding job before the backup.
 apiVersion: restore.bret.linogics.io/v1alpha1
@@ -11,7 +10,15 @@ metadata:
 spec:
   restoreMount: /prometheus
 
-  initContainers: []
+  initContainers:
+  # The restored mount root comes back owned by root. Prometheus must write its lock and WAL
+  # there, so an init container with no securityContext (root) gives the root to uid 65534.
+  - name: data-perms
+    image: busybox:1.37
+    command:
+      - /bin/sh
+      - -c
+      - chown 65534:65534 /prometheus
 
   containers:
   - name: check
@@ -19,7 +26,6 @@ spec:
     securityContext:
       runAsUser: 65534
       runAsGroup: 65534
-      fsGroup: 65534
     env:
     - name: BRET_CANARY_SEQ
       value: "42"   # value written by the seeding job
