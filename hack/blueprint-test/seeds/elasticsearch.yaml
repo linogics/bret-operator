@@ -1,0 +1,70 @@
+# Seed for blueprints/elasticsearch.yaml. Data path is /usr/share/elasticsearch/data (uid 1000).
+# Starts a single node with the same cluster and node names as the check, indexes the canary
+# doc with a refresh, then kill -9 the JVM so the backup is crash-consistent.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+  - name: chown-data
+    image: busybox:1.37
+    securityContext:
+      runAsUser: 0
+    command: [/bin/sh, -c, "chown 1000:1000 /usr/share/elasticsearch/data"]
+    volumeMounts:
+    - name: data
+      mountPath: /usr/share/elasticsearch/data
+  containers:
+  - name: seed
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+    env:
+    - name: discovery.type
+      value: single-node
+    - name: xpack.security.enabled
+      value: "false"
+    - name: cluster.name
+      value: bret-source-cluster
+    - name: node.name
+      value: es-0
+    - name: ES_JAVA_OPTS
+      value: "-Xms512m -Xmx512m"
+    command:
+    - /bin/bash
+    - -c
+    - |
+      set -eu
+      /usr/share/elasticsearch/bin/elasticsearch -d -p /tmp/es-seed.pid
+      curl -fsS --retry 60 --retry-delay 2 --retry-connrefused \
+          'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=120s' >/dev/null
+      payload="seed-canary-payload-not-secret"
+      sha=$(printf %s "$payload" | sha256sum | cut -d ' ' -f 1)
+      curl -fsS -X PUT 'http://127.0.0.1:9200/bret-canary' -H 'Content-Type: application/json' -d '{"settings":{"number_of_shards":1,"number_of_replicas":0}}' >/dev/null
+      curl -fsS -X PUT "http://127.0.0.1:9200/bret-canary/_doc/canary?refresh=true" -H 'Content-Type: application/json' -d "{\"payload\":\"$payload\",\"sha256\":\"$sha\"}" >/dev/null
+      curl -fsS http://127.0.0.1:9200/bret-canary/_doc/canary
+      echo
+      # Crash-consistent point: kill the JVM without a clean shutdown.
+      kill -9 "$(cat /tmp/es-seed.pid)"
+      sleep 2
+    volumeMounts:
+    - name: data
+      mountPath: /usr/share/elasticsearch/data
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: data

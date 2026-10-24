@@ -1,6 +1,5 @@
-# UNTESTED
-# Restore check for elasticsearch 8.15. Files-only (Lucene segments under path.data). Not run.
-# TAG UNVERIFIED: image tag could not be confirmed (registry requires auth).
+# TESTED: round trip PASS, negative test FAIL as expected.
+# Restore check for elasticsearch 8.15. Files-only (Lucene segments under path.data).
 # Canary contract: index bret-canary, doc _id "canary" with {"payload": "...", "sha256": "..."},
 # seeded before the backup. cluster.name and node.name must equal the source values.
 apiVersion: restore.bret.linogics.io/v1alpha1
@@ -15,7 +14,7 @@ spec:
 
   containers:
   - name: check
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0  # TAG UNVERIFIED
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
     securityContext:
       runAsUser: 1000
     env:
@@ -28,7 +27,7 @@ spec:
     - name: node.name
       value: es-0                  # must match the source node
     - name: ES_JAVA_OPTS
-      value: "-Xms1g -Xmx1g"
+      value: "-Xms512m -Xmx512m"
     command:
       - /bin/bash
       - -c
