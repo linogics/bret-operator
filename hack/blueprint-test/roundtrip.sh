@@ -145,7 +145,7 @@ main() {
 
 	if [[ -n $uid ]]; then
 		policy_mover="  mover: {securityContext: {runAsUser: $uid, runAsGroup: $uid, runAsNonRoot: true}}"
-		mover="  mover: {securityContext: {runAsUser: $uid, runAsGroup: $uid, runAsNonRoot: true}}"
+		mover="  mover: {securityContext: {runAsUser: $uid, runAsGroup: $uid, runAsNonRoot: true}, podSecurityContext: {fsGroup: $uid}}"
 	fi
 
 	# 1. Repository and one SnapshotPolicy per volume.
