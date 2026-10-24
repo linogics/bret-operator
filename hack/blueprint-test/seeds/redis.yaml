@@ -1,0 +1,62 @@
+# Seed for blueprints/redis.yaml. Mount is /data (uid 999), RDB snapshot only.
+# Writes the canary keys, forces an RDB save, then kill -9 redis-server so the backup is
+# crash-consistent. The check must load the RDB on boot.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+  - name: chown-data
+    image: busybox:1.37
+    securityContext:
+      runAsUser: 0
+    command: [/bin/sh, -c, "chown 999:999 /data"]
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  containers:
+  - name: seed
+    image: redis:7.4
+    securityContext:
+      runAsUser: 999
+      runAsGroup: 999
+    command:
+    - /bin/sh
+    - -c
+    - |
+      set -eu
+      redis-server --dir /data --port 6379 --save "" --appendonly no >/tmp/redis.log 2>&1 &
+      pid=$!
+      for i in $(seq 1 60); do
+        redis-cli -p 6379 ping >/dev/null 2>&1 && break
+        sleep 1
+      done
+      payload="seed-canary-payload-not-secret"
+      sha=$(printf %s "$payload" | sha256sum | cut -d' ' -f1)
+      redis-cli -p 6379 SET bret:canary:payload "$payload"
+      redis-cli -p 6379 SET bret:canary:sha256 "$sha"
+      redis-cli -p 6379 DBSIZE
+      redis-cli -p 6379 SAVE
+      # Crash-consistent point: no clean shutdown.
+      kill -9 "$pid"
+      sleep 2
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: data

@@ -1,5 +1,5 @@
-# UNTESTED
-# Restore check for redis 7.4. Database-only (RDB or AOF in /data). Not run.
+# TESTED: round trip PASS, negative test FAIL as expected.
+# Restore check for redis 7.4. Database-only (RDB or AOF in /data).
 # Canary contract: keys bret:canary:payload and bret:canary:sha256 (hex sha256 of payload),
 # seeded before the backup.
 apiVersion: restore.bret.linogics.io/v1alpha1
