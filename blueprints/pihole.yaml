@@ -1,4 +1,4 @@
-# UNTESTED
+# TESTED: round trip PASS, negative test FAIL as expected.
 # DESIGN DELTA: restoredVolumes (not in design §7.1)
 # Two volumes: /etc/pihole (gravity.db, setupVars, custom.list) and /etc/dnsmasq.d.
 # Canary contract: adlist https://bret-canary.invalid/list.txt in gravity.db, and the line
