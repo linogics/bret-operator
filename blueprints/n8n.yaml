@@ -1,5 +1,5 @@
-# UNTESTED
-# Restore check for n8n 1.60 with SQLite (~/.n8n/database.sqlite). One PVC. Not run.
+# TESTED: round trip PASS, negative test FAIL as expected.
+# Restore check for n8n 1.60 with SQLite (~/.n8n/database.sqlite). One PVC.
 # Secret n8n-secrets must hold N8N_ENCRYPTION_KEY equal to the source instance key.
 # Canary contract: workflow named bret-canary and credential named bret-canary,
 # seeded before the backup.
@@ -11,14 +11,22 @@ metadata:
 spec:
   restoreMount: /home/node/.n8n
 
-  initContainers: []
+  initContainers:
+  # The restored mount root comes back owned by root. n8n (uid 1000) writes its SQLite DB and
+  # config there, so an init container with no securityContext (root) gives the root to uid 1000.
+  - name: data-perms
+    image: busybox:1.37
+    command:
+      - /bin/sh
+      - -c
+      - chown 1000:1000 /home/node/.n8n
 
   containers:
   - name: check
     image: n8nio/n8n:1.60.0
     securityContext:
       runAsUser: 1000
-      fsGroup: 1000
+      runAsGroup: 1000
     envFrom:
     - secretRef:
         name: n8n-secrets
