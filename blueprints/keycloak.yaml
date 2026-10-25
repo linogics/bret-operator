@@ -1,9 +1,8 @@
-# UNTESTED
+# TESTED: round trip PASS, negative test FAIL as expected.
 # Postgres data dir: PGDATA is <mount>/pgdata (same layout as the spike source).
 # pgdata-perms init sets 0700, Postgres refuses 2770 after restore (spike).
 # Restore check for keycloak 26.0. Database-only: state lives in an external PostgreSQL,
-# restored to /var/lib/postgresql/data. Not run.
-# TAG UNVERIFIED: keycloak tag could not be confirmed.
+# restored to /var/lib/postgresql/data.
 # Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+), gated by
 # startupProbe. Not in design §7.1 (see INDEX.md).
 # Canary contract: realm bret-canary in the restored DB. Secret keycloak-db holds KC_DB_PASSWORD.
@@ -51,7 +50,7 @@ spec:
 
   containers:
   - name: check
-    image: quay.io/keycloak/keycloak:26.0  # TAG UNVERIFIED
+    image: quay.io/keycloak/keycloak:26.0
     env:
     - name: KC_DB
       value: postgres
@@ -65,10 +64,27 @@ spec:
     - secretRef:
         name: keycloak-db
     command:
-      - /bin/sh
+      - /bin/bash
       - -c
       - |
         set -eu
+
+        # The image has no curl or wget. Plain HTTP GET over bash /dev/tcp.
+        # Prints the body on success, returns 1 unless the status is 200.
+        http_get() {
+          local hostport=${1#http://} path status line
+          path=/${hostport#*/}
+          hostport=${hostport%%/*}
+          exec 3<>"/dev/tcp/${hostport%%:*}/${hostport##*:}" || return 1
+          printf 'GET %s HTTP/1.0\r\nHost: %s\r\n\r\n' "$path" "$hostport" >&3
+          read -r status <&3 || return 1
+          case $status in
+            *" 200 "*) ;;
+            *) return 1 ;;
+          esac
+          while IFS= read -r line <&3 && [ -n "${line%$'\r'}" ]; do :; done
+          cat <&3
+        }
 
         # Start runs Liquibase migrations against the restored schema.
         /opt/keycloak/bin/kc.sh start --http-enabled=true --hostname-strict=false \
@@ -78,13 +94,12 @@ spec:
 
         # Wait for readiness (up to 170 s), then require status UP.
         for i in $(seq 1 170); do
-          curl -fs http://127.0.0.1:9000/health/ready >/dev/null 2>&1 && break
+          http_get http://127.0.0.1:9000/health/ready >/dev/null && break
           sleep 1
         done
-        curl -fs http://127.0.0.1:9000/health/ready | grep -q '"status": "UP"'
+        http_get http://127.0.0.1:9000/health/ready | grep -q '"status": "UP"'
 
         # Canary realm must be served with its OIDC discovery document.
-        curl -fs \
-            http://127.0.0.1:8080/realms/bret-canary/.well-known/openid-configuration >/dev/null
+        http_get http://127.0.0.1:8080/realms/bret-canary/.well-known/openid-configuration >/dev/null
 
   volumes: []
