@@ -1,4 +1,4 @@
-# UNTESTED
+# TESTED: round trip PASS, negative test FAIL as expected.
 # Postgres data dir: PGDATA is <mount>/pgdata (same layout as the spike source).
 # pgdata-perms init sets 0700, Postgres refuses 2770 after restore (spike).
 # DESIGN DELTA: restoredVolumes (not in design §7.1)
@@ -10,6 +10,8 @@ kind: RestoreBlueprint
 metadata:
   name: nextcloud
   namespace: default
+  annotations:
+    restore.bret.linogics.io/mover-uid: '{"html": 33, "pgdata": 999}'
 spec:
   restoredVolumes:
   - name: html
@@ -18,6 +20,15 @@ spec:
     mountPath: /var/lib/postgresql/data
 
   initContainers:
+  # The restored mount roots come back owned by root. Nextcloud (uid 33) needs its html root
+  # and the Postgres sidecar (uid 999) needs the pgdata root. Init containers with no
+  # securityContext run as root and give the roots to those UIDs.
+  - name: html-perms
+    image: busybox:1.37
+    command:
+      - /bin/sh
+      - -c
+      - chown 33:33 /var/www/html
   - name: pgdata-perms
     image: busybox:1.37
     securityContext:
@@ -57,7 +68,6 @@ spec:
     securityContext:
       runAsUser: 33
       runAsGroup: 33
-      fsGroup: 33
     envFrom:
     - secretRef:
         name: nextcloud-db
