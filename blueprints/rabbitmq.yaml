@@ -2,6 +2,8 @@
 # Restore check for rabbitmq 3.13 (management image). Files-only: mnesia dir, message store.
 # Canary contract: queue bret.canary holding BRET_CANARY_MESSAGES messages,
 # seeded before the backup.
+# Node name: the test runs as rabbit@localhost, a harness workaround. A real check must
+# run with the source node name (RABBITMQ_NODENAME), or mnesia will not load.
 apiVersion: restore.bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
