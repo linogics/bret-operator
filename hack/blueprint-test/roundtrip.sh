@@ -127,8 +127,24 @@ kopiur_restore() {
 	YAML
 }
 
+mover_block() {
+	# args: uid, kind (policy or restore). Prints nothing when uid is empty.
+	local uid=$1 kind=$2
+
+	if [[ -z $uid ]]; then
+		return 0
+	fi
+	if [[ $kind == restore ]]; then
+		printf '  mover: {securityContext: {runAsUser: %s, runAsGroup: %s, runAsNonRoot: true}, podSecurityContext: {fsGroup: %s}}\n' \
+			"$uid" "$uid" "$uid"
+		return 0
+	fi
+	printf '  mover: {securityContext: {runAsUser: %s, runAsGroup: %s, runAsNonRoot: true}}\n' \
+		"$uid" "$uid"
+}
+
 main() {
-	local keys=() claims=() k uid size policy_mover="" mover=""
+	local keys=() claims=() k uid size
 
 	# Start from an empty namespace. A seed cannot initdb into an old data dir.
 	if kubectl get ns "$ns" >/dev/null 2>&1; then
@@ -138,20 +154,16 @@ main() {
 	trap cleanup EXIT
 
 	mapfile -t keys < <(python3 "$here/render.py" "$bp" --list)
-	uid=$(python3 "$here/render.py" "$bp" --uid)
 	for k in "${keys[@]}"; do
 		claims+=("$k=r-$k")
 	done
 
-	if [[ -n $uid ]]; then
-		policy_mover="  mover: {securityContext: {runAsUser: $uid, runAsGroup: $uid, runAsNonRoot: true}}"
-		mover="  mover: {securityContext: {runAsUser: $uid, runAsGroup: $uid, runAsNonRoot: true}, podSecurityContext: {fsGroup: $uid}}"
-	fi
 
 	# 1. Repository and one SnapshotPolicy per volume.
 	kopiur_repo | apply_yaml
 	for k in "${keys[@]}"; do
-		kopiur_policy "$k" "$policy_mover" | apply_yaml
+		uid=$(python3 "$here/render.py" "$bp" --uid "$k")
+		kopiur_policy "$k" "$(mover_block "$uid" policy)" | apply_yaml
 	done
 
 	# 2. Seed the source data.
@@ -170,7 +182,8 @@ main() {
 		kopiur_snapshot "$k" | apply_yaml
 		wait_jsonpath "$ns" snapshot "$k-1" '{.status.phase}' Succeeded \
 			|| return 1
-		kopiur_restore "$k" "$size" "$mover" | apply_yaml
+		uid=$(python3 "$here/render.py" "$bp" --uid "$k")
+		kopiur_restore "$k" "$size" "$(mover_block "$uid" restore)" | apply_yaml
 		wait_jsonpath "$ns" restore "r-$k" '{.status.phase}' Completed \
 			|| return 1
 		wait_jsonpath "$ns" pvc "r-$k" '{.status.phase}' Bound || return 1

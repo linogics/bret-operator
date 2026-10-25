@@ -4,13 +4,14 @@
 Modes:
   render.py BLUEPRINT --name POD --claims K=V [K=V ...] [--ns NS]   print YAML (PVCs + Pod)
   render.py BLUEPRINT --list                                        print volume keys, one per line
-  render.py BLUEPRINT --uid                                         print the UID the blueprint runs as
+  render.py BLUEPRINT --uid KEY                                     print the mover UID for one volume key
 
 Volume keys: restoreMount blueprints use the key "data".
 restoredVolumes blueprints use the entry name as key.
 Scratch PVCs are named <pod>-scratch-<name> and rendered as PVC objects.
 """
 import argparse
+import json
 import re
 import sys
 
@@ -34,8 +35,21 @@ def mount_targets(spec):
     return [(v["name"], v["mountPath"]) for v in spec.get("restoredVolumes", [])]
 
 
-def find_uid(spec):
-    for c in spec.get("initContainers", []) + spec.get("containers", []):
+def find_uid(bp, key):
+    """UID the mover uses for one volume.
+
+    A blueprint may set the annotation restore.bret.linogics.io/mover-uid to a JSON
+    object mapping volume keys to UIDs. Without it, the first main container's runAsUser
+    is used. Init containers are skipped, because a native sidecar can run as another UID.
+    """
+    ann = (bp["metadata"].get("annotations") or {}).get(
+        "restore.bret.linogics.io/mover-uid"
+    )
+    if ann:
+        mapping = json.loads(ann)
+        if key in mapping:
+            return mapping[key]
+    for c in bp["spec"]["containers"]:
         uid = (c.get("securityContext") or {}).get("runAsUser")
         if uid is not None:
             return uid
@@ -103,7 +117,7 @@ def main():
     ap.add_argument("--ns", default="default")
     ap.add_argument("--claims", nargs="*", default=[])
     ap.add_argument("--list", action="store_true")
-    ap.add_argument("--uid", action="store_true")
+    ap.add_argument("--uid", metavar="KEY")
     a = ap.parse_args()
 
     with open(a.blueprint) as f:
@@ -113,8 +127,8 @@ def main():
     if a.list:
         print("\n".join(volume_keys(spec)))
         return
-    if a.uid:
-        uid = find_uid(spec)
+    if a.uid is not None:
+        uid = find_uid(bp, a.uid)
         print(uid if uid is not None else "")
         return
 
