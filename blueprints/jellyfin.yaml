@@ -1,4 +1,4 @@
-# UNTESTED
+# TESTED: round trip PASS, negative test FAIL as expected.
 # DESIGN DELTA: restoredVolumes (not in design §7.1)
 # Two volumes: config (library.db, jellyfin.db) and media. Mount paths equal the image's paths
 # so library paths stored in the DB still resolve. Media may be very large (see INDEX.md).
@@ -16,11 +16,23 @@ spec:
   - name: media
     mountPath: /media
 
-  initContainers: []
+  initContainers:
+  # The restored mount roots come back owned by root. Jellyfin (uid 1000) writes its databases
+  # and logs under /config, so an init container with no securityContext (root) gives the root
+  # of /config to uid 1000. Media is only read.
+  - name: config-perms
+    image: busybox:1.37
+    command:
+      - /bin/sh
+      - -c
+      - chown 1000:1000 /config
 
   containers:
   - name: check
     image: jellyfin/jellyfin:10.9.11
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
     command:
       - /bin/sh
       - -c
