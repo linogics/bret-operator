@@ -1,7 +1,25 @@
 # RestoreBlueprint index (top-20 apps)
 
-All blueprints are UNTESTED. None were run. Images were checked against public registries
-(Docker Hub / quay tag lookups) where noted; `TAG UNVERIFIED` marks tags that could not be confirmed.
+## Test status (kind, Kopiur round trip, 2026-11-14/15)
+
+Each PASS means the round trip passed and the negative test (broken canary) failed as expected.
+Harness: `hack/blueprint-test/roundtrip.sh APP`. Details: `docs/testing-blueprints.md`.
+
+| Result | Apps |
+|---|---|
+| PASS (19) | postgres, mysql, mariadb, redis, mongodb, elasticsearch, rabbitmq, nextcloud, wordpress, gitea, grafana, prometheus, vaultwarden, home-assistant, jellyfin, uptime-kuma, keycloak, n8n, pihole |
+| NOT TESTED (1) | minio: neither `minio/minio` nor `minio/mc` could be pulled (Docker Hub: not found; quay: 401). No seed written. |
+
+Caveats that apply to the PASS results:
+
+- Restored mount roots come back owned by `root:65532`. Several blueprints chown their mount in a root init container.
+- Blueprints use no `fsGroup`. The `RestoreBlueprint` API has no pod security context field yet.
+- `rabbitmq` runs as `rabbit@localhost` in the test. The source node name is needed for a real check.
+- `elasticsearch` heap is 512m in the test, to fit the test cluster.
+- `keycloak` stops Postgres at pod end (kubelet), not with kill -9.
+- Seeds contain test-only values, prefixed `seed-...-not-secret`. Real checks need the source app's own Secrets.
+
+Images were checked against public registries where noted. A `TAG UNVERIFIED` marker means the tag could not be confirmed at all.
 
 ## Conventions
 
