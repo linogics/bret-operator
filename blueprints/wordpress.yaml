@@ -8,6 +8,8 @@ kind: RestoreBlueprint
 metadata:
   name: wordpress
   namespace: default
+  annotations:
+    restore.bret.linogics.io/mover-uid: '{"html": 33, "mysql": 999}'
 spec:
   restoredVolumes:
   - name: html
