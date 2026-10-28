@@ -18,6 +18,19 @@ import sys
 import yaml
 
 
+# Pod-level fields a RestoreBlueprint may set. Names match the PodSpec fields.
+POD_FIELDS = [
+    "securityContext",
+    "serviceAccountName",
+    "imagePullSecrets",
+    "nodeSelector",
+    "tolerations",
+    "affinity",
+    "priorityClassName",
+    "runtimeClassName",
+]
+
+
 def dns(s):
     return re.sub(r"[^a-z0-9-]", "-", s.lower()).strip("-")[:50]
 
@@ -106,6 +119,9 @@ def render(bp, name, ns, claims, scratch_list):
             "volumes": volumes,
         },
     }
+    for field in POD_FIELDS:
+        if field in spec:
+            pod["spec"][field] = spec[field]
     docs.append(pod)
     return docs
 
