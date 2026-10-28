@@ -43,6 +43,23 @@ type RestoreBlueprintSpec struct {
 	ScratchVolumes []ScratchVolume `json:"scratchVolumes,omitempty"`
 	// Volumes are extra volumes for the check pod, such as ConfigMaps or Secrets.
 	Volumes []corev1.Volume `json:"volumes,omitempty"`
+
+	// SecurityContext is the pod-level security context, for example fsGroup or runAsUser for all containers.
+	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
+	// ServiceAccountName is the service account the check pod runs as.
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+	// ImagePullSecrets are secrets used to pull the check images from private registries.
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	// NodeSelector constrains the check pod to nodes with these labels.
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// Tolerations allow the check pod to run on tainted nodes.
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+	// Affinity is the pod affinity and anti-affinity for the check pod.
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+	// PriorityClassName is the priority class of the check pod.
+	PriorityClassName string `json:"priorityClassName,omitempty"`
+	// RuntimeClassName is the runtime class of the check pod.
+	RuntimeClassName *string `json:"runtimeClassName,omitempty"`
 }
 
 // RestoreBlueprintStatus defines the observed state of RestoreBlueprint.

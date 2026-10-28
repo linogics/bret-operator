@@ -13,7 +13,7 @@ Harness: `hack/blueprint-test/roundtrip.sh APP`. Details: `docs/testing-blueprin
 Caveats that apply to the PASS results:
 
 - Restored mount roots come back owned by `root:65532`. Several blueprints chown their mount in a root init container.
-- Blueprints use no `fsGroup`. The `RestoreBlueprint` API has no pod security context field yet.
+- Pod-level settings such as `securityContext.fsGroup` are set with the blueprint's pod fields. Most blueprints still use no `fsGroup`.
 - `rabbitmq` runs as `rabbit@localhost` in the test. The source node name is needed for a real check.
 - `elasticsearch` heap is 512m in the test, to fit the test cluster.
 - `keycloak` stops Postgres at pod end (kubelet), not with kill -9.

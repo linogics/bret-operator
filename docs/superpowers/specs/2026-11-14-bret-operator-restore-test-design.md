@@ -173,6 +173,11 @@ Two additions from the blueprint drafts (proposed, not yet in the types):
   `keepOnFailure`. `size` is required. Extra volumes that are static
   (ConfigMap, Secret, small `emptyDir`) use the blueprint's `volumes` and
   `volumeMounts`, no operator change.
+- Pod-level fields, the rest of the PodSpec the check pod needs:
+  `securityContext` (pod `fsGroup`, `runAsUser`, and so on), `serviceAccountName`,
+  `imagePullSecrets`, `nodeSelector`, `tolerations`, `affinity`, `priorityClassName`,
+  `runtimeClassName`. The blueprint is a PodSpec-shaped template, so these apply to the
+  check pod as written. The mover settings on the native tool objects are separate.
 
 Sizing:
 

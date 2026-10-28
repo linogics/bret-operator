@@ -217,6 +217,14 @@ _Appears in:_
 | `containers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#container-v1-core) array_ | Containers run the check; exit code 0 means pass. |  | MinItems: 1 <br /> |
 | `scratchVolumes` _[ScratchVolume](#scratchvolume) array_ | ScratchVolumes are PVCs created per attempt for staging space, deleted after the attempt. |  |  |
 | `volumes` _[Volume](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#volume-v1-core) array_ | Volumes are extra volumes for the check pod, such as ConfigMaps or Secrets. |  |  |
+| `securityContext` _[PodSecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#podsecuritycontext-v1-core)_ | SecurityContext is the pod-level security context, for example fsGroup or runAsUser for all containers. |  |  |
+| `serviceAccountName` _string_ | ServiceAccountName is the service account the check pod runs as. |  |  |
+| `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#localobjectreference-v1-core) array_ | ImagePullSecrets are secrets used to pull the check images from private registries. |  |  |
+| `nodeSelector` _object (keys:string, values:string)_ | NodeSelector constrains the check pod to nodes with these labels. |  |  |
+| `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#toleration-v1-core) array_ | Tolerations allow the check pod to run on tainted nodes. |  |  |
+| `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#affinity-v1-core)_ | Affinity is the pod affinity and anti-affinity for the check pod. |  |  |
+| `priorityClassName` _string_ | PriorityClassName is the priority class of the check pod. |  |  |
+| `runtimeClassName` _string_ | RuntimeClassName is the runtime class of the check pod. |  |  |
 
 
 #### RestoreBlueprintStatus
