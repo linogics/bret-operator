@@ -74,6 +74,7 @@ BlueprintRef names the RestoreBlueprint used for the check.
 
 
 _Appears in:_
+- [RestoreSpec](#restorespec)
 - [RestoreTestSpec](#restoretestspec)
 
 | Field | Description | Default | Validation |
@@ -297,6 +298,9 @@ _Appears in:_
 | `provider` _[Provider](#provider)_ | Provider is the backup tool that performs the restore. |  | Enum: [velero volsync kopiur] <br /> |
 | `source` _[RestoreSource](#restoresource)_ | Source is the backup to restore from. |  |  |
 | `target` _[RestoreTarget](#restoretarget)_ | Target is the scratch volume to restore into. |  |  |
+| `blueprintRef` _[BlueprintRef](#blueprintref)_ | BlueprintRef is the RestoreBlueprint that checks the restored data. |  |  |
+| `restoreWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | RestoreWindow is the deadline for this attempt, covering the restore, image pulls and the check. | 45m |  |
+| `keepOnFailure` _boolean_ | KeepOnFailure keeps the check pod, the scratch volume and the native restore object when the attempt fails. | false |  |
 
 
 #### RestoreStatus

@@ -54,12 +54,33 @@ spec:
           spec:
             description: Spec is the desired state of the restore.
             properties:
+              blueprintRef:
+                description: BlueprintRef is the RestoreBlueprint that checks the
+                  restored data.
+                properties:
+                  name:
+                    description: Name is the name of the RestoreBlueprint in the same
+                      namespace.
+                    type: string
+                required:
+                - name
+                type: object
+              keepOnFailure:
+                default: false
+                description: KeepOnFailure keeps the check pod, the scratch volume
+                  and the native restore object when the attempt fails.
+                type: boolean
               provider:
                 description: Provider is the backup tool that performs the restore.
                 enum:
                 - velero
                 - volsync
                 - kopiur
+                type: string
+              restoreWindow:
+                default: 45m
+                description: RestoreWindow is the deadline for this attempt, covering
+                  the restore, image pulls and the check.
                 type: string
               source:
                 description: Source is the backup to restore from.
@@ -97,6 +118,7 @@ spec:
                 - size
                 type: object
             required:
+            - blueprintRef
             - provider
             - source
             - target
