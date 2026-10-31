@@ -21,7 +21,7 @@ run restores and checks are not written yet. The operator starts but does not ac
 - [Getting started](docs/getting-started.md): from an empty cluster to a first check.
 - [Installation](docs/installation.md): Helm chart or plain manifests.
 - [Concepts](docs/concepts.md): what the operator does and the rules it follows.
-- [Blueprints](docs/blueprints.md): how to write a check, with 20 app drafts in
+- [Blueprints](docs/blueprints.md): how to write a check, with 19 app drafts in
   [blueprints/](blueprints/INDEX.md).
 - [API reference](docs/reference/api.md): generated from the Go types.
 

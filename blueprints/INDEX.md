@@ -1,4 +1,4 @@
-# RestoreBlueprint index (top-20 apps)
+# RestoreBlueprint index (top-19 apps)
 
 ## Test status (kind, Kopiur round trip, 2026-11-14/15)
 
@@ -8,7 +8,6 @@ Harness: `hack/blueprint-test/roundtrip.sh APP`. Details: `docs/testing-blueprin
 | Result | Apps |
 |---|---|
 | PASS (19) | postgres, mysql, mariadb, redis, mongodb, elasticsearch, rabbitmq, nextcloud, wordpress, gitea, grafana, prometheus, vaultwarden, home-assistant, jellyfin, uptime-kuma, keycloak, n8n, pihole |
-| NOT TESTED (1) | minio: neither `minio/minio` nor `minio/mc` could be pulled (Docker Hub: not found; quay: 401). No seed written. |
 
 Caveats that apply to the PASS results:
 
@@ -37,7 +36,7 @@ Images were checked against public registries where noted. A `TAG UNVERIFIED` ma
   `containers` checks run. Needs k8s 1.29+. Design §7.1 says initContainers run before checks and
   exit; this is a different use of the field and should be decided in the design.
 - **Secrets.** Blueprints read credentials from Secrets named in each YAML (`*-db`, `grafana-admin`,
-  `minio-creds`, `n8n-secrets`). The operator or user must provision them with the source values.
+  `n8n-secrets`). The operator or user must provision them with the source values.
   Encryption keys and admin passwords must match the source, or the check fails for a
   reason unrelated to the backup.
 - **Pod security.** Per-container `securityContext` sets the UID of each image (postgres 999, mysql
@@ -54,7 +53,6 @@ Images were checked against public registries where noted. A `TAG UNVERIFIED` ma
 | mongodb | database-only (WiredTiger) | data -> /data/db | restoreMount | `mongod --fork` on restored dbpath, `validate full` on canary collection, canary sha256 | TAG OK (mongo:7.0 probed); `mongosh` presence in the image NOT confirmed; replica-set dbs not covered |
 | elasticsearch | files-only (Lucene in path.data) | data -> /usr/share/elasticsearch/data | restoreMount | single-node start, cluster yellow, canary doc sha256 | tag pulled OK in test; `cluster.name` and `node.name` must match source; host `vm.max_map_count` needed; uid 1000 |
 | rabbitmq | files-only (mnesia dir + message store) | data -> /var/lib/rabbitmq | restoreMount | server boot, `await_startup`, `check_running`, `check_local_alarms`, canary queue message count | node name is tied to mnesia (`RABBITMQ_NODENAME`); `.erlang.cookie` must survive restore with mode 400 |
-| minio | files-only (xl.meta + part files on one drive) | data -> /data | restoreMount | server on restored drive, `mc ready`, canary object sha256 | TAG UNVERIFIED (minio and mc); `mc` copied from a second image via initContainer; creds must match source; single-drive only, no erasure heal test |
 | nextcloud | database + files | html -> /var/www/html; pgdata -> /var/lib/postgresql/data | restoredVolumes + native sidecar postgres | `occ status` (DB reachable), `occ integrity:check-core`, canary: DB `oc_filecache.size` equals file size on disk | pdo_pgsql in image assumed; canary path assumes one storage; `dbhost` rewritten to localhost in config |
 | wordpress | database + files | html -> /var/www/html; mysql -> /var/lib/mysql | restoredVolumes + native sidecar mariadb | mariadb ping, canary post content == sha256 of uploaded file | front-end render not checked; plugin-generated tables not covered |
 | gitea | sqlite-in-volume (gitea.db + git repos) | data -> /data | restoreMount (/data) | `gitea web` boot, `/api/healthz` pass, canary repo raw file sha256 | SQLite only; postgres-backed installs need separate DB restore (not covered); repo and DB share one PVC so one snapshot |
@@ -73,7 +71,7 @@ mongo:7.0, rabbitmq:3.13-management, nextcloud:29-apache, wordpress:6.6-php8.3-a
 gitea/gitea:1.22, grafana/grafana:11.2.0, vaultwarden/server:1.32.0,
 homeassistant/home-assistant:2024.9.0, jellyfin/jellyfin:10.9.11, louislam/uptime-kuma:1.23.15,
 n8nio/n8n:1.60.0, pihole/pihole:2024.07.0, prom/prometheus:v2.54.1.
-Not confirmed: elasticsearch, minio, minio/mc, python, keycloak (all marked in the YAML).
+Not confirmed: elasticsearch, python, keycloak (all marked in the YAML).
 
 Popularity: the top-20 list was used as given. No swaps were made. Artifact Hub / CNCF
 usage was not checked.
@@ -116,6 +114,6 @@ two must come from the same backup point.
 - **postgres, mysql, mariadb, redis, mongodb** (database only). The check reads the DB's own
   structure (`pg_amcheck`, `mysqlcheck`, `validate`) plus the canary row. A physical copy taken while the DB
   is running is recovered by crash recovery, which is part of the test.
-- **elasticsearch, prometheus, rabbitmq, minio** (files only, one PVC). Each has its own on-disk
+- **elasticsearch, prometheus, rabbitmq** (files only, one PVC). Each has its own on-disk
   format. The checks rely on the server loading the restored data and answering a query for the
   canary.
