@@ -2,46 +2,692 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"slices"
+	"sort"
+	"strconv"
+	"time"
 
+	"github.com/robfig/cron/v3"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
 
-// RestoreTestReconciler reconciles a RestoreTest object
+const (
+	// runNowAnnotation starts one manual run each time its value changes.
+	runNowAnnotation = "restore.bret.linogics.io/run-now"
+	testLabel        = "restore.bret.linogics.io/test"
+	runLabel         = "restore.bret.linogics.io/run"
+	attemptLabel     = "restore.bret.linogics.io/attempt"
+	// snapshotPollInterval is how often afterBackup looks for new snapshots, since snapshots are not watched.
+	snapshotPollInterval   = time.Minute
+	snapshotPhaseSucceeded = "Succeeded"
+)
+
+// Event and condition reasons for RestoreTest.
+const (
+	reasonRunSkipped     = "RunSkipped"
+	reasonRunReplaced    = "RunReplaced"
+	reasonRunning        = "Running"
+	reasonTargetMissing  = "TargetMissing"
+	reasonBackupNotFound = "BackupNotFound"
+)
+
+// snapshotGVK is the Kopiur Snapshot kind. It is used as unstructured, so Kopiur is not a Go dependency.
+var snapshotGVK = schema.GroupVersionKind{Group: kopiurGroup, Version: "v1alpha1", Kind: "Snapshot"}
+
+// RestoreTestReconciler reconciles a RestoreTest object: it starts Restore objects on its triggers and retries failed attempts.
 type RestoreTestReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
+	// APIReader reads Kopiur Snapshot objects without starting an informer for them. Nil falls back to the client.
+	APIReader client.Reader
+	// Now returns the current time. Nil means time.Now.
+	Now func() time.Time
+}
+
+// trigger is one due request for a run. consume records in the status that the request was handled.
+type trigger struct {
+	source  string
+	backup  string
+	consume func()
+}
+
+// completedBackup is a Succeeded Kopiur Snapshot that matches the backup selector.
+type completedBackup struct {
+	name      string
+	completed time.Time
 }
 
 // +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoretests,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoretests/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoretests/finalizers,verbs=update
+// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=kopiur.home-operations.com,resources=snapshots,verbs=get;list;watch
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the RestoreTest object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
+// Reconcile runs one step of the RestoreTest state machine and stores the status it produced.
 func (r *RestoreTestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	test := &restorev1alpha1.RestoreTest{}
+	if err := r.Get(ctx, req.NamespacedName, test); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
 
-	// TODO(user): your logic here
+	result, err := r.advance(ctx, test)
+
+	if statusErr := r.Status().Update(ctx, test); statusErr != nil {
+		return ctrl.Result{}, errors.Join(err, statusErr)
+	}
+
+	return result, err
+}
+
+// advance settles a finished run, then starts or queues the next run when a trigger is due.
+func (r *RestoreTestReconciler) advance(ctx context.Context, test *restorev1alpha1.RestoreTest) (ctrl.Result, error) {
+	if test.Spec.Provider != restorev1alpha1.ProviderKopiur {
+		r.blockTest(test, reasonProviderUnsupported, fmt.Sprintf("provider %s is not supported yet", test.Spec.Provider))
+
+		return ctrl.Result{}, nil
+	}
+
+	restore, err := r.currentRestore(ctx, test)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if restore != nil && isTerminal(restore.Status.Phase) {
+		var result ctrl.Result
+
+		result, err = r.settle(ctx, test, restore)
+		if err != nil || test.Status.CurrentRestore != "" {
+			return result, err
+		}
+	}
+
+	return r.runTriggers(ctx, test)
+}
+
+// currentRestore returns the Restore of the run in progress. It clears the reference when the Restore is gone.
+func (r *RestoreTestReconciler) currentRestore(ctx context.Context, test *restorev1alpha1.RestoreTest) (*restorev1alpha1.Restore, error) {
+	if test.Status.CurrentRestore == "" {
+		return nil, nil
+	}
+
+	restore := &restorev1alpha1.Restore{}
+
+	err := r.Get(ctx, client.ObjectKey{Namespace: test.Namespace, Name: test.Status.CurrentRestore}, restore)
+	if apierrors.IsNotFound(err) {
+		test.Status.CurrentRestore = ""
+		test.Status.RetryAt = nil
+
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return restore, nil
+}
+
+// settle handles a terminal Restore of the run in progress. It schedules a retry, or records the final result.
+func (r *RestoreTestReconciler) settle(
+	ctx context.Context,
+	test *restorev1alpha1.RestoreTest,
+	restore *restorev1alpha1.Restore,
+) (ctrl.Result, error) {
+	attempt := attemptOf(restore)
+
+	if restore.Status.Phase == restorev1alpha1.RestorePhaseFailed && attempt <= int(test.Spec.Retries.Count) {
+		return r.retry(ctx, test, restore, attempt)
+	}
+
+	now := r.now()
+	result := restorev1alpha1.RunResultFailed
+	status := metav1.ConditionFalse
+
+	if restore.Status.Phase == restorev1alpha1.RestorePhaseSucceeded {
+		result = restorev1alpha1.RunResultSucceeded
+		status = metav1.ConditionTrue
+
+		restoreTestLastSuccess.WithLabelValues(test.Name, test.Namespace).Set(float64(now.Unix()))
+	}
+
+	test.Status.LastRun = &restorev1alpha1.LastRun{
+		Time:   metav1.NewTime(now),
+		Result: result,
+		Reason: restore.Status.Message,
+	}
+
+	if restore.Spec.KeepOnFailure && restore.Status.Phase != restorev1alpha1.RestorePhaseSucceeded {
+		test.Status.RetainedResources = append(test.Status.RetainedResources, restore.Name)
+	}
+
+	test.Status.CurrentRestore = ""
+	test.Status.RetryAt = nil
+
+	setTestReady(test, status, string(result), restore.Status.Message)
 
 	return ctrl.Result{}, nil
+}
+
+// retry waits for the backoff after a failed attempt, then creates the next attempt of the same run.
+func (r *RestoreTestReconciler) retry(
+	ctx context.Context,
+	test *restorev1alpha1.RestoreTest,
+	restore *restorev1alpha1.Restore,
+	attempt int,
+) (ctrl.Result, error) {
+	now := r.now()
+
+	if test.Status.RetryAt == nil {
+		retryAt := metav1.NewTime(now.Add(test.Spec.Retries.Backoff.Duration))
+		test.Status.RetryAt = &retryAt
+
+		setTestReady(test, metav1.ConditionFalse, reasonRunning, fmt.Sprintf("attempt %d failed, retry scheduled", attempt))
+	}
+
+	if wait := test.Status.RetryAt.Sub(now); wait > 0 {
+		return ctrl.Result{RequeueAfter: wait}, nil
+	}
+
+	if !r.requireTarget(test) {
+		return ctrl.Result{}, nil
+	}
+
+	err := r.createRestore(ctx, test, restore.Labels[runLabel], restore.Spec.Source.BackupRef.Name, attempt+1)
+
+	return ctrl.Result{}, err
+}
+
+// runTriggers starts the queued run when no run is in progress, then handles one due trigger.
+func (r *RestoreTestReconciler) runTriggers(ctx context.Context, test *restorev1alpha1.RestoreTest) (ctrl.Result, error) {
+	if test.Status.CurrentRestore == "" && test.Status.PendingRun != "" {
+		started, err := r.start(ctx, test, "queued-"+r.now().UTC().Format(time.RFC3339Nano), test.Status.PendingRun)
+		if err != nil || !started {
+			return ctrl.Result{}, err
+		}
+
+		test.Status.PendingRun = ""
+
+		return ctrl.Result{}, nil
+	}
+
+	trig, wait, err := r.nextTrigger(ctx, test)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if trig == nil {
+		return ctrl.Result{RequeueAfter: wait}, nil
+	}
+
+	handled, err := r.handle(ctx, test, trig)
+	if err != nil || !handled {
+		return ctrl.Result{}, err
+	}
+
+	// Another trigger may be due, so check again right away.
+	return ctrl.Result{Requeue: true}, nil //nolint:staticcheck // immediate requeue; RequeueAfter has no zero-delay form
+}
+
+// nextTrigger returns the first due trigger, or nil. It also returns how long to wait for the next one, zero for none.
+func (r *RestoreTestReconciler) nextTrigger(ctx context.Context, test *restorev1alpha1.RestoreTest) (*trigger, time.Duration, error) {
+	triggers := test.Spec.Triggers
+	if triggers == nil {
+		return nil, 0, nil
+	}
+
+	nonce := test.Annotations[runNowAnnotation]
+	if triggers.Manual && nonce != "" && nonce != test.Status.LastRunNowValue {
+		return &trigger{
+			source:  "run-now-" + nonce,
+			consume: func() { test.Status.LastRunNowValue = nonce },
+		}, 0, nil
+	}
+
+	now := r.now()
+
+	var wait time.Duration
+
+	if triggers.Cron != "" {
+		schedule, err := cron.ParseStandard(triggers.Cron)
+		if err != nil {
+			return nil, 0, fmt.Errorf("parse cron %q: %w", triggers.Cron, err)
+		}
+
+		if test.Status.NextRun == nil {
+			next := metav1.NewTime(schedule.Next(now.UTC()))
+			test.Status.NextRun = &next
+		}
+
+		tick := test.Status.NextRun.Time
+		if !now.Before(tick) {
+			return &trigger{
+				source: "cron-" + tick.UTC().Format(time.RFC3339),
+				consume: func() {
+					next := metav1.NewTime(schedule.Next(now.UTC()))
+					test.Status.NextRun = &next
+				},
+			}, 0, nil
+		}
+
+		wait = tick.Sub(now)
+	}
+
+	if triggers.AfterBackup != nil {
+		trig, backupWait, err := r.afterBackupTrigger(ctx, test, triggers.AfterBackup.Delay.Duration, now)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		if trig != nil {
+			return trig, 0, nil
+		}
+
+		wait = earliest(wait, earliest(backupWait, snapshotPollInterval))
+	}
+
+	return nil, wait, nil
+}
+
+// afterBackupTrigger returns the oldest completed backup whose delay has passed and that no run handled yet.
+// Otherwise it returns how long until the next such backup is due.
+func (r *RestoreTestReconciler) afterBackupTrigger(
+	ctx context.Context,
+	test *restorev1alpha1.RestoreTest,
+	delay time.Duration,
+	now time.Time,
+) (*trigger, time.Duration, error) {
+	backups, err := r.completedBackups(ctx, test)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var wait time.Duration
+
+	for _, b := range backups {
+		if slices.Contains(test.Status.HandledBackups, b.name) {
+			continue
+		}
+		// Backups that finished before this test existed are not new. Testing them all at once would be a surprise.
+		if b.completed.Before(test.CreationTimestamp.Time) {
+			continue
+		}
+
+		due := b.completed.Add(delay)
+		if !now.Before(due) {
+			return &trigger{
+				source: "backup-" + b.name,
+				backup: b.name,
+				consume: func() {
+					test.Status.HandledBackups = append(test.Status.HandledBackups, b.name)
+				},
+			}, 0, nil
+		}
+
+		wait = earliest(wait, due.Sub(now))
+	}
+
+	return nil, wait, nil
+}
+
+// handle applies the overlap policy to a due trigger. It reports false when the trigger was not used and must wait.
+func (r *RestoreTestReconciler) handle(ctx context.Context, test *restorev1alpha1.RestoreTest, trig *trigger) (bool, error) {
+	if test.Status.CurrentRestore == "" {
+		started, err := r.start(ctx, test, trig.source, trig.backup)
+		if err != nil || !started {
+			return false, err
+		}
+
+		trig.consume()
+
+		return true, nil
+	}
+
+	switch test.Spec.OverlapPolicy {
+	case restorev1alpha1.OverlapPolicyQueue:
+		return r.queue(ctx, test, trig)
+	case restorev1alpha1.OverlapPolicyReplace:
+		return r.replace(ctx, test, trig)
+	default:
+		r.Recorder.Event(test, corev1.EventTypeNormal, reasonRunSkipped, "run "+trig.source+" skipped, a run is in progress")
+		trig.consume()
+
+		return true, nil
+	}
+}
+
+// queue keeps one pending run behind the run in progress. A trigger that finds a pending run is skipped.
+func (r *RestoreTestReconciler) queue(ctx context.Context, test *restorev1alpha1.RestoreTest, trig *trigger) (bool, error) {
+	if test.Status.PendingRun != "" {
+		r.Recorder.Event(test, corev1.EventTypeNormal, reasonRunSkipped, "run "+trig.source+" skipped, a run is already pending")
+		trig.consume()
+
+		return true, nil
+	}
+
+	backup, err := r.resolveBackup(ctx, test, trig.backup)
+	if err != nil {
+		return false, err
+	}
+
+	if backup == "" {
+		r.blockTest(test, reasonBackupNotFound, "no Succeeded backup matches backupSelector")
+
+		return false, nil
+	}
+
+	test.Status.PendingRun = backup
+
+	trig.consume()
+
+	return true, nil
+}
+
+// replace deletes the run in progress and starts the trigger in its place.
+func (r *RestoreTestReconciler) replace(ctx context.Context, test *restorev1alpha1.RestoreTest, trig *trigger) (bool, error) {
+	if !r.requireTarget(test) {
+		return false, nil
+	}
+
+	old := &restorev1alpha1.Restore{ObjectMeta: metav1.ObjectMeta{Name: test.Status.CurrentRestore, Namespace: test.Namespace}}
+
+	err := client.IgnoreNotFound(r.Delete(ctx, old))
+	if err != nil {
+		return false, err
+	}
+
+	r.Recorder.Event(test, corev1.EventTypeNormal, reasonRunReplaced, "replaced run "+old.Name+" with "+trig.source)
+
+	test.Status.CurrentRestore = ""
+	test.Status.RetryAt = nil
+	test.Status.PendingRun = ""
+
+	started, err := r.start(ctx, test, trig.source, trig.backup)
+	if err != nil || !started {
+		return false, err
+	}
+
+	trig.consume()
+
+	return true, nil
+}
+
+// start creates the first attempt of a new run. An empty backup selects the newest matching backup.
+func (r *RestoreTestReconciler) start(ctx context.Context, test *restorev1alpha1.RestoreTest, source, backup string) (bool, error) {
+	if !r.requireTarget(test) {
+		return false, nil
+	}
+
+	name, err := r.resolveBackup(ctx, test, backup)
+	if err != nil {
+		return false, err
+	}
+
+	if name == "" {
+		r.blockTest(test, reasonBackupNotFound, "no Succeeded backup matches backupSelector")
+
+		return false, nil
+	}
+
+	err = r.createRestore(ctx, test, runID(source), name, 1)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// createRestore creates the Restore of one attempt and makes it the run in progress.
+// An attempt that already exists, from an earlier reconcile that did not store its status, is accepted.
+func (r *RestoreTestReconciler) createRestore(ctx context.Context, test *restorev1alpha1.RestoreTest, run, backup string, attempt int) error {
+	restore := &restorev1alpha1.Restore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-%s-a%d", test.Name, run, attempt),
+			Namespace: test.Namespace,
+			Labels: map[string]string{
+				testLabel:    test.Name,
+				runLabel:     run,
+				attemptLabel: strconv.Itoa(attempt),
+			},
+		},
+		Spec: restorev1alpha1.RestoreSpec{
+			Provider: test.Spec.Provider,
+			Source: restorev1alpha1.RestoreSource{
+				BackupRef: restorev1alpha1.BackupRef{Name: backup, Namespace: test.Namespace},
+			},
+			Target:        test.Spec.Target,
+			BlueprintRef:  test.Spec.BlueprintRef,
+			RestoreWindow: test.Spec.RestoreWindow,
+			KeepOnFailure: test.Spec.KeepOnFailure,
+		},
+	}
+
+	err := controllerutil.SetControllerReference(test, restore, r.Scheme)
+	if err != nil {
+		return err
+	}
+
+	err = r.Create(ctx, restore)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+
+	test.Status.CurrentRestore = restore.Name
+	test.Status.RetryAt = nil
+
+	setTestReady(test, metav1.ConditionFalse, reasonRunning, "attempt "+strconv.Itoa(attempt)+" started")
+
+	return nil
+}
+
+// requireTarget reports whether the test can create Restore objects. Without a target it sets TargetMissing.
+func (r *RestoreTestReconciler) requireTarget(test *restorev1alpha1.RestoreTest) bool {
+	if !test.Spec.Target.Size.IsZero() {
+		return true
+	}
+
+	r.blockTest(test, reasonTargetMissing, "spec.target.size is required to start a run")
+
+	return false
+}
+
+// resolveBackup returns preferred when set. Otherwise it returns the backup name from the selector,
+// or the newest Succeeded backup that matches it. An empty result means no backup matches.
+func (r *RestoreTestReconciler) resolveBackup(ctx context.Context, test *restorev1alpha1.RestoreTest, preferred string) (string, error) {
+	if preferred != "" {
+		return preferred, nil
+	}
+
+	if test.Spec.BackupSelector.Name != "" {
+		return test.Spec.BackupSelector.Name, nil
+	}
+
+	backups, err := r.completedBackups(ctx, test)
+	if err != nil {
+		return "", err
+	}
+
+	if len(backups) == 0 {
+		return "", nil
+	}
+
+	return backups[len(backups)-1].name, nil
+}
+
+// completedBackups lists the Succeeded Kopiur Snapshots that match the backup selector, oldest first.
+func (r *RestoreTestReconciler) completedBackups(ctx context.Context, test *restorev1alpha1.RestoreTest) ([]completedBackup, error) {
+	snapshots := &unstructured.UnstructuredList{}
+	snapshots.SetGroupVersionKind(snapshotGVK.GroupVersion().WithKind("SnapshotList"))
+
+	err := r.reader().List(ctx, snapshots, client.InNamespace(test.Namespace))
+	if err != nil {
+		return nil, err
+	}
+
+	var backups []completedBackup
+
+	for i := range snapshots.Items {
+		obj := &snapshots.Items[i]
+
+		if kopiurPhase(obj) != snapshotPhaseSucceeded || !selects(test.Spec.BackupSelector, obj) {
+			continue
+		}
+
+		completed, ok := completionTime(obj)
+		if !ok {
+			continue
+		}
+
+		backups = append(backups, completedBackup{name: obj.GetName(), completed: completed})
+	}
+
+	sort.Slice(backups, func(i, j int) bool {
+		if backups[i].completed.Equal(backups[j].completed) {
+			return backups[i].name < backups[j].name
+		}
+
+		return backups[i].completed.Before(backups[j].completed)
+	})
+
+	return backups, nil
+}
+
+// blockTest sets Ready=False with a reason and emits a warning event when the reason changes.
+func (r *RestoreTestReconciler) blockTest(test *restorev1alpha1.RestoreTest, reason, msg string) {
+	if testReadyReason(test) != reason {
+		r.Recorder.Event(test, corev1.EventTypeWarning, reason, msg)
+	}
+
+	setTestReady(test, metav1.ConditionFalse, reason, msg)
+}
+
+func setTestReady(test *restorev1alpha1.RestoreTest, status metav1.ConditionStatus, reason, msg string) {
+	meta.SetStatusCondition(&test.Status.Conditions, metav1.Condition{
+		Type:               readyConditionType,
+		Status:             status,
+		Reason:             reason,
+		Message:            msg,
+		ObservedGeneration: test.Generation,
+	})
+}
+
+func testReadyReason(test *restorev1alpha1.RestoreTest) string {
+	condition := meta.FindStatusCondition(test.Status.Conditions, readyConditionType)
+	if condition == nil {
+		return ""
+	}
+
+	return condition.Reason
+}
+
+// selects reports whether a backup object matches the backup selector.
+func selects(sel restorev1alpha1.BackupSelector, obj *unstructured.Unstructured) bool {
+	if sel.Name != "" {
+		return obj.GetName() == sel.Name
+	}
+
+	if len(sel.Labels) == 0 {
+		return false
+	}
+
+	for k, v := range sel.Labels {
+		if obj.GetLabels()[k] != v {
+			return false
+		}
+	}
+
+	return true
+}
+
+// completionTime is the lastTransitionTime of the Ready=True condition of a Kopiur Snapshot.
+func completionTime(obj *unstructured.Unstructured) (time.Time, bool) {
+	conditions, _, _ := unstructured.NestedSlice(obj.Object, "status", "conditions")
+
+	for _, c := range conditions {
+		condition, ok := c.(map[string]any)
+		if !ok || condition["type"] != "Ready" || condition["status"] != "True" {
+			continue
+		}
+
+		raw, _ := condition["lastTransitionTime"].(string)
+
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return time.Time{}, false
+		}
+
+		return t, true
+	}
+
+	return time.Time{}, false
+}
+
+// attemptOf reads the attempt number of a Restore. A missing or invalid label counts as the first attempt.
+func attemptOf(restore *restorev1alpha1.Restore) int {
+	attempt, err := strconv.Atoi(restore.Labels[attemptLabel])
+	if err != nil {
+		return 1
+	}
+
+	return attempt
+}
+
+// runID is 8 hex characters of the hash of a trigger source. It names the Restore objects of one run.
+func runID(source string) string {
+	sum := sha256.Sum256([]byte(source))
+
+	return hex.EncodeToString(sum[:4])
+}
+
+// earliest returns the shorter of two waits, where zero means no wait is needed.
+func earliest(a, b time.Duration) time.Duration {
+	if a == 0 || (b != 0 && b < a) {
+		return b
+	}
+
+	return a
+}
+
+func (r *RestoreTestReconciler) now() time.Time {
+	if r.Now != nil {
+		return r.Now()
+	}
+
+	return time.Now()
+}
+
+// reader reads Kopiur Snapshots through the API reader when one is set, so no informer is started for them.
+func (r *RestoreTestReconciler) reader() client.Reader {
+	if r.APIReader != nil {
+		return r.APIReader
+	}
+
+	return r.Client
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *RestoreTestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&restorev1alpha1.RestoreTest{}).
+		Owns(&restorev1alpha1.Restore{}).
 		Named("restoretest").
 		Complete(r)
 }

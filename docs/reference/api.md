@@ -335,6 +335,7 @@ RestoreTarget describes the scratch volume a Restore writes into.
 
 _Appears in:_
 - [RestoreSpec](#restorespec)
+- [RestoreTestSpec](#restoretestspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -379,6 +380,7 @@ _Appears in:_
 | `provider` _[Provider](#provider)_ | Provider is the backup tool that performs the restores. |  | Enum: [velero volsync kopiur] <br /> |
 | `backupSelector` _[BackupSelector](#backupselector)_ | BackupSelector chooses which backups the restores read from. |  |  |
 | `blueprintRef` _[BlueprintRef](#blueprintref)_ | BlueprintRef names the check to run against each restored volume. |  |  |
+| `target` _[RestoreTarget](#restoretarget)_ | Target is the scratch volume each run restores into, with the same meaning as Restore.spec.target. |  |  |
 | `triggers` _[Triggers](#triggers)_ | Triggers defines what starts a run. |  |  |
 | `restoreWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | RestoreWindow is the deadline for each attempt. | 45m |  |
 | `retries` _[Retries](#retries)_ | Retries defines how failed attempts are retried. | \{  \} |  |
@@ -403,6 +405,10 @@ _Appears in:_
 | `nextRun` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | NextRun is when the next cron run is scheduled. |  |  |
 | `handledBackups` _string array_ | HandledBackups lists backup names already used by an afterBackup trigger. |  |  |
 | `retainedResources` _string array_ | RetainedResources lists objects kept after a failed run for debugging. |  |  |
+| `currentRestore` _string_ | CurrentRestore is the Restore of the run in progress, empty when no run is in progress. |  |  |
+| `retryAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | RetryAt is when the next attempt of the run in progress is created. |  |  |
+| `pendingRun` _string_ | PendingRun is the backup of the run queued behind the run in progress (overlap policy Queue). |  |  |
+| `lastRunNowValue` _string_ | LastRunNowValue is the last value of the run-now annotation that started a run. |  |  |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#condition-v1-meta) array_ | Conditions are the latest observations of the test state. |  |  |
 
 

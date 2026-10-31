@@ -37,6 +37,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - kopiur.home-operations.com
+  resources:
+  - snapshots
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - restore.bret.linogics.io
   resources:
   - restoreblueprints

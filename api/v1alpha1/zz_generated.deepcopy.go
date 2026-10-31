@@ -481,6 +481,7 @@ func (in *RestoreTestSpec) DeepCopyInto(out *RestoreTestSpec) {
 	*out = *in
 	in.BackupSelector.DeepCopyInto(&out.BackupSelector)
 	out.BlueprintRef = in.BlueprintRef
+	in.Target.DeepCopyInto(&out.Target)
 	if in.Triggers != nil {
 		in, out := &in.Triggers, &out.Triggers
 		*out = new(Triggers)
@@ -521,6 +522,10 @@ func (in *RestoreTestStatus) DeepCopyInto(out *RestoreTestStatus) {
 		in, out := &in.RetainedResources, &out.RetainedResources
 		*out = make([]string, len(*in))
 		copy(*out, *in)
+	}
+	if in.RetryAt != nil {
+		in, out := &in.RetryAt, &out.RetryAt
+		*out = (*in).DeepCopy()
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions

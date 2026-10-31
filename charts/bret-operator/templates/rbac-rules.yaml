@@ -9,6 +9,46 @@ metadata:
     {{- include "bret-operator.labels" . | nindent 4 }}
 rules:
 - apiGroups:
+  - ''
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ''
+  resources:
+  - persistentvolumeclaims
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
+  - restores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
+  - snapshots
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - restore.bret.linogics.io
   resources:
   - restoreblueprints

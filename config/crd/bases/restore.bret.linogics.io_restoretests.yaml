@@ -123,6 +123,24 @@ spec:
                     minimum: 0
                     type: integer
                 type: object
+              target:
+                description: Target is the scratch volume each run restores into,
+                  with the same meaning as Restore.spec.target.
+                properties:
+                  size:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: Size is the capacity of the scratch volume.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  storageClassName:
+                    description: StorageClassName is the storage class of the scratch
+                      volume.
+                    type: string
+                required:
+                - size
+                type: object
               triggers:
                 description: Triggers defines what starts a run.
                 properties:
@@ -215,6 +233,10 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              currentRestore:
+                description: CurrentRestore is the Restore of the run in progress,
+                  empty when no run is in progress.
+                type: string
               handledBackups:
                 description: HandledBackups lists backup names already used by an
                   afterBackup trigger.
@@ -241,9 +263,17 @@ spec:
                 - result
                 - time
                 type: object
+              lastRunNowValue:
+                description: LastRunNowValue is the last value of the run-now annotation
+                  that started a run.
+                type: string
               nextRun:
                 description: NextRun is when the next cron run is scheduled.
                 format: date-time
+                type: string
+              pendingRun:
+                description: PendingRun is the backup of the run queued behind the
+                  run in progress (overlap policy Queue).
                 type: string
               retainedResources:
                 description: RetainedResources lists objects kept after a failed run
@@ -251,6 +281,11 @@ spec:
                 items:
                   type: string
                 type: array
+              retryAt:
+                description: RetryAt is when the next attempt of the run in progress
+                  is created.
+                format: date-time
+                type: string
             type: object
         required:
         - spec

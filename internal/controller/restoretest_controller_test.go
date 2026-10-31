@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
@@ -63,8 +64,9 @@ var _ = Describe("RestoreTest Controller", func() {
 			By("Reconciling the created resource")
 
 			controllerReconciler := &RestoreTestReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				Recorder: record.NewFakeRecorder(10),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{

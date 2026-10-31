@@ -81,6 +81,8 @@ type RestoreTestSpec struct {
 	BackupSelector BackupSelector `json:"backupSelector"`
 	// BlueprintRef names the check to run against each restored volume.
 	BlueprintRef BlueprintRef `json:"blueprintRef"`
+	// Target is the scratch volume each run restores into, with the same meaning as Restore.spec.target.
+	Target RestoreTarget `json:"target,omitempty"`
 	// Triggers defines what starts a run.
 	Triggers *Triggers `json:"triggers,omitempty"`
 	// RestoreWindow is the deadline for each attempt.
@@ -117,6 +119,14 @@ type RestoreTestStatus struct {
 	HandledBackups []string `json:"handledBackups,omitempty"`
 	// RetainedResources lists objects kept after a failed run for debugging.
 	RetainedResources []string `json:"retainedResources,omitempty"`
+	// CurrentRestore is the Restore of the run in progress, empty when no run is in progress.
+	CurrentRestore string `json:"currentRestore,omitempty"`
+	// RetryAt is when the next attempt of the run in progress is created.
+	RetryAt *metav1.Time `json:"retryAt,omitempty"`
+	// PendingRun is the backup of the run queued behind the run in progress (overlap policy Queue).
+	PendingRun string `json:"pendingRun,omitempty"`
+	// LastRunNowValue is the last value of the run-now annotation that started a run.
+	LastRunNowValue string `json:"lastRunNowValue,omitempty"`
 	// Conditions are the latest observations of the test state.
 	// +listType=map
 	// +listMapKey=type
