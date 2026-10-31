@@ -155,11 +155,13 @@ func TestRestorePhasesToSucceeded(t *testing.T) {
 	key := client.ObjectKeyFromObject(restore)
 
 	reconcileRestore(t, r, key)
+
 	if got := getRestore(t, c, key).Status.Phase; got != restorev1alpha1.RestorePhasePending {
 		t.Fatalf("after start: phase %q, want Pending", got)
 	}
 
 	reconcileRestore(t, r, key)
+
 	if got := getRestore(t, c, key).Status.Phase; got != restorev1alpha1.RestorePhaseRunning {
 		t.Fatalf("after Kopiur created: phase %q, want Running", got)
 	}
@@ -180,6 +182,7 @@ func TestRestorePhasesToSucceeded(t *testing.T) {
 	reconcileRestore(t, r, key)
 
 	podKey := types.NamespacedName{Name: checkPodName(restore), Namespace: restore.Namespace}
+
 	pod := &corev1.Pod{}
 	if err := c.Get(ctx, podKey, pod); err != nil {
 		t.Fatalf("check pod not created: %v", err)
@@ -195,6 +198,7 @@ func TestRestorePhasesToSucceeded(t *testing.T) {
 	}
 
 	reconcileRestore(t, r, key)
+
 	if got := getRestore(t, c, key).Status.Phase; got != restorev1alpha1.RestorePhaseSucceeded {
 		t.Fatalf("after check pod succeeded: phase %q, want Succeeded", got)
 	}

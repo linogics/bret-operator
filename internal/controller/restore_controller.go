@@ -125,7 +125,7 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 	if restore.Status.StartTime == nil {
 		startAttempt(restore, time.Now())
 
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
 	if restore.Status.Deadline != nil && !time.Now().Before(restore.Status.Deadline.Time) {

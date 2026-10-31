@@ -46,6 +46,7 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 	keep := restore.Spec.KeepOnFailure && restore.Status.Phase != restorev1alpha1.RestorePhaseSucceeded
 
 	pvcs := &corev1.PersistentVolumeClaimList{}
+
 	err := r.List(ctx, pvcs, client.InNamespace(restore.Namespace), client.MatchingLabels(restoreLabels(restore)))
 	if err != nil {
 		return err
