@@ -26,7 +26,7 @@ var _ = Describe("RestoreTest Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: testNamespace, // TODO(user):Modify as needed
 		}
 		restoretest := &restorev1alpha1.RestoreTest{}
 
@@ -38,12 +38,12 @@ var _ = Describe("RestoreTest Controller", func() {
 				resource := &restorev1alpha1.RestoreTest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
-						Namespace: "default",
+						Namespace: testNamespace,
 					},
 					Spec: restorev1alpha1.RestoreTestSpec{
 						Provider:       restorev1alpha1.ProviderVelero,
 						BackupSelector: restorev1alpha1.BackupSelector{Name: "backup"},
-						BlueprintRef:   restorev1alpha1.BlueprintRef{Name: "check"},
+						BlueprintRef:   restorev1alpha1.BlueprintRef{Name: testCheckName},
 						RestoreWindow:  metav1.Duration{Duration: 45 * time.Minute},
 					},
 				}

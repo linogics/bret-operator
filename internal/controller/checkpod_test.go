@@ -14,15 +14,15 @@ func checkPodBlueprint() *restorev1alpha1.RestoreBlueprint {
 	uid := int64(999)
 
 	return &restorev1alpha1.RestoreBlueprint{
-		ObjectMeta: metav1.ObjectMeta{Name: "postgres", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testApp, Namespace: testNamespace},
 		Spec: restorev1alpha1.RestoreBlueprintSpec{
-			RestoreMount: "/var/lib/postgresql/data",
+			RestoreMount: testMountPath,
 			InitContainers: []corev1.Container{
 				{Name: "perms", Image: "busybox"},
 			},
 			Containers: []corev1.Container{
 				{
-					Name:            "check",
+					Name:            testCheckName,
 					Image:           "postgres:17",
 					SecurityContext: &corev1.SecurityContext{RunAsUser: &uid},
 				},
@@ -48,7 +48,7 @@ func TestBuildCheckPod(t *testing.T) {
 		t.Fatalf("buildCheckPod: %v", err)
 	}
 
-	if pod.Name != "r1-check" || pod.Namespace != "default" {
+	if pod.Name != "r1-check" || pod.Namespace != testNamespace {
 		t.Errorf("pod name %s/%s, want default/r1-check", pod.Namespace, pod.Name)
 	}
 
@@ -78,7 +78,7 @@ func TestBuildCheckPod(t *testing.T) {
 			mounts[m.Name] = m.MountPath
 		}
 
-		if mounts[restoredVolume] != "/var/lib/postgresql/data" {
+		if mounts[restoredVolume] != testMountPath {
 			t.Errorf("container %s: restored mount %q, want /var/lib/postgresql/data", c.Name, mounts[restoredVolume])
 		}
 

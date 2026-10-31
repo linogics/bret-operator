@@ -23,7 +23,7 @@ var _ = Describe("RestoreBlueprint Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: testNamespace, // TODO(user):Modify as needed
 		}
 		restoreblueprint := &restorev1alpha1.RestoreBlueprint{}
 
@@ -35,11 +35,11 @@ var _ = Describe("RestoreBlueprint Controller", func() {
 				resource := &restorev1alpha1.RestoreBlueprint{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
-						Namespace: "default",
+						Namespace: testNamespace,
 					},
 					Spec: restorev1alpha1.RestoreBlueprintSpec{
 						RestoreMount: "/restore",
-						Containers:   []corev1.Container{{Name: "check", Image: "busybox"}},
+						Containers:   []corev1.Container{{Name: testCheckName, Image: "busybox"}},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

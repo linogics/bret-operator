@@ -72,11 +72,11 @@ func newRestoreTestFixture(t *testing.T, test *restorev1alpha1.RestoreTest, objs
 
 func newRestoreTestObject() *restorev1alpha1.RestoreTest {
 	return &restorev1alpha1.RestoreTest{
-		ObjectMeta: metav1.ObjectMeta{Name: "t1", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "t1", Namespace: testNamespace},
 		Spec: restorev1alpha1.RestoreTestSpec{
 			Provider:       restorev1alpha1.ProviderKopiur,
 			BackupSelector: restorev1alpha1.BackupSelector{Name: "b1"},
-			BlueprintRef:   restorev1alpha1.BlueprintRef{Name: "postgres"},
+			BlueprintRef:   restorev1alpha1.BlueprintRef{Name: testApp},
 			Target:         restorev1alpha1.RestoreTarget{Size: resource.MustParse("1Gi")},
 			RestoreWindow:  metav1.Duration{Duration: 45 * time.Minute},
 			OverlapPolicy:  restorev1alpha1.OverlapPolicySkip,
@@ -85,7 +85,7 @@ func newRestoreTestObject() *restorev1alpha1.RestoreTest {
 }
 
 // run reconciles until the reconciler stops asking for an immediate requeue.
-func (f *testFixture) run() ctrl.Result {
+func (f *testFixture) run() {
 	f.t.Helper()
 
 	for range 10 {
@@ -95,13 +95,11 @@ func (f *testFixture) run() ctrl.Result {
 		}
 
 		if !res.Requeue { //nolint:staticcheck // immediate requeue check, see controller
-			return res
+			return
 		}
 	}
 
 	f.t.Fatal("reconcile did not settle")
-
-	return ctrl.Result{}
 }
 
 func (f *testFixture) test() *restorev1alpha1.RestoreTest {
@@ -135,7 +133,7 @@ func (f *testFixture) restores() []restorev1alpha1.Restore {
 	f.t.Helper()
 
 	list := &restorev1alpha1.RestoreList{}
-	if err := f.c.List(f.ctx, list, client.InNamespace("default")); err != nil {
+	if err := f.c.List(f.ctx, list, client.InNamespace(testNamespace)); err != nil {
 		f.t.Fatal(err)
 	}
 
@@ -193,7 +191,7 @@ func newSnapshot(name string, labels map[string]string, phase string, ready time
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "kopiur.home-operations.com/v1alpha1",
 		"kind":       "Snapshot",
-		"metadata":   map[string]any{"name": name, "namespace": "default"},
+		"metadata":   map[string]any{"name": name, "namespace": testNamespace},
 		"status": map[string]any{
 			"phase": phase,
 			"conditions": []any{map[string]any{
@@ -252,16 +250,16 @@ func TestRestoreTestCronCreatesRestore(t *testing.T) {
 
 func TestRestoreTestAfterBackupOneRunPerSnapshot(t *testing.T) {
 	test := newRestoreTestObject()
-	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{"app": "pg"}}
+	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
 	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
 	test.Spec.OverlapPolicy = restorev1alpha1.OverlapPolicyQueue
 
-	pg := map[string]string{"app": "pg"}
+	pg := map[string]string{testLabelKey: testLabelValue}
 	objs := []client.Object{
 		newSnapshot("a", pg, "Succeeded", time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)),
 		newSnapshot("b", pg, "Succeeded", time.Date(2026, 11, 15, 10, 10, 0, 0, time.UTC)),
 		newSnapshot("c", pg, "Failed", time.Date(2026, 11, 15, 10, 12, 0, 0, time.UTC)),
-		newSnapshot("d", map[string]string{"app": "other"}, "Succeeded", time.Date(2026, 11, 15, 10, 13, 0, 0, time.UTC)),
+		newSnapshot("d", map[string]string{testLabelKey: "other"}, "Succeeded", time.Date(2026, 11, 15, 10, 13, 0, 0, time.UTC)),
 	}
 
 	f := newRestoreTestFixture(t, test, objs...)
@@ -471,10 +469,10 @@ func TestRestoreTestTargetMissing(t *testing.T) {
 func TestRestoreTestAfterBackupIgnoresBackupsBeforeCreation(t *testing.T) {
 	test := newRestoreTestObject()
 	test.CreationTimestamp = metav1.NewTime(time.Date(2026, 11, 15, 10, 5, 0, 0, time.UTC))
-	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{"app": "pg"}}
+	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
 	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
 
-	pg := map[string]string{"app": "pg"}
+	pg := map[string]string{testLabelKey: testLabelValue}
 	objs := []client.Object{
 		newSnapshot("old", pg, "Succeeded", time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)),
 		newSnapshot("new", pg, "Succeeded", time.Date(2026, 11, 15, 10, 10, 0, 0, time.UTC)),

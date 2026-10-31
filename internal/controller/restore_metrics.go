@@ -10,16 +10,21 @@ import (
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
 
+const (
+	labelProvider = "provider"
+	labelResult   = "result"
+)
+
 var (
 	restoreRuns = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "bret_restore_runs_total",
 		Help: "Finished restore attempts by provider and result.",
-	}, []string{"provider", "result"})
+	}, []string{labelProvider, labelResult})
 
 	restoreDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "bret_restore_duration_seconds",
 		Help: "Duration of finished restore attempts by provider and result.",
-	}, []string{"provider", "result"})
+	}, []string{labelProvider, labelResult})
 )
 
 func init() {

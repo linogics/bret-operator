@@ -32,7 +32,7 @@ var _ = Describe("Restore Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: testNamespace, // TODO(user):Modify as needed
 		}
 		restore := &restorev1alpha1.Restore{}
 
@@ -44,7 +44,7 @@ var _ = Describe("Restore Controller", func() {
 				resource := &restorev1alpha1.Restore{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
-						Namespace: "default",
+						Namespace: testNamespace,
 					},
 					Spec: restorev1alpha1.RestoreSpec{
 						Provider: restorev1alpha1.ProviderVelero,
@@ -108,12 +108,12 @@ func fakeRestoreClient(t *testing.T, objs ...client.Object) (client.Client, *Res
 
 func newTestRestore() *restorev1alpha1.Restore {
 	return &restorev1alpha1.Restore{
-		ObjectMeta: metav1.ObjectMeta{Name: "r1", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "r1", Namespace: testNamespace},
 		Spec: restorev1alpha1.RestoreSpec{
 			Provider:      restorev1alpha1.ProviderKopiur,
 			Source:        restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "b1"}},
 			Target:        restorev1alpha1.RestoreTarget{Size: resource.MustParse("1Gi")},
-			BlueprintRef:  restorev1alpha1.BlueprintRef{Name: "postgres"},
+			BlueprintRef:  restorev1alpha1.BlueprintRef{Name: testApp},
 			RestoreWindow: metav1.Duration{Duration: 45 * time.Minute},
 		},
 	}
@@ -121,10 +121,10 @@ func newTestRestore() *restorev1alpha1.Restore {
 
 func newTestBlueprint() *restorev1alpha1.RestoreBlueprint {
 	return &restorev1alpha1.RestoreBlueprint{
-		ObjectMeta: metav1.ObjectMeta{Name: "postgres", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testApp, Namespace: testNamespace},
 		Spec: restorev1alpha1.RestoreBlueprintSpec{
-			RestoreMount: "/var/lib/postgresql/data",
-			Containers:   []corev1.Container{{Name: "check", Image: "postgres:17"}},
+			RestoreMount: testMountPath,
+			Containers:   []corev1.Container{{Name: testCheckName, Image: "postgres:17"}},
 		},
 	}
 }

@@ -18,6 +18,8 @@ const (
 	kopiurPhaseCompleted = "Completed"
 	kopiurPhaseFailed    = "Failed"
 	moverUIDAnnotation   = "restore.bret.linogics.io/mover-uid"
+	keyName              = "name"
+	keyNamespace         = "namespace"
 )
 
 // kopiurRestoreGVK is the Kopiur Restore kind. It is used as unstructured, so Kopiur is not a Go dependency.
@@ -64,7 +66,7 @@ func kopiurRestoreObject(restore *restorev1alpha1.Restore, uid *int64) *unstruct
 
 	spec := map[string]any{
 		"source": map[string]any{
-			"snapshotRef": map[string]any{"name": backup.Name, "namespace": backupNamespace},
+			"snapshotRef": map[string]any{keyName: backup.Name, keyNamespace: backupNamespace},
 		},
 		"target": map[string]any{"populator": map[string]any{}},
 		"policy": map[string]any{"onMissingSnapshot": "Fail"},
@@ -81,9 +83,9 @@ func kopiurRestoreObject(restore *restorev1alpha1.Restore, uid *int64) *unstruct
 		"apiVersion": kopiurRestoreGVK.GroupVersion().String(),
 		"kind":       kopiurRestoreGVK.Kind,
 		"metadata": map[string]any{
-			"name":      kopiurName(restore),
-			"namespace": restore.Namespace,
-			"labels":    map[string]any{restoreLabel: restore.Name},
+			keyName:      kopiurName(restore),
+			keyNamespace: restore.Namespace,
+			"labels":     map[string]any{restoreLabel: restore.Name},
 		},
 		"spec": spec,
 	}}
