@@ -86,7 +86,7 @@ Blueprint tests do not run in CI. They need a cluster and several gigabytes of i
 | `cmd/main.go` | Manager entry point and flags. |
 | `config/` | Kustomize bases: CRDs, RBAC, manager, metrics. |
 | `charts/bret-operator/` | Helm chart. CRDs and RBAC are copied from `config/`. |
-| `blueprints/` | Check drafts for 20 apps. See `blueprints/INDEX.md`. |
+| `blueprints/` | Check drafts for each app. See `blueprints/INDEX.md`. |
 | `examples/` | Minimal blueprint, RestoreTest and Restore examples. |
 | `hack/blueprint-test/` | Blueprint harness and per-app seeds. |
 | `hack/helm/sync_rbac.py` | Copies RBAC rules into the chart. |

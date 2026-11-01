@@ -132,7 +132,7 @@ docker manifest inspect postgres:17.12 >/dev/null && echo ok
 nerdctl --namespace k8s.io pull postgres:17.12
 ```
 
-## Status of the 20 app blueprints
+## Status of the app blueprints
 
 See [blueprints/INDEX.md](../blueprints/INDEX.md). It records, per app, whether the round trip
 passed, the negative test result, and the open issues.

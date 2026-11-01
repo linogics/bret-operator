@@ -1,4 +1,4 @@
-# RestoreBlueprint index (top-19 apps)
+# RestoreBlueprint index
 
 ## Test status (kind, Kopiur round trip, 2026-11-14/15)
 
@@ -7,7 +7,7 @@ Harness: `hack/blueprint-test/roundtrip.sh APP`. Details: `docs/testing-blueprin
 
 | Result | Apps |
 |---|---|
-| PASS (19) | postgres, mysql, mariadb, redis, mongodb, elasticsearch, rabbitmq, nextcloud, wordpress, gitea, grafana, prometheus, vaultwarden, home-assistant, jellyfin, uptime-kuma, keycloak, n8n, pihole |
+| PASS | postgres, mysql, mariadb, redis, mongodb, elasticsearch, rabbitmq, nextcloud, wordpress, gitea, grafana, prometheus, vaultwarden, home-assistant, jellyfin, uptime-kuma, keycloak, n8n, pihole |
 
 Caveats that apply to the PASS results:
 
@@ -73,7 +73,7 @@ homeassistant/home-assistant:2024.9.0, jellyfin/jellyfin:10.9.11, louislam/uptim
 n8nio/n8n:1.60.0, pihole/pihole:2024.07.0, prom/prometheus:v2.54.1.
 Not confirmed: elasticsearch, python, keycloak (all marked in the YAML).
 
-Popularity: the top-20 list was used as given. No swaps were made. Artifact Hub / CNCF
+Popularity: the popularity list was used as given. No swaps were made. Artifact Hub / CNCF
 usage was not checked.
 
 ## Apps that have data and a database

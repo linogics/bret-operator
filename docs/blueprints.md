@@ -188,5 +188,5 @@ hack/blueprint-test/roundtrip.sh minimal examples/seeds/minimal.yaml examples/re
 
 ## Catalog
 
-[blueprints/INDEX.md](../blueprints/INDEX.md) lists the 20 app blueprints, the volumes each one
+[blueprints/INDEX.md](../blueprints/INDEX.md) lists the app blueprints, the volumes each one
 needs, the canary it uses, and its test status.

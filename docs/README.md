@@ -35,7 +35,7 @@ Anything marked **planned** in these docs is design, not behavior. The design is
 | Document | Content |
 |---|---|
 | [reference/api.md](reference/api.md) | Generated field reference for all three kinds. Do not edit by hand. |
-| [blueprints/INDEX.md](../blueprints/INDEX.md) | Catalog of 20 app blueprints, their volumes, checks and test status. |
+| [blueprints/INDEX.md](../blueprints/INDEX.md) | Catalog of app blueprints, their volumes, checks and test status. |
 | [best-practices.md](best-practices.md) | Rules for backups and restore tests. |
 | [data-and-database.md](data-and-database.md) | Apps that have files and a database. Keeping them in one restore point. |
 | [troubleshooting.md](troubleshooting.md) | Known errors and their fixes, from the kind spike. |
