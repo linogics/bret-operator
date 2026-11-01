@@ -13,11 +13,14 @@ Read this first.
 |---|---|
 | CRDs `Restore`, `RestoreTest`, `RestoreBlueprint` (schema, validation, printer columns) | Implemented. Generated from `api/v1alpha1/`. |
 | Helm chart and plain manifests | Implemented. See [installation.md](installation.md). |
-| Controllers (create restores, run checks, update status, events, metrics) | **Not implemented.** The reconcilers are empty scaffolds. The operator starts, but it does not restore or check anything yet. |
+| Restore controller (Kopiur provider) | Implemented: scratch PVC, Kopiur restore, check pod, window, cleanup, retention, status, Events, metrics. Verified on a kind cluster (success and failure). |
+| RestoreTest controller | Implemented: cron, afterBackup, manual trigger, overlap policy, retries. Unit tests only. Not yet run end to end on a cluster. |
+| Velero and VolSync providers | Not implemented. A `Restore` with these providers reports `ProviderUnsupported`. |
+| Metrics `bret_restore_*`, `bret_restoretest_*` | Implemented. Not yet checked by a Prometheus scrape. |
 | `RestoreBlueprint` check files in `blueprints/` | Drafts. Being tested by hand with the harness in [testing-blueprints.md](testing-blueprints.md). Each app's result is in [blueprints/INDEX.md](../blueprints/INDEX.md). |
 | Blueprint check by hand (`hack/blueprint-test/`) | Works. Restores a backup with Kopiur and runs a blueprint against it. |
 
-Anything marked **planned** in these docs is design, not behavior. The design is in
+Anything marked **planned** in these docs is not in the code yet. The design is in
 [superpowers/specs/2026-11-14-bret-operator-restore-test-design.md](superpowers/specs/2026-11-14-bret-operator-restore-test-design.md).
 
 ## Read in this order

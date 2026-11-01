@@ -11,9 +11,9 @@
 bret-operator tests your Kubernetes backups. It restores a backup from Velero, VolSync or
 Kopiur into a scratch volume, runs your check in a throwaway pod, and records the result.
 
-**Status: early.** The CRDs, the Helm chart and the release pipeline exist. The controllers that
-run restores and checks are not written yet. The operator starts but does not act on
-`RestoreTest` objects. Blueprint checks can be run by hand today. See
+**Status: early.** The CRDs, the Helm chart and the release pipeline exist. The `Restore` and
+`RestoreTest` controllers work for the Kopiur provider. Velero and VolSync are not implemented yet.
+Blueprint checks can also be run by hand. See
 [docs/README.md](docs/README.md) for the full status table.
 
 ## Quick links
