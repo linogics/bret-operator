@@ -17,9 +17,9 @@ type RestoreBlueprintReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoreblueprints/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoreblueprints/finalizers,verbs=update
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoreblueprints/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoreblueprints/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

@@ -17,7 +17,7 @@ const (
 	kopiurGroup          = "kopiur.home-operations.com"
 	kopiurPhaseCompleted = "Completed"
 	kopiurPhaseFailed    = "Failed"
-	moverUIDAnnotation   = "restore.bret.linogics.io/mover-uid"
+	moverUIDAnnotation   = "bret.linogics.io/mover-uid"
 	keyName              = "name"
 	keyNamespace         = "namespace"
 )

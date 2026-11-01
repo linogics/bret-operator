@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: restoretests.restore.bret.linogics.io
+  name: restoretests.bret.linogics.io
 spec:
-  group: restore.bret.linogics.io
+  group: bret.linogics.io
   names:
     kind: RestoreTest
     listKind: RestoreTestList

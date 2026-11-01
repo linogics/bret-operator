@@ -11,7 +11,7 @@ metadata:
   name: nextcloud
   namespace: default
   annotations:
-    restore.bret.linogics.io/mover-uid: '{"html": 33, "pgdata": 999}'
+    bret.linogics.io/mover-uid: '{"html": 33, "pgdata": 999}'
 spec:
   restoredVolumes:
   - name: html

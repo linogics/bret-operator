@@ -40,7 +40,7 @@ Check it:
 ```bash
 kubectl -n bret-operator-system get deploy,pods
 kubectl -n bret-operator-system logs deploy/bret-operator
-kubectl get crd | grep restore.bret.linogics.io
+kubectl get crd | grep bret.linogics.io
 ```
 
 Expected: the deployment is `1/1 Available`, and three CRDs are listed:
@@ -142,7 +142,7 @@ need your `Restore`, `RestoreTest` and `RestoreBlueprint` objects:
 
 ```bash
 kubectl delete restoretests,restores,restoreblueprints --all -A
-kubectl delete crd restores.restore.bret.linogics.io restoretests.restore.bret.linogics.io restoreblueprints.restore.bret.linogics.io
+kubectl delete crd restores.bret.linogics.io restoretests.bret.linogics.io restoreblueprints.bret.linogics.io
 ```
 
 Deleting a CRD deletes every object of that kind. Back up the objects first if you keep them.

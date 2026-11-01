@@ -40,7 +40,7 @@ Check it:
 
 ```bash
 kubectl -n bret-operator-system get deploy
-kubectl get crd restores.restore.bret.linogics.io restoretests.restore.bret.linogics.io restoreblueprints.restore.bret.linogics.io
+kubectl get crd restores.bret.linogics.io restoretests.bret.linogics.io restoreblueprints.bret.linogics.io
 ```
 
 The deployment should show `1/1` ready. The three CRDs should be listed.

@@ -29,6 +29,38 @@ rules:
   - update
   - watch
 - apiGroups:
+  - bret.linogics.io
+  resources:
+  - restoreblueprints
+  - restores
+  - restoretests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - bret.linogics.io
+  resources:
+  - restoreblueprints/finalizers
+  - restores/finalizers
+  - restoretests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - bret.linogics.io
+  resources:
+  - restoreblueprints/status
+  - restores/status
+  - restoretests/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - kopiur.home-operations.com
   resources:
   - restores
@@ -48,38 +80,6 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - restore.bret.linogics.io
-  resources:
-  - restoreblueprints
-  - restores
-  - restoretests
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - restore.bret.linogics.io
-  resources:
-  - restoreblueprints/finalizers
-  - restores/finalizers
-  - restoretests/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - restore.bret.linogics.io
-  resources:
-  - restoreblueprints/status
-  - restores/status
-  - restoretests/status
-  verbs:
-  - get
-  - patch
-  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

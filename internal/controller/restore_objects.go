@@ -13,7 +13,7 @@ import (
 )
 
 // retainedLabel marks objects kept after a failed attempt when keepOnFailure is set.
-const retainedLabel = "restore.bret.linogics.io/retained"
+const retainedLabel = "bret.linogics.io/retained"
 
 // ensure creates obj, owned by restore, unless it exists. obj is filled with the stored object
 // and the result reports whether this call created it.

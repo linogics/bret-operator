@@ -74,11 +74,11 @@ type completedBackup struct {
 	completed time.Time
 }
 
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoretests,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoretests/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoretests/finalizers,verbs=update
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoretests,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoretests/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoretests/finalizers,verbs=update
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=kopiur.home-operations.com,resources=snapshots,verbs=get;list;watch
 

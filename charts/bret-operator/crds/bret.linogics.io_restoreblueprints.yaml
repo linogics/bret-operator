@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: restoreblueprints.restore.bret.linogics.io
+  name: restoreblueprints.bret.linogics.io
 spec:
-  group: restore.bret.linogics.io
+  group: bret.linogics.io
   names:
     kind: RestoreBlueprint
     listKind: RestoreBlueprintList

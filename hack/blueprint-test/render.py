@@ -51,12 +51,12 @@ def mount_targets(spec):
 def find_uid(bp, key):
     """UID the mover uses for one volume.
 
-    A blueprint may set the annotation restore.bret.linogics.io/mover-uid to a JSON
+    A blueprint may set the annotation bret.linogics.io/mover-uid to a JSON
     object mapping volume keys to UIDs. Without it, the first main container's runAsUser
     is used. Init containers are skipped, because a native sidecar can run as another UID.
     """
     ann = (bp["metadata"].get("annotations") or {}).get(
-        "restore.bret.linogics.io/mover-uid"
+        "bret.linogics.io/mover-uid"
     )
     if ann:
         mapping = json.loads(ann)

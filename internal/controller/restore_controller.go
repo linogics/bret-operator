@@ -47,10 +47,10 @@ type RestoreReconciler struct {
 	APIReader client.Reader
 }
 
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restores/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restores/finalizers,verbs=update
-// +kubebuilder:rbac:groups=restore.bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restores/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restores/finalizers,verbs=update
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=pods;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=kopiur.home-operations.com,resources=restores,verbs=get;list;watch;create;update;patch;delete

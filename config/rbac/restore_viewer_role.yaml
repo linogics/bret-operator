@@ -1,7 +1,7 @@
 # This rule is not used by the project bret-operator itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants read-only access to restore.bret.linogics.io resources.
+# Grants read-only access to bret.linogics.io resources.
 # This role is intended for users who need visibility into these resources
 # without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
 
@@ -14,7 +14,7 @@ metadata:
   name: restore-viewer-role
 rules:
 - apiGroups:
-  - restore.bret.linogics.io
+  - bret.linogics.io
   resources:
   - restores
   verbs:
@@ -22,7 +22,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - restore.bret.linogics.io
+  - bret.linogics.io
   resources:
   - restores/status
   verbs:

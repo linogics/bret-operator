@@ -103,7 +103,7 @@ Default `false`. When `true` and the last attempt failed, the operator keeps:
 - the native restore object,
 - the scratch volume, so the restored data stays readable.
 
-The kept objects get the label `restore.bret.linogics.io/retained: "true"`. They are not removed
+The kept objects get the label `bret.linogics.io/retained: "true"`. They are not removed
 automatically. Inspect them, then delete them by hand. Earlier failed attempts are always removed.
 
 Turn it on for a check you are still debugging. Leave it off in a long-running schedule, or

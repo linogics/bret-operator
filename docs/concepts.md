@@ -101,7 +101,7 @@ With `keepOnFailure: true` and the last attempt failed, the operator keeps:
 - the native restore object,
 - the scratch volume, so the restored data stays readable.
 
-Kept resources get the label `restore.bret.linogics.io/retained: "true"` and an Event (planned).
+Kept resources get the label `bret.linogics.io/retained: "true"` and an Event (planned).
 Kept resources are not deleted automatically. Delete them by hand, or delete the `Restore`.
 
 Earlier failed attempts are always cleaned up. Only the last attempt is kept.
