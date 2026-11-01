@@ -2,7 +2,7 @@
 # Restore check for grafana 11.2 with SQLite (default). One PVC.
 # Canary contract: dashboard with uid and title "bret-canary", seeded before the backup.
 # Secret grafana-admin holds GF_SECURITY_ADMIN_PASSWORD matching the source instance.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: grafana

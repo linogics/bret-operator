@@ -3,7 +3,7 @@
 # Two volumes: /etc/pihole (gravity.db, setupVars, custom.list) and /etc/dnsmasq.d.
 # Canary contract: adlist https://bret-canary.invalid/list.txt in gravity.db, and the line
 # "10.0.0.53 bret-canary.test" in /etc/pihole/custom.list, seeded before the backup.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: pihole

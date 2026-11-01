@@ -2,7 +2,7 @@
 # The volume is restored to /data. The check recomputes the SHA-256 of the canary file.
 # Canary contract: /data/canary.txt holds the payload, /data/canary.sha256 holds its hash.
 # The seed for this check is hack/blueprint-test/seeds/minimal.yaml.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: minimal

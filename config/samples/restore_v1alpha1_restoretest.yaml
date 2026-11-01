@@ -1,4 +1,4 @@
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
   labels:

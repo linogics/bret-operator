@@ -1,6 +1,6 @@
 # RestoreTest: test the newest orders-db backup every night, and after each new backup.
 # Blueprint: examples/restoreblueprint-minimal.yaml (or your own).
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
   name: orders-db-nightly

@@ -3,7 +3,7 @@
 # Secret n8n-secrets must hold N8N_ENCRYPTION_KEY equal to the source instance key.
 # Canary contract: workflow named bret-canary and credential named bret-canary,
 # seeded before the backup.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: n8n

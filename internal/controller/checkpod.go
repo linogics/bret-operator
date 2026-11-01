@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	restoreLabel   = "restore.bret.linogics.io/restore"
-	blueprintLabel = "restore.bret.linogics.io/blueprint"
+	restoreLabel   = "bret.linogics.io/restore"
+	blueprintLabel = "bret.linogics.io/blueprint"
 	restoredVolume = "restored-data"
 )
 

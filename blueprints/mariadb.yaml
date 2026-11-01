@@ -2,7 +2,7 @@
 # Restore check for mariadb 11.4. Database-only, one PVC.
 # Canary contract: table bret.canary(id int primary key, payload text, sha256 char(64)),
 # row id=1 with sha256 = sha2(payload, 256), seeded before the backup.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: mariadb

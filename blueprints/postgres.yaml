@@ -4,7 +4,7 @@
 # Restore check for postgres. Database-only, one PVC. Not run.
 # Canary contract: table bret_canary(id int, payload text, sha256 text) in db "app",
 # row id=1 with sha256 = hex(sha256(payload)), seeded before the backup.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: postgres

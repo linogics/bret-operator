@@ -1,6 +1,6 @@
 # Restore: one manual restore attempt of a named backup. Usually a RestoreTest creates these.
 # The check that runs afterwards is set by the RestoreTest, so this object alone runs no check yet.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: Restore
 metadata:
   name: orders-db-manual

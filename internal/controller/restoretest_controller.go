@@ -29,10 +29,10 @@ import (
 
 const (
 	// runNowAnnotation starts one manual run each time its value changes.
-	runNowAnnotation = "restore.bret.linogics.io/run-now"
-	testLabel        = "restore.bret.linogics.io/test"
-	runLabel         = "restore.bret.linogics.io/run"
-	attemptLabel     = "restore.bret.linogics.io/attempt"
+	runNowAnnotation = "bret.linogics.io/run-now"
+	testLabel        = "bret.linogics.io/test"
+	runLabel         = "bret.linogics.io/run"
+	attemptLabel     = "bret.linogics.io/attempt"
 	// snapshotPollInterval is how often afterBackup looks for new snapshots, since snapshots are not watched.
 	snapshotPollInterval   = time.Minute
 	snapshotPhaseSucceeded = "Succeeded"

@@ -2,7 +2,7 @@
 # Restore check for elasticsearch 8.15. Files-only (Lucene segments under path.data).
 # Canary contract: index bret-canary, doc _id "canary" with {"payload": "...", "sha256": "..."},
 # seeded before the backup. cluster.name and node.name must equal the source values.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: elasticsearch

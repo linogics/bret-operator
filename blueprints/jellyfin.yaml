@@ -4,7 +4,7 @@
 # so library paths stored in the DB still resolve. Media may be very large (see INDEX.md).
 # Canary contract: /media/bret-canary/canary.txt and canary.sha256 (sha256sum format),
 # seeded before the backup.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: jellyfin

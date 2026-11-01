@@ -4,7 +4,7 @@ Check the manager:
   kubectl -n {{ .Release.Namespace }} get deploy,pods -l app.kubernetes.io/instance={{ .Release.Name }}
   kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "bret-operator.fullname" . }}
 
-CRDs installed: restores, restoretests, restoreblueprints (restore.bret.linogics.io/v1alpha1).
+CRDs installed: restores, restoretests, restoreblueprints (bret.linogics.io/v1alpha1).
 Helm installs CRDs once. It does not upgrade or delete them. See docs/installation.md.
 
 Next steps: docs/getting-started.md

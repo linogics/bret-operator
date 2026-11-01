@@ -12,7 +12,7 @@ restores yet. The rules below are the design the controller will follow.
 Taken from [examples/restoretest.yaml](../examples/restoretest.yaml):
 
 ```yaml
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
   name: orders-db-nightly
@@ -68,7 +68,7 @@ Any combination of three triggers. A run starts when any one fires.
 |---|---|---|
 | `cron` | `"17 3 * * *"` | 5-field cron in UTC. The pattern is checked by the API. |
 | `afterBackup.delay` | `30m` | After a new matching backup completes at time `T`, a run starts at `T + delay`. Each backup is tested once, recorded in `status.handledBackups`. |
-| `manual` | `true` | Enables the run-now annotation. A new value on `restore.bret.linogics.io/run-now` starts one run. |
+| `manual` | `true` | Enables the run-now annotation. A new value on `bret.linogics.io/run-now` starts one run. |
 
 Pick the times on purpose. A test that starts while the backup is still writing can fail for no
 good reason. Leave some margin after the backup window, as the `delay` above does.

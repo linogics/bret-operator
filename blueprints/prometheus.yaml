@@ -2,7 +2,7 @@
 # Restore check for prometheus v2.54.1. Files-only (TSDB blocks and WAL under /prometheus).
 # Canary contract: metric bret_canary_seq, last written value BRET_CANARY_SEQ, within the
 # 10-year window below. The value is written by the seeding job before the backup.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: prometheus

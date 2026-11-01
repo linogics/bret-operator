@@ -144,7 +144,7 @@ run:
 
 ```bash
 kubectl -n data annotate restoretest orders-db-nightly \
-  restore.bret.linogics.io/run-now="$(date +%s)" --overwrite
+  bret.linogics.io/run-now="$(date +%s)" --overwrite
 ```
 
 ## Step 7: Read the result

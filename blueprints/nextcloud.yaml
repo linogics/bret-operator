@@ -5,7 +5,7 @@
 # Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+), gated by
 # startupProbe. Keeps running during the checks. Not in design §7.1 (see INDEX.md).
 # Secret nextcloud-db holds POSTGRES_PASSWORD for the source database.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: nextcloud

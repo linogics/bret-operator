@@ -1,7 +1,7 @@
 # TESTED: round trip PASS, negative test FAIL as expected.
 # Restore check for uptime-kuma 1.23 with SQLite (/app/data/kuma.db). One PVC.
 # Canary contract: monitor named bret-canary exists in kuma.db, seeded before the backup.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: uptime-kuma

@@ -2,7 +2,7 @@
 # Restore check for mongodb 7.0. Database-only (WiredTiger files), one PVC.
 # mongosh is in the image (checked with nerdctl run on mongo:7.0).
 # Canary contract: db "app", collection bret_canary, doc {_id: "canary", payload, sha256}.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: mongodb

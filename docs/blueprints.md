@@ -16,7 +16,7 @@ It is the smallest check that works, and it is tested.
 ## Anatomy
 
 ```yaml
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: orders-db-check

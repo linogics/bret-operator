@@ -3,7 +3,7 @@
 # One PVC.
 # Canary contract: /config/bret-canary/canary.txt and canary.sha256 (sha256sum format),
 # seeded before the backup.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: home-assistant

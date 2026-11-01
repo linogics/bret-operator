@@ -2,7 +2,7 @@
 # Restore check for gitea 1.22 with SQLite (default). One PVC mounted at /data.
 # Mount path equals the image's default data path, so absolute paths in app.ini still resolve.
 # Canary contract: public repo bret/canary with canary.txt and canary.sha256 (sha256sum format).
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: gitea

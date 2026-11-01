@@ -1,10 +1,10 @@
 # API Reference
 
 ## Packages
-- [restore.bret.linogics.io/v1alpha1](#restorebretlinogicsiov1alpha1)
+- [bret.linogics.io/v1alpha1](#restorebretlinogicsiov1alpha1)
 
 
-## restore.bret.linogics.io/v1alpha1
+## bret.linogics.io/v1alpha1
 
 Package v1alpha1 contains API Schema definitions for the restore v1alpha1 API group.
 
@@ -169,7 +169,7 @@ Restore is one restore run, manual or started by a RestoreTest.
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `restore.bret.linogics.io/v1alpha1` | | |
+| `apiVersion` _string_ | `bret.linogics.io/v1alpha1` | | |
 | `kind` _string_ | `Restore` | | |
 | `kind` _string_ | Kind is a string value representing the REST resource this object represents.<br />Servers may infer this from the endpoint the client submits requests to.<br />Cannot be updated.<br />In CamelCase.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds |  | Optional: \{\} <br /> |
 | `apiVersion` _string_ | APIVersion defines the versioned schema of this representation of an object.<br />Servers should convert recognized schemas to the latest internal value, and<br />may reject unrecognized values.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources |  | Optional: \{\} <br /> |
@@ -190,7 +190,7 @@ RestoreBlueprint is the check run against a restored volume.
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `restore.bret.linogics.io/v1alpha1` | | |
+| `apiVersion` _string_ | `bret.linogics.io/v1alpha1` | | |
 | `kind` _string_ | `RestoreBlueprint` | | |
 | `kind` _string_ | Kind is a string value representing the REST resource this object represents.<br />Servers may infer this from the endpoint the client submits requests to.<br />Cannot be updated.<br />In CamelCase.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds |  | Optional: \{\} <br /> |
 | `apiVersion` _string_ | APIVersion defines the versioned schema of this representation of an object.<br />Servers should convert recognized schemas to the latest internal value, and<br />may reject unrecognized values.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources |  | Optional: \{\} <br /> |
@@ -355,7 +355,7 @@ RestoreTest schedules restore runs and sets their policy.
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `restore.bret.linogics.io/v1alpha1` | | |
+| `apiVersion` _string_ | `bret.linogics.io/v1alpha1` | | |
 | `kind` _string_ | `RestoreTest` | | |
 | `kind` _string_ | Kind is a string value representing the REST resource this object represents.<br />Servers may infer this from the endpoint the client submits requests to.<br />Cannot be updated.<br />In CamelCase.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds |  | Optional: \{\} <br /> |
 | `apiVersion` _string_ | APIVersion defines the versioned schema of this representation of an object.<br />Servers should convert recognized schemas to the latest internal value, and<br />may reject unrecognized values.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources |  | Optional: \{\} <br /> |

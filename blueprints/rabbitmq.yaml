@@ -4,7 +4,7 @@
 # seeded before the backup.
 # Node name: the test runs as rabbit@localhost, a harness workaround. A real check must
 # run with the source node name (RABBITMQ_NODENAME), or mnesia will not load.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: rabbitmq

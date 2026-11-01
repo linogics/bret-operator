@@ -3,7 +3,7 @@
 # One PVC.
 # Canary contract: user bret-canary@example.invalid exists in the users table,
 # seeded before the backup.
-apiVersion: restore.bret.linogics.io/v1alpha1
+apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreBlueprint
 metadata:
   name: vaultwarden
