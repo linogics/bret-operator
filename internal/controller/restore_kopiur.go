@@ -184,3 +184,13 @@ func optionalString(s string) *string {
 
 	return &s
 }
+
+// kopiurSnapshotSize reads status.stats.sizeBytes of a Kopiur Snapshot. Nil means missing or zero.
+func kopiurSnapshotSize(obj *unstructured.Unstructured) *resource.Quantity {
+	bytes, _, _ := unstructured.NestedInt64(obj.Object, "status", "stats", "sizeBytes")
+	if bytes <= 0 {
+		return nil
+	}
+
+	return resource.NewQuantity(bytes, resource.BinarySI)
+}
