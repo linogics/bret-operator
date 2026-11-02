@@ -126,14 +126,8 @@ func moverUID(bp *restorev1alpha1.RestoreBlueprint) (*int64, error) {
 }
 
 // restoredPVC is the PVC populated by Kopiur. Its dataSourceRef points at the Kopiur Restore.
-func restoredPVC(restore *restorev1alpha1.Restore) *corev1.PersistentVolumeClaim {
+func restoredPVC(restore *restorev1alpha1.Restore, size resource.Quantity) *corev1.PersistentVolumeClaim {
 	apiGroup := kopiurGroup
-
-	// shortcut: unset target.size requests zero until the size is derived from the source, upgrade to resolveSize.
-	size := resource.Quantity{}
-	if restore.Spec.Target.Size != nil {
-		size = *restore.Spec.Target.Size
-	}
 
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{

@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -144,7 +145,27 @@ func (r *RestoreReconciler) progress(
 	bp *restorev1alpha1.RestoreBlueprint,
 	uid *int64,
 ) (ctrl.Result, error) {
-	claims, err := r.ensureClaims(ctx, restore, bp)
+	source, err := r.sourceSize(ctx, restore)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	size, err := resolveSize(restore.Spec.Target, source)
+	if err != nil {
+		// Terminal for this attempt: nothing is created and nothing is requeued.
+		reason := restorev1alpha1.ReasonSizeUnknown
+		if errors.Is(err, ErrInsufficientCapacity) {
+			reason = restorev1alpha1.ReasonInsufficientCapacity
+		}
+
+		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+		r.block(restore, reason, err.Error())
+		recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
+
+		return ctrl.Result{}, nil
+	}
+
+	claims, err := r.ensureClaims(ctx, restore, bp, size)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -184,8 +205,9 @@ func (r *RestoreReconciler) ensureClaims(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreBlueprint,
+	size resource.Quantity,
 ) (map[string]string, error) {
-	if _, err := r.ensure(ctx, restore, restoredPVC(restore)); err != nil {
+	if _, err := r.ensure(ctx, restore, restoredPVC(restore, size)); err != nil {
 		return nil, err
 	}
 

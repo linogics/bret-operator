@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -251,5 +252,83 @@ func TestRestoreWindowCancels(t *testing.T) {
 
 	if err := c.Get(ctx, client.ObjectKeyFromObject(kopiurStub(restore)), kopiurStub(restore)); !errors.IsNotFound(err) {
 		t.Errorf("Kopiur restore created after the window expired: %v", err)
+	}
+}
+
+// kopiurSnapshotOfSize is a Kopiur Snapshot named b1 that reports sizeBytes.
+func kopiurSnapshotOfSize(sizeBytes int64) *unstructured.Unstructured {
+	snap := &unstructured.Unstructured{}
+	snap.SetGroupVersionKind(snapshotGVK)
+	snap.SetNamespace(testNamespace)
+	snap.SetName("b1")
+	_ = unstructured.SetNestedField(snap.Object, sizeBytes, "status", "stats", "sizeBytes")
+
+	return snap
+}
+
+// reconcileToSizing runs the start step and the step that resolves the size.
+func reconcileToSizing(t *testing.T, r *RestoreReconciler, key types.NamespacedName) {
+	t.Helper()
+
+	reconcileRestore(t, r, key)
+	reconcileRestore(t, r, key)
+}
+
+func assertSizeFailure(t *testing.T, c client.Client, restore *restorev1alpha1.Restore, reason string) {
+	t.Helper()
+
+	got := getRestore(t, c, client.ObjectKeyFromObject(restore))
+	if got.Status.Phase != restorev1alpha1.RestorePhaseFailed {
+		t.Fatalf("phase %q, want Failed", got.Status.Phase)
+	}
+
+	if r := readyReason(got); r != reason {
+		t.Errorf("Ready reason %q, want %s", r, reason)
+	}
+
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := c.Get(context.Background(), types.NamespacedName{Name: restoredClaimName(restore), Namespace: restore.Namespace}, pvc); !errors.IsNotFound(err) {
+		t.Errorf("PVC created for a failed size: %v", err)
+	}
+
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(kopiurStub(restore)), kopiurStub(restore)); !errors.IsNotFound(err) {
+		t.Errorf("provider object created for a failed size: %v", err)
+	}
+}
+
+func TestRestoreSizeUnknownFails(t *testing.T) {
+	restore := newTestRestore()
+	restore.Spec.Target.Size = nil
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+
+	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
+	assertSizeFailure(t, c, restore, restorev1alpha1.ReasonSizeUnknown)
+}
+
+func TestRestoreSizeTooSmallFails(t *testing.T) {
+	restore := newTestRestore()
+	restore.Spec.Target.Size = quantityPtr("1Gi")
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), kopiurSnapshotOfSize(2<<30))
+
+	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
+	assertSizeFailure(t, c, restore, restorev1alpha1.ReasonInsufficientCapacity)
+}
+
+func TestRestoreSizeAutoExpand(t *testing.T) {
+	restore := newTestRestore()
+	restore.Spec.Target.Size = nil
+	restore.Spec.Target.AutoExpand = &restorev1alpha1.AutoExpand{Percentage: 150}
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), kopiurSnapshotOfSize(2<<30))
+
+	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
+
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := c.Get(context.Background(), types.NamespacedName{Name: restoredClaimName(restore), Namespace: restore.Namespace}, pvc); err != nil {
+		t.Fatal(err)
+	}
+
+	got := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	if want := resource.MustParse("3Gi"); got.Cmp(want) != 0 {
+		t.Errorf("PVC size %s, want 3Gi", got.String())
 	}
 }
