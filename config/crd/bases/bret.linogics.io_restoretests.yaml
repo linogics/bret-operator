@@ -127,19 +127,49 @@ spec:
                 description: Target is the scratch volume each run restores into,
                   with the same meaning as Restore.spec.target.
                 properties:
+                  autoExpand:
+                    description: AutoExpand derives the size from the source size
+                      when Size is unset.
+                    properties:
+                      max:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Max is the upper bound of the derived size.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      min:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Min is the lower bound of the derived size.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      percentage:
+                        description: Percentage is the percent of the source size.
+                        format: int32
+                        type: integer
+                    required:
+                    - percentage
+                    type: object
+                    x-kubernetes-validations:
+                    - message: percentage must be greater than 0
+                      rule: self.percentage > 0
+                    - message: min must not be greater than max
+                      rule: '!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max))
+                        <= 0'
                   size:
                     anyOf:
                     - type: integer
                     - type: string
-                    description: Size is the capacity of the scratch volume.
+                    description: Size is the capacity of the scratch volume. When
+                      unset, it is derived from the source size.
                     pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                     x-kubernetes-int-or-string: true
                   storageClassName:
                     description: StorageClassName is the storage class of the scratch
                       volume.
                     type: string
-                required:
-                - size
                 type: object
               triggers:
                 description: Triggers defines what starts a run.

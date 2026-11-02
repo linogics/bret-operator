@@ -49,12 +49,34 @@ type RestoreSource struct {
 	BackupRef BackupRef `json:"backupRef"`
 }
 
+// Condition reasons for a Restore whose scratch size cannot be resolved.
+const (
+	// ReasonSizeUnknown means the source size is unknown and target.size is not set.
+	ReasonSizeUnknown = "SizeUnknown"
+	// ReasonInsufficientCapacity means target.size is smaller than the source size.
+	ReasonInsufficientCapacity = "InsufficientCapacity"
+)
+
+// AutoExpand derives the scratch size from the source size: clamp(source * percentage / 100, min, max).
+// +kubebuilder:validation:XValidation:rule="self.percentage > 0",message="percentage must be greater than 0"
+// +kubebuilder:validation:XValidation:rule="!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max)) <= 0",message="min must not be greater than max"
+type AutoExpand struct {
+	// Percentage is the percent of the source size.
+	Percentage int32 `json:"percentage"`
+	// Min is the lower bound of the derived size.
+	Min *resource.Quantity `json:"min,omitempty"`
+	// Max is the upper bound of the derived size.
+	Max *resource.Quantity `json:"max,omitempty"`
+}
+
 // RestoreTarget describes the scratch volume a Restore writes into.
 type RestoreTarget struct {
 	// StorageClassName is the storage class of the scratch volume.
 	StorageClassName string `json:"storageClassName,omitempty"`
-	// Size is the capacity of the scratch volume.
-	Size resource.Quantity `json:"size"`
+	// Size is the capacity of the scratch volume. When unset, it is derived from the source size.
+	Size *resource.Quantity `json:"size,omitempty"`
+	// AutoExpand derives the size from the source size when Size is unset.
+	AutoExpand *AutoExpand `json:"autoExpand,omitempty"`
 }
 
 // RestoreSpec defines the desired state of Restore.

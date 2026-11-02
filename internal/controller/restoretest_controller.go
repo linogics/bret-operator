@@ -500,7 +500,7 @@ func (r *RestoreTestReconciler) createRestore(ctx context.Context, test *restore
 
 // requireTarget reports whether the test can create Restore objects. Without a target it sets TargetMissing.
 func (r *RestoreTestReconciler) requireTarget(test *restorev1alpha1.RestoreTest) bool {
-	if !test.Spec.Target.Size.IsZero() {
+	if test.Spec.Target.Size != nil && !test.Spec.Target.Size.IsZero() {
 		return true
 	}
 

@@ -129,6 +129,12 @@ func moverUID(bp *restorev1alpha1.RestoreBlueprint) (*int64, error) {
 func restoredPVC(restore *restorev1alpha1.Restore) *corev1.PersistentVolumeClaim {
 	apiGroup := kopiurGroup
 
+	// shortcut: unset target.size requests zero until the size is derived from the source, upgrade to resolveSize.
+	size := resource.Quantity{}
+	if restore.Spec.Target.Size != nil {
+		size = *restore.Spec.Target.Size
+	}
+
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      restoredClaimName(restore),
@@ -137,7 +143,7 @@ func restoredPVC(restore *restorev1alpha1.Restore) *corev1.PersistentVolumeClaim
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-			Resources:        claimResources(restore.Spec.Target.Size),
+			Resources:        claimResources(size),
 			StorageClassName: optionalString(restore.Spec.Target.StorageClassName),
 			DataSourceRef: &corev1.TypedObjectReference{
 				APIGroup: &apiGroup,

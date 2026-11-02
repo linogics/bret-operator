@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -49,7 +48,7 @@ var _ = Describe("Restore Controller", func() {
 					Spec: restorev1alpha1.RestoreSpec{
 						Provider: restorev1alpha1.ProviderVelero,
 						Source:   restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "backup"}},
-						Target:   restorev1alpha1.RestoreTarget{Size: resource.MustParse("1Gi")},
+						Target:   restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -112,7 +111,7 @@ func newTestRestore() *restorev1alpha1.Restore {
 		Spec: restorev1alpha1.RestoreSpec{
 			Provider:      restorev1alpha1.ProviderKopiur,
 			Source:        restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "b1"}},
-			Target:        restorev1alpha1.RestoreTarget{Size: resource.MustParse("1Gi")},
+			Target:        restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
 			BlueprintRef:  restorev1alpha1.BlueprintRef{Name: testApp},
 			RestoreWindow: metav1.Duration{Duration: 45 * time.Minute},
 		},

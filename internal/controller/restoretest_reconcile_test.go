@@ -7,7 +7,6 @@ import (
 	"time"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -77,7 +76,7 @@ func newRestoreTestObject() *restorev1alpha1.RestoreTest {
 			Provider:       restorev1alpha1.ProviderKopiur,
 			BackupSelector: restorev1alpha1.BackupSelector{Name: "b1"},
 			BlueprintRef:   restorev1alpha1.BlueprintRef{Name: testApp},
-			Target:         restorev1alpha1.RestoreTarget{Size: resource.MustParse("1Gi")},
+			Target:         restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
 			RestoreWindow:  metav1.Duration{Duration: 45 * time.Minute},
 			OverlapPolicy:  restorev1alpha1.OverlapPolicySkip,
 		},
