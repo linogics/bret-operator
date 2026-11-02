@@ -66,8 +66,7 @@ func (r *RestoreReconciler) sourceSize(ctx context.Context, restore *restorev1al
 
 		return &size, nil
 	case restorev1alpha1.ProviderVelero:
-		// shortcut: Velero contents read not implemented, requires target.size, upgrade in Task 5.
-		return nil, nil
+		return r.veleroSourceSize(ctx, restore)
 	default:
 		return nil, nil
 	}

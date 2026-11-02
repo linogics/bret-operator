@@ -70,7 +70,6 @@ func TestSourceSize(t *testing.T) {
 		{"volsync pvc", restorev1alpha1.ProviderVolSync, []client.Object{volsyncSource, pvc}, "5Gi"},
 		{"volsync pvc missing", restorev1alpha1.ProviderVolSync, []client.Object{volsyncSource}, ""},
 		{"volsync source missing", restorev1alpha1.ProviderVolSync, nil, ""},
-		{"velero stub", restorev1alpha1.ProviderVelero, nil, ""},
 	}
 
 	for _, tt := range tests {

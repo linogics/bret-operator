@@ -90,7 +90,7 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // advance runs one step of the attempt and reports how the reconciler should be requeued.
 func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha1.Restore) (ctrl.Result, error) {
-	if restore.Spec.Provider != restorev1alpha1.ProviderKopiur {
+	if restore.Spec.Provider != restorev1alpha1.ProviderKopiur && restore.Spec.Provider != restorev1alpha1.ProviderVelero {
 		r.block(restore, reasonProviderUnsupported, fmt.Sprintf("provider %s is not supported yet", restore.Spec.Provider))
 
 		return ctrl.Result{}, nil
@@ -163,6 +163,10 @@ func (r *RestoreReconciler) progress(
 		recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
 
 		return ctrl.Result{}, nil
+	}
+
+	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
+		return r.reconcileVelero(ctx, restore)
 	}
 
 	claims, err := r.ensureClaims(ctx, restore, bp, size)

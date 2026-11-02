@@ -57,6 +57,10 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 		kopiurStub(restore),
 	}
 
+	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
+		objs = append(objs, veleroStub(restore))
+	}
+
 	for i := range pvcs.Items {
 		objs = append(objs, &pvcs.Items[i])
 	}
