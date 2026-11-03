@@ -11,12 +11,18 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
 
 func TestVeleroRestoreSpec(t *testing.T) {
@@ -183,5 +189,116 @@ func answerDownloadRequest(ctx context.Context, c client.Client, url string) {
 		}
 
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		podPhase  corev1.PodPhase
+		keep      bool
+		wantPhase restorev1alpha1.RestorePhase
+		wantNS    bool
+	}{
+		{"success deletes scratch namespace", corev1.PodSucceeded, false, restorev1alpha1.RestorePhaseSucceeded, false},
+		{"failure with keepOnFailure retains it", corev1.PodFailed, true, restorev1alpha1.RestorePhaseFailed, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": "1Gi"}))
+			}))
+			defer srv.Close()
+
+			restore := newTestRestore()
+			restore.Spec.Provider = restorev1alpha1.ProviderVelero
+			restore.Spec.KeepOnFailure = tt.keep
+
+			c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+			key := client.ObjectKeyFromObject(restore)
+
+			go func() {
+				for ctx.Err() == nil {
+					answerDownloadRequest(ctx, c, srv.URL)
+				}
+			}()
+
+			reconcileRestore(t, r, key) // Pending
+			reconcileRestore(t, r, key) // Velero Restore created
+
+			vr := veleroStub(restore)
+			if err := c.Get(ctx, client.ObjectKeyFromObject(vr), vr); err != nil {
+				t.Fatalf("Velero restore not created: %v", err)
+			}
+
+			if err := unstructured.SetNestedField(vr.Object, "Completed", "status", "phase"); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := c.Update(ctx, vr); err != nil {
+				t.Fatal(err)
+			}
+
+			scratch := veleroScratchNamespace(restore)
+			podKey := types.NamespacedName{Name: checkPodName(restore), Namespace: scratch.Name}
+
+			reconcileRestore(t, r, key) // namespace absent: requeue, no error
+
+			if err := c.Get(ctx, podKey, &corev1.Pod{}); !errors.IsNotFound(err) {
+				t.Fatalf("pod created before the scratch namespace exists: %v", err)
+			}
+
+			pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "data", Namespace: scratch.Name}}
+			if err := c.Create(ctx, scratch); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := c.Create(ctx, pvc); err != nil {
+				t.Fatal(err)
+			}
+
+			reconcileRestore(t, r, key)
+
+			pod := &corev1.Pod{}
+			if err := c.Get(ctx, podKey, pod); err != nil {
+				t.Fatalf("check pod not in scratch namespace: %v", err)
+			}
+
+			if pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName != "data" {
+				t.Fatalf("pod mounts %v, want restored PVC data", pod.Spec.Volumes[0])
+			}
+
+			pod.Status.Phase = tt.podPhase
+			if err := c.Status().Update(ctx, pod); err != nil {
+				t.Fatal(err)
+			}
+
+			reconcileRestore(t, r, key)
+
+			if got := getRestore(t, c, key).Status.Phase; got != tt.wantPhase {
+				t.Fatalf("phase %q, want %q", got, tt.wantPhase)
+			}
+
+			err := c.Get(ctx, client.ObjectKeyFromObject(scratch), scratch)
+			if tt.wantNS != (err == nil) {
+				t.Fatalf("scratch namespace present=%v, want %v (%v)", err == nil, tt.wantNS, err)
+			}
+
+			if tt.wantNS && scratch.Labels[retainedLabel] != "true" {
+				t.Fatalf("kept namespace not labelled retained: %v", scratch.Labels)
+			}
+
+			// Velero restore is cleaned the same way, and a second cleanup is a no-op.
+			if err := r.cleanup(ctx, getRestore(t, c, key)); err != nil {
+				t.Fatalf("second cleanup: %v", err)
+			}
+
+			err = c.Get(ctx, client.ObjectKeyFromObject(vr), veleroStub(restore))
+			if tt.wantNS == errors.IsNotFound(err) {
+				t.Fatalf("velero restore presence wrong, keep=%v err=%v", tt.keep, err)
+			}
+		})
 	}
 }

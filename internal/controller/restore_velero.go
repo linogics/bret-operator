@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -72,8 +73,16 @@ func veleroRestoreObject(restore *restorev1alpha1.Restore) *unstructured.Unstruc
 	return obj
 }
 
-// reconcileVelero creates the Velero Restore and maps its status.phase to the Restore phase.
-func (r *RestoreReconciler) reconcileVelero(ctx context.Context, restore *restorev1alpha1.Restore) (ctrl.Result, error) {
+func veleroScratchNamespace(restore *restorev1alpha1.Restore) *corev1.Namespace {
+	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "bret-scratch-" + restore.Name}}
+}
+
+// reconcileVelero creates the Velero Restore, then runs the check pod in the scratch namespace once Velero completes.
+func (r *RestoreReconciler) reconcileVelero(
+	ctx context.Context,
+	restore *restorev1alpha1.Restore,
+	bp *restorev1alpha1.RestoreBlueprint,
+) (ctrl.Result, error) {
 	cur := veleroStub(restore)
 	phase := ""
 
@@ -101,10 +110,7 @@ func (r *RestoreReconciler) reconcileVelero(ctx context.Context, restore *restor
 
 	switch phase {
 	case "Completed":
-		// shortcut: no check pod for Velero yet, a completed Velero restore counts as success.
-		r.finish(restore, restorev1alpha1.RestorePhaseSucceeded, reasonRestoreSucceeded, "Velero restore completed")
-
-		return ctrl.Result{}, nil
+		return r.checkVelero(ctx, restore, bp)
 	case "Failed", "PartiallyFailed", "FailedValidation":
 		r.finish(restore, restorev1alpha1.RestorePhaseFailed, reasonRestoreFailed, "Velero restore "+phase)
 
@@ -112,6 +118,74 @@ func (r *RestoreReconciler) reconcileVelero(ctx context.Context, restore *restor
 	default:
 		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
 	}
+}
+
+// checkVelero runs the check pod next to the restored PVC in the scratch namespace. It requeues
+// while Velero has not created the namespace or the PVC yet.
+func (r *RestoreReconciler) checkVelero(
+	ctx context.Context,
+	restore *restorev1alpha1.Restore,
+	bp *restorev1alpha1.RestoreBlueprint,
+) (ctrl.Result, error) {
+	ns := veleroScratchNamespace(restore)
+
+	if err := r.getObject(ctx, ns); err != nil {
+		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, client.IgnoreNotFound(err)
+	}
+
+	pvcs := &corev1.PersistentVolumeClaimList{}
+	if err := r.List(ctx, pvcs, client.InNamespace(ns.Name)); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	claim, err := r.restoredVeleroClaim(ctx, restore, pvcs.Items)
+	if err != nil || claim == "" {
+		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, err
+	}
+
+	claims := make(map[string]string, len(bp.Spec.ScratchVolumes))
+
+	for _, sv := range bp.Spec.ScratchVolumes {
+		pvc := scratchPVC(restore, sv)
+		pvc.Namespace = ns.Name
+
+		if _, err := r.ensure(ctx, restore, pvc); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		claims[sv.Name] = pvc.Name
+	}
+
+	return r.check(ctx, restore, bp, claim, ns.Name, claims)
+}
+
+// restoredVeleroClaim is the PVC Velero restored. With several, the blueprint sourcePVC picks one.
+// Scratch claims of the operator carry the restore label and are skipped. "" means not there yet.
+func (r *RestoreReconciler) restoredVeleroClaim(
+	ctx context.Context,
+	restore *restorev1alpha1.Restore,
+	pvcs []corev1.PersistentVolumeClaim,
+) (string, error) {
+	var names []string
+
+	for i := range pvcs {
+		if _, ours := pvcs[i].Labels[restoreLabel]; !ours {
+			names = append(names, pvcs[i].Name)
+		}
+	}
+
+	if len(names) == 1 {
+		return names[0], nil
+	}
+
+	want := r.blueprintSourcePVC(ctx, restore)
+	for _, n := range names {
+		if n == want {
+			return n, nil
+		}
+	}
+
+	return "", nil
 }
 
 // veleroSourceSize reads the PVC size from the backup contents. Failures to read the contents give nil,

@@ -27,9 +27,12 @@ func (r *RestoreReconciler) ensure(ctx context.Context, restore *restorev1alpha1
 		return false, err
 	}
 
-	err = controllerutil.SetControllerReference(restore, obj, r.Scheme)
-	if err != nil {
-		return false, err
+	// Objects in another namespace cannot have an owner; their cleanup finds them by name and label.
+	if obj.GetNamespace() == restore.Namespace {
+		err = controllerutil.SetControllerReference(restore, obj, r.Scheme)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	err = r.Create(ctx, obj)
@@ -58,7 +61,7 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
-		objs = append(objs, veleroStub(restore))
+		objs = append(objs, veleroStub(restore), veleroScratchNamespace(restore))
 	}
 
 	for i := range pvcs.Items {

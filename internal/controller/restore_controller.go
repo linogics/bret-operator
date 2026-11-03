@@ -53,6 +53,7 @@ type RestoreReconciler struct {
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores/finalizers,verbs=update
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=pods;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;patch;delete
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=kopiur.home-operations.com,resources=restores,verbs=get;list;watch;create;update;patch;delete
 
@@ -166,7 +167,7 @@ func (r *RestoreReconciler) progress(
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
-		return r.reconcileVelero(ctx, restore)
+		return r.reconcileVelero(ctx, restore, bp)
 	}
 
 	claims, err := r.ensureClaims(ctx, restore, bp, size)
@@ -198,7 +199,7 @@ func (r *RestoreReconciler) progress(
 
 		return ctrl.Result{}, nil
 	case kopiurPhaseCompleted:
-		return r.check(ctx, restore, bp, claims)
+		return r.check(ctx, restore, bp, restoredClaimName(restore), restore.Namespace, claims)
 	default:
 		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
 	}
@@ -235,14 +236,17 @@ func (r *RestoreReconciler) check(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreBlueprint,
+	restoredClaim, namespace string,
 	claims map[string]string,
 ) (ctrl.Result, error) {
-	pod, err := buildCheckPod(restore, bp, restoredClaimName(restore), claims)
+	pod, err := buildCheckPod(restore, bp, restoredClaim, claims)
 	if err != nil {
 		r.block(restore, reasonBlueprintUnsupported, err.Error())
 
 		return ctrl.Result{}, nil
 	}
+
+	pod.Namespace = namespace
 
 	if _, err := r.ensure(ctx, restore, pod); err != nil {
 		return ctrl.Result{}, err
