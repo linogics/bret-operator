@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -298,6 +299,76 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 			err = c.Get(ctx, client.ObjectKeyFromObject(vr), veleroStub(restore))
 			if tt.wantNS == errors.IsNotFound(err) {
 				t.Fatalf("velero restore presence wrong, keep=%v err=%v", tt.keep, err)
+			}
+		})
+	}
+}
+
+func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*restorev1alpha1.RestoreBlueprint)
+		field  string
+	}{
+		{"service account", func(bp *restorev1alpha1.RestoreBlueprint) { bp.Spec.ServiceAccountName = "sa" }, "serviceAccountName"},
+		{"pull secrets", func(bp *restorev1alpha1.RestoreBlueprint) {
+			bp.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: "s"}}
+		}, "imagePullSecrets"},
+		{"configmap volume", func(bp *restorev1alpha1.RestoreBlueprint) {
+			bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{}}}}
+		}, "volumes"},
+		{"secret volume", func(bp *restorev1alpha1.RestoreBlueprint) {
+			bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{}}}}
+		}, "volumes"},
+		{"clean", func(*restorev1alpha1.RestoreBlueprint) {}, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": "1Gi"}))
+			}))
+			defer srv.Close()
+
+			restore := newTestRestore()
+			restore.Spec.Provider = restorev1alpha1.ProviderVelero
+
+			bp := newTestBlueprint()
+			tt.mutate(bp)
+
+			c, r := fakeRestoreClient(t, restore, bp)
+			key := client.ObjectKeyFromObject(restore)
+
+			go func() {
+				for ctx.Err() == nil {
+					answerDownloadRequest(ctx, c, srv.URL)
+				}
+			}()
+
+			reconcileRestore(t, r, key) // Pending
+			reconcileRestore(t, r, key)
+
+			got := getRestore(t, c, key)
+			err := c.Get(ctx, client.ObjectKeyFromObject(veleroStub(restore)), veleroStub(restore))
+
+			if tt.field == "" {
+				if err != nil || got.Status.Phase != restorev1alpha1.RestorePhaseRunning {
+					t.Fatalf("clean blueprint: phase %q, velero restore err %v", got.Status.Phase, err)
+				}
+
+				return
+			}
+
+			if got.Status.Phase != restorev1alpha1.RestorePhaseFailed || readyReason(got) != reasonProviderUnsupported ||
+				!strings.Contains(got.Status.Message, tt.field) {
+				t.Fatalf("phase %q reason %q message %q", got.Status.Phase, readyReason(got), got.Status.Message)
+			}
+
+			if !errors.IsNotFound(err) {
+				t.Fatalf("velero restore created for rejected blueprint: %v", err)
 			}
 		})
 	}

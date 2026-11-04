@@ -117,6 +117,16 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		return ctrl.Result{}, nil
 	}
 
+	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
+		if err = validateVeleroBlueprint(bp); err != nil {
+			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+			r.block(restore, reasonProviderUnsupported, err.Error())
+			recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
+
+			return ctrl.Result{}, nil
+		}
+	}
+
 	uid, err := moverUID(bp)
 	if err != nil {
 		r.block(restore, reasonBlueprintUnsupported, err.Error())

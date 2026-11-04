@@ -73,6 +73,25 @@ func veleroRestoreObject(restore *restorev1alpha1.Restore) *unstructured.Unstruc
 	return obj
 }
 
+// validateVeleroBlueprint rejects blueprints that point at objects of the Restore namespace,
+// because the Velero check pod runs in the scratch namespace.
+func validateVeleroBlueprint(bp *restorev1alpha1.RestoreBlueprint) error {
+	switch {
+	case bp.Spec.ServiceAccountName != "":
+		return fmt.Errorf("blueprint %s: serviceAccountName is not supported with Velero", bp.Name)
+	case len(bp.Spec.ImagePullSecrets) > 0:
+		return fmt.Errorf("blueprint %s: imagePullSecrets is not supported with Velero", bp.Name)
+	}
+
+	for i := range bp.Spec.Volumes {
+		if v := bp.Spec.Volumes[i]; v.ConfigMap != nil || v.Secret != nil {
+			return fmt.Errorf("blueprint %s: volumes[%d] %q uses a configMap or secret, not supported with Velero", bp.Name, i, v.Name)
+		}
+	}
+
+	return nil
+}
+
 func veleroScratchNamespace(restore *restorev1alpha1.Restore) *corev1.Namespace {
 	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "bret-scratch-" + restore.Name}}
 }
