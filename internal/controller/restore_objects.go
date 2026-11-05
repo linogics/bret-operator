@@ -64,6 +64,10 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 		objs = append(objs, veleroStub(restore), veleroScratchNamespace(restore))
 	}
 
+	if restore.Spec.Provider == restorev1alpha1.ProviderVolSync {
+		objs = append(objs, volsyncStub(restore))
+	}
+
 	for i := range pvcs.Items {
 		objs = append(objs, &pvcs.Items[i])
 	}

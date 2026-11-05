@@ -50,6 +50,8 @@ var _ = Describe("Restore Controller", func() {
 						Provider: restorev1alpha1.ProviderVolSync,
 						Source:   restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "backup"}},
 						Target:   restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
+
+						BlueprintRef: restorev1alpha1.BlueprintRef{Name: "bp"},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

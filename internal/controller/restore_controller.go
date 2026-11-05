@@ -91,7 +91,9 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // advance runs one step of the attempt and reports how the reconciler should be requeued.
 func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha1.Restore) (ctrl.Result, error) {
-	if restore.Spec.Provider != restorev1alpha1.ProviderKopiur && restore.Spec.Provider != restorev1alpha1.ProviderVelero {
+	if restore.Spec.Provider != restorev1alpha1.ProviderKopiur &&
+		restore.Spec.Provider != restorev1alpha1.ProviderVelero &&
+		restore.Spec.Provider != restorev1alpha1.ProviderVolSync {
 		r.block(restore, reasonProviderUnsupported, fmt.Sprintf("provider %s is not supported yet", restore.Spec.Provider))
 
 		return ctrl.Result{}, nil
@@ -180,6 +182,10 @@ func (r *RestoreReconciler) progress(
 		return r.reconcileVelero(ctx, restore, bp)
 	}
 
+	if restore.Spec.Provider == restorev1alpha1.ProviderVolSync {
+		return r.reconcileVolSync(ctx, restore, bp, size)
+	}
+
 	claims, err := r.ensureClaims(ctx, restore, bp, size)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -226,6 +232,15 @@ func (r *RestoreReconciler) ensureClaims(
 		return nil, err
 	}
 
+	return r.ensureScratchClaims(ctx, restore, bp)
+}
+
+// ensureScratchClaims creates the blueprint scratch PVCs. It returns them by volume name.
+func (r *RestoreReconciler) ensureScratchClaims(
+	ctx context.Context,
+	restore *restorev1alpha1.Restore,
+	bp *restorev1alpha1.RestoreBlueprint,
+) (map[string]string, error) {
 	claims := make(map[string]string, len(bp.Spec.ScratchVolumes))
 
 	for _, sv := range bp.Spec.ScratchVolumes {

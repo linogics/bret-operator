@@ -105,6 +105,16 @@ rules:
 - apiGroups:
   - volsync.backube
   resources:
+  - replicationdestinations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - volsync.backube
+  resources:
   - replicationsources
   verbs:
   - get
