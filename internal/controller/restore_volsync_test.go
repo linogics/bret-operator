@@ -158,7 +158,7 @@ func TestVolSyncSourceInBackupNamespace(t *testing.T) {
 	_ = unstructured.SetNestedField(src.Object, "data", "spec", "sourcePVC")
 
 	pvc := &corev1.PersistentVolumeClaim{}
-	pvc.Namespace, pvc.Name = testNamespace, "data"
+	pvc.Namespace, pvc.Name = "backups", "data" // none in the Restore namespace
 	pvc.Spec.Resources.Requests = corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("2Gi")}
 
 	_, r := fakeRestoreClient(t, restore, src, pvc)

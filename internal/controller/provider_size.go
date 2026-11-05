@@ -49,7 +49,7 @@ func (r *RestoreReconciler) sourceSize(ctx context.Context, restore *restorev1al
 		}
 
 		pvc := &corev1.PersistentVolumeClaim{}
-		pvc.Namespace, pvc.Name = restore.Namespace, pvcName
+		pvc.Namespace, pvc.Name = namespace, pvcName
 
 		if err := r.getObject(ctx, pvc); err != nil {
 			return nil, client.IgnoreNotFound(err)
