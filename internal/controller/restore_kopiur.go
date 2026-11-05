@@ -30,6 +30,15 @@ func kopiurName(restore *restorev1alpha1.Restore) string {
 	return restore.Name + "-kopiur"
 }
 
+// backupNamespace is the namespace of the backup object: backupRef.namespace, else the Restore's.
+func backupNamespace(restore *restorev1alpha1.Restore) string {
+	if ns := restore.Spec.Source.BackupRef.Namespace; ns != "" {
+		return ns
+	}
+
+	return restore.Namespace
+}
+
 // restoredClaimName is the PVC that receives the restored data.
 func restoredClaimName(restore *restorev1alpha1.Restore) string {
 	return restore.Name + "-scratch"
@@ -59,14 +68,9 @@ func kopiurStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 func kopiurRestoreObject(restore *restorev1alpha1.Restore, uid *int64) *unstructured.Unstructured {
 	backup := restore.Spec.Source.BackupRef
 
-	backupNamespace := backup.Namespace
-	if backupNamespace == "" {
-		backupNamespace = restore.Namespace
-	}
-
 	spec := map[string]any{
 		"source": map[string]any{
-			"snapshotRef": map[string]any{keyName: backup.Name, keyNamespace: backupNamespace},
+			"snapshotRef": map[string]any{keyName: backup.Name, keyNamespace: backupNamespace(restore)},
 		},
 		"target": map[string]any{"populator": map[string]any{}},
 		"policy": map[string]any{"onMissingSnapshot": "Fail"},

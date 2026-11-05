@@ -148,3 +148,28 @@ func TestVolSyncRestoreSizeUnknownFails(t *testing.T) {
 		t.Errorf("ReplicationDestination created for a failed size: %v", err)
 	}
 }
+
+func TestVolSyncSourceInBackupNamespace(t *testing.T) {
+	restore := volsyncTestRestore()
+	restore.Spec.Source.BackupRef.Namespace = "backups"
+
+	src := volsyncSource()
+	src.SetNamespace("backups")
+	_ = unstructured.SetNestedField(src.Object, "data", "spec", "sourcePVC")
+
+	pvc := &corev1.PersistentVolumeClaim{}
+	pvc.Namespace, pvc.Name = testNamespace, "data"
+	pvc.Spec.Resources.Requests = corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("2Gi")}
+
+	_, r := fakeRestoreClient(t, restore, src, pvc)
+
+	size, err := r.sourceSize(context.Background(), restore)
+	if err != nil || size == nil || size.Cmp(resource.MustParse("2Gi")) != 0 {
+		t.Fatalf("sourceSize = %v, %v; want 2Gi", size, err)
+	}
+
+	repo, err := r.volsyncRepository(context.Background(), restore)
+	if err != nil || repo != "repo-secret" {
+		t.Fatalf("volsyncRepository = %q, %v; want repo-secret", repo, err)
+	}
+}
