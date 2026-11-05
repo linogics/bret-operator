@@ -41,6 +41,9 @@ Kubernetes: `>=1.29.0-0`
 | podAnnotations | object | `{}` | Extra annotations added to the manager pod. |
 | podLabels | object | `{}` | Extra labels added to the manager pod. |
 | podSecurityContext | object | `{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}` | Pod security context. The default follows the restricted Pod Security Standard. |
+| providers.kopiur | bool | `true` | Enable the Kopiur provider. |
+| providers.velero | bool | `false` | Enable the Velero provider. Adds velero.io rights and the cluster-wide pod, PVC and namespace rights its checks need. |
+| providers.volsync | bool | `false` | Enable the VolSync provider. |
 | replicaCount | int | `1` | Number of manager replicas. Leader election keeps one replica active. |
 | resources | object | `{"limits":{"cpu":"500m","memory":"128Mi"},"requests":{"cpu":"10m","memory":"64Mi"}}` | Manager resources. |
 | securityContext | object | `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}` | Container security context. |
@@ -48,4 +51,5 @@ Kubernetes: `>=1.29.0-0`
 | serviceAccount.create | bool | `true` | Create the service account used by the manager. |
 | serviceAccount.name | string | `""` | Name of the service account. Generated from the release name when empty. |
 | tolerations | list | `[]` | Tolerations for the manager pod. |
+| watchNamespaces | list | `[]` | Namespaces the manager watches. Empty means cluster-wide. Otherwise the restore rights are bound per namespace with a Role. |
 

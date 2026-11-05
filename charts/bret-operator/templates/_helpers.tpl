@@ -50,3 +50,12 @@ control-plane: controller-manager
 {{- define "bret-operator.image" -}}
 {{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) }}
 {{- end }}
+
+{{/*
+Comma list of the enabled providers.
+*/}}
+{{- define "bret-operator.providers" -}}
+{{- $p := list -}}
+{{- range $name, $on := .Values.providers }}{{ if $on }}{{ $p = append $p $name }}{{ end }}{{ end -}}
+{{- join "," (sortAlpha $p) -}}
+{{- end }}

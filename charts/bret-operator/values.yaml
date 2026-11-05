@@ -68,6 +68,17 @@ tolerations: []
 # -- Affinity for the manager pod.
 affinity: {}
 
+providers:
+  # -- Enable the Kopiur provider.
+  kopiur: true
+  # -- Enable the Velero provider. Adds velero.io rights and the cluster-wide pod, PVC and namespace rights its checks need.
+  velero: false
+  # -- Enable the VolSync provider.
+  volsync: false
+
+# -- Namespaces the manager watches. Empty means cluster-wide. Otherwise the restore rights are bound per namespace with a Role.
+watchNamespaces: []
+
 metrics:
   # -- Serve Prometheus metrics. When false the metrics endpoint is disabled.
   enabled: true

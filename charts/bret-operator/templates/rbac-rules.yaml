@@ -18,6 +18,14 @@ rules:
 - apiGroups:
   - ''
   resources:
+  - namespaces
+  verbs:
+  - delete
+  - get
+  - patch
+- apiGroups:
+  - ''
+  resources:
   - persistentvolumeclaims
   - pods
   verbs:
@@ -28,6 +36,7 @@ rules:
   - patch
   - update
   - watch
+{{- if not .Values.watchNamespaces }}
 - apiGroups:
   - bret.linogics.io
   resources:
@@ -60,6 +69,7 @@ rules:
   - get
   - patch
   - update
+{{- if $.Values.providers.kopiur }}
 - apiGroups:
   - kopiur.home-operations.com
   resources:
@@ -72,6 +82,8 @@ rules:
   - patch
   - update
   - watch
+{{- end }}
+{{- if $.Values.providers.kopiur }}
 - apiGroups:
   - kopiur.home-operations.com
   resources:
@@ -80,6 +92,163 @@ rules:
   - get
   - list
   - watch
+{{- end }}
+{{- if $.Values.providers.velero }}
+- apiGroups:
+  - velero.io
+  resources:
+  - downloadrequests
+  verbs:
+  - create
+  - delete
+  - get
+{{- end }}
+{{- if $.Values.providers.velero }}
+- apiGroups:
+  - velero.io
+  resources:
+  - restores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+{{- end }}
+{{- if $.Values.providers.volsync }}
+- apiGroups:
+  - volsync.backube
+  resources:
+  - replicationdestinations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+{{- end }}
+{{- if $.Values.providers.volsync }}
+- apiGroups:
+  - volsync.backube
+  resources:
+  - replicationsources
+  verbs:
+  - get
+  - list
+  - watch
+{{- end }}
+{{- end }}
+{{- range .Values.watchNamespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}-manager
+  namespace: {{ . }}
+  labels:
+    {{- include "bret-operator.labels" $ | nindent 4 }}
+rules:
+- apiGroups:
+  - bret.linogics.io
+  resources:
+  - restoreblueprints
+  - restores
+  - restoretests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - bret.linogics.io
+  resources:
+  - restoreblueprints/finalizers
+  - restores/finalizers
+  - restoretests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - bret.linogics.io
+  resources:
+  - restoreblueprints/status
+  - restores/status
+  - restoretests/status
+  verbs:
+  - get
+  - patch
+  - update
+{{- if $.Values.providers.kopiur }}
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
+  - restores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- end }}
+{{- if $.Values.providers.kopiur }}
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
+  - snapshots
+  verbs:
+  - get
+  - list
+  - watch
+{{- end }}
+{{- if $.Values.providers.velero }}
+- apiGroups:
+  - velero.io
+  resources:
+  - downloadrequests
+  verbs:
+  - create
+  - delete
+  - get
+{{- end }}
+{{- if $.Values.providers.velero }}
+- apiGroups:
+  - velero.io
+  resources:
+  - restores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+{{- end }}
+{{- if $.Values.providers.volsync }}
+- apiGroups:
+  - volsync.backube
+  resources:
+  - replicationdestinations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+{{- end }}
+{{- if $.Values.providers.volsync }}
+- apiGroups:
+  - volsync.backube
+  resources:
+  - replicationsources
+  verbs:
+  - get
+  - list
+  - watch
+{{- end }}
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

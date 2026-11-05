@@ -1,7 +1,7 @@
 # API Reference
 
 ## Packages
-- [bret.linogics.io/v1alpha1](#restorebretlinogicsiov1alpha1)
+- [bret.linogics.io/v1alpha1](#bretlinogicsiov1alpha1)
 
 
 ## bret.linogics.io/v1alpha1
@@ -29,6 +29,24 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `delay` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | Delay is how long to wait after the backup completes before the run starts. |  |  |
+
+
+#### AutoExpand
+
+
+
+AutoExpand derives the scratch size from the source size: clamp(source * percentage / 100, min, max).
+
+
+
+_Appears in:_
+- [RestoreTarget](#restoretarget)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `percentage` _integer_ | Percentage is the percent of the source size. |  |  |
+| `min` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Min is the lower bound of the derived size. |  |  |
+| `max` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Max is the upper bound of the derived size. |  |  |
 
 
 #### BackupRef
@@ -340,7 +358,8 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `storageClassName` _string_ | StorageClassName is the storage class of the scratch volume. |  |  |
-| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. |  |  |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. When unset, it is derived from the source size. |  |  |
+| `autoExpand` _[AutoExpand](#autoexpand)_ | AutoExpand derives the size from the source size when Size is unset. |  |  |
 
 
 #### RestoreTest

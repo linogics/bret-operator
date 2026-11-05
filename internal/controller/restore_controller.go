@@ -46,6 +46,8 @@ type RestoreReconciler struct {
 	Recorder record.EventRecorder
 	// APIReader reads provider objects without starting an informer for them. Nil falls back to the client.
 	APIReader client.Reader
+	// EnabledProviders limits the providers this reconciler serves. Nil serves all of them.
+	EnabledProviders map[restorev1alpha1.Provider]bool
 }
 
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
@@ -91,9 +93,7 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // advance runs one step of the attempt and reports how the reconciler should be requeued.
 func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha1.Restore) (ctrl.Result, error) {
-	if restore.Spec.Provider != restorev1alpha1.ProviderKopiur &&
-		restore.Spec.Provider != restorev1alpha1.ProviderVelero &&
-		restore.Spec.Provider != restorev1alpha1.ProviderVolSync {
+	if !r.providerEnabled(restore.Spec.Provider) {
 		r.block(restore, reasonProviderUnsupported, fmt.Sprintf("provider %s is not supported yet", restore.Spec.Provider))
 
 		return ctrl.Result{}, nil
@@ -373,6 +373,16 @@ func isTerminal(phase restorev1alpha1.RestorePhase) bool {
 	default:
 		return false
 	}
+}
+
+// providerEnabled reports whether the provider is known and switched on.
+func (r *RestoreReconciler) providerEnabled(p restorev1alpha1.Provider) bool {
+	switch p {
+	case restorev1alpha1.ProviderKopiur, restorev1alpha1.ProviderVelero, restorev1alpha1.ProviderVolSync:
+		return r.EnabledProviders == nil || r.EnabledProviders[p]
+	}
+
+	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.

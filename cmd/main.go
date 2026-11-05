@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -14,7 +15,9 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -36,6 +39,19 @@ func init() {
 
 	utilruntime.Must(restorev1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
+}
+
+// csvEnv splits a comma separated env var and drops empty items.
+func csvEnv(name string) []string {
+	var out []string
+
+	for _, v := range strings.Split(os.Getenv(name), ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+
+	return out
 }
 
 // nolint:gocyclo
@@ -169,8 +185,37 @@ func main() {
 		})
 	}
 
+	// Empty PROVIDERS keeps every provider on, as outside the chart.
+	var enabledProviders map[restorev1alpha1.Provider]bool
+
+	if names := csvEnv("PROVIDERS"); len(names) > 0 {
+		enabledProviders = map[restorev1alpha1.Provider]bool{}
+		for _, n := range names {
+			enabledProviders[restorev1alpha1.Provider(n)] = true
+		}
+	}
+
+	// Empty WATCH_NAMESPACES is cluster-wide. Otherwise only the bret objects are limited to those namespaces:
+	// pods, PVCs and namespaces of the checks stay cluster-wide because scratch namespaces are not watched.
+	var cacheOpts cache.Options
+
+	if watch := csvEnv("WATCH_NAMESPACES"); len(watch) > 0 {
+		nsConfig := map[string]cache.Config{}
+		for _, ns := range watch {
+			nsConfig[ns] = cache.Config{}
+		}
+
+		cacheOpts.ByObject = map[client.Object]cache.ByObject{}
+		for _, o := range []client.Object{
+			&restorev1alpha1.Restore{}, &restorev1alpha1.RestoreTest{}, &restorev1alpha1.RestoreBlueprint{},
+		} {
+			cacheOpts.ByObject[o] = cache.ByObject{Namespaces: nsConfig}
+		}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
+		Cache:                  cacheOpts,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
@@ -198,6 +243,8 @@ func main() {
 		Scheme:    mgr.GetScheme(),
 		Recorder:  mgr.GetEventRecorderFor("restore"),
 		APIReader: mgr.GetAPIReader(),
+
+		EnabledProviders: enabledProviders,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Restore")
 		os.Exit(1)
