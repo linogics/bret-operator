@@ -65,7 +65,7 @@ Caveat: a live PVC (VolSync) shows its size now, not at backup time. If the app 
 
 ### Provider RBAC and controllers
 
-Chart flags: `providers.kopiur`, `providers.velero`, `providers.volsync` (booleans).
+Chart flags: `providers.kopiur.enabled`, `providers.velero.enabled`, `providers.volsync.enabled` (booleans); `providers.velero.namespace` is the Velero install namespace.
 
 - Flag off: no RBAC rules for that API group, and its controller does not start.
 - VolSync needs `get` on PVCs in the namespaces it reads. That is a Role per watched namespace.

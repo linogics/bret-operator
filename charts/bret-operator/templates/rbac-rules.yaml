@@ -69,7 +69,7 @@ rules:
   - get
   - patch
   - update
-{{- if $.Values.providers.kopiur }}
+{{- if $.Values.providers.kopiur.enabled }}
 - apiGroups:
   - kopiur.home-operations.com
   resources:
@@ -83,7 +83,7 @@ rules:
   - update
   - watch
 {{- end }}
-{{- if $.Values.providers.kopiur }}
+{{- if $.Values.providers.kopiur.enabled }}
 - apiGroups:
   - kopiur.home-operations.com
   resources:
@@ -115,7 +115,7 @@ rules:
   - list
   - watch
 {{- end }}
-{{- if $.Values.providers.volsync }}
+{{- if $.Values.providers.volsync.enabled }}
 - apiGroups:
   - volsync.backube
   resources:
@@ -127,7 +127,7 @@ rules:
   - list
   - watch
 {{- end }}
-{{- if $.Values.providers.volsync }}
+{{- if $.Values.providers.volsync.enabled }}
 - apiGroups:
   - volsync.backube
   resources:
@@ -180,7 +180,7 @@ rules:
   - get
   - patch
   - update
-{{- if $.Values.providers.kopiur }}
+{{- if $.Values.providers.kopiur.enabled }}
 - apiGroups:
   - kopiur.home-operations.com
   resources:
@@ -194,7 +194,7 @@ rules:
   - update
   - watch
 {{- end }}
-{{- if $.Values.providers.kopiur }}
+{{- if $.Values.providers.kopiur.enabled }}
 - apiGroups:
   - kopiur.home-operations.com
   resources:
@@ -204,7 +204,7 @@ rules:
   - list
   - watch
 {{- end }}
-{{- if $.Values.providers.volsync }}
+{{- if $.Values.providers.volsync.enabled }}
 - apiGroups:
   - volsync.backube
   resources:
@@ -216,7 +216,7 @@ rules:
   - list
   - watch
 {{- end }}
-{{- if $.Values.providers.volsync }}
+{{- if $.Values.providers.volsync.enabled }}
 - apiGroups:
   - volsync.backube
   resources:

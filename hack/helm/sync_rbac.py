@@ -32,8 +32,7 @@ def provider_rules(rules):
         text = yaml.safe_dump([rule], sort_keys=False)
         name = PROVIDER_GROUPS.get(rule["apiGroups"][0])
         if name:
-            enabled = ".enabled" if name == "velero" else ""
-            text = f"{{{{- if $.Values.providers.{name}{enabled} }}}}\n{text}{{{{- end }}}}\n"
+            text = f"{{{{- if $.Values.providers.{name}.enabled }}}}\n{text}{{{{- end }}}}\n"
         out.append(text)
     return "".join(out)
 

@@ -41,10 +41,10 @@ Kubernetes: `>=1.29.0-0`
 | podAnnotations | object | `{}` | Extra annotations added to the manager pod. |
 | podLabels | object | `{}` | Extra labels added to the manager pod. |
 | podSecurityContext | object | `{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}` | Pod security context. The default follows the restricted Pod Security Standard. |
-| providers.kopiur | bool | `true` | Enable the Kopiur provider. |
+| providers.kopiur.enabled | bool | `true` | Enable the Kopiur provider. |
 | providers.velero.enabled | bool | `false` | Enable the Velero provider. Adds velero.io rights and the cluster-wide pod, PVC and namespace rights its checks need. |
 | providers.velero.namespace | string | `"velero"` | Velero install namespace. With watchNamespaces set, the velero.io rights are bound here even if it is not listed. |
-| providers.volsync | bool | `false` | Enable the VolSync provider. |
+| providers.volsync.enabled | bool | `false` | Enable the VolSync provider. |
 | replicaCount | int | `1` | Number of manager replicas. Leader election keeps one replica active. |
 | resources | object | `{"limits":{"cpu":"500m","memory":"128Mi"},"requests":{"cpu":"10m","memory":"64Mi"}}` | Manager resources. |
 | securityContext | object | `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}` | Container security context. |

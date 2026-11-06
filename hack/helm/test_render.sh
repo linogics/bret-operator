@@ -9,7 +9,7 @@ out=$(helm template bret "$CHART" --set providers.velero.enabled=false)
 grep -q 'kopiur.home-operations.com' <<<"$out" || fail "kopiur rules missing by default"
 grep -q 'volsync.backube' <<<"$out" && fail "volsync rules rendered by default"
 
-out=$(helm template bret "$CHART" --set providers.velero.enabled=true --set providers.volsync=true --set providers.kopiur=false)
+out=$(helm template bret "$CHART" --set providers.velero.enabled=true --set providers.volsync.enabled=true --set providers.kopiur.enabled=false)
 grep -q 'velero.io' <<<"$out" || fail "velero rules missing when enabled"
 grep -q 'volsync.backube' <<<"$out" || fail "volsync rules missing when enabled"
 grep -q 'kopiur.home-operations.com' <<<"$out" && fail "kopiur rules rendered when disabled"
