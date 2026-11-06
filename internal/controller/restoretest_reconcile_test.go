@@ -491,3 +491,29 @@ func TestRestoreTestAfterBackupIgnoresBackupsBeforeCreation(t *testing.T) {
 		t.Errorf("restore source = %q, want new", got)
 	}
 }
+
+func TestRestoreTestKopiurDisabled(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
+	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
+
+	snap := newSnapshot("a", map[string]string{testLabelKey: testLabelValue}, "Succeeded",
+		time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC))
+
+	f := newRestoreTestFixture(t, test, snap)
+	f.now = time.Date(2026, 11, 15, 10, 20, 0, 0, time.UTC)
+	f.r.EnabledProviders = map[restorev1alpha1.Provider]bool{restorev1alpha1.ProviderVelero: true}
+
+	res, err := f.r.Reconcile(f.ctx, ctrl.Request{NamespacedName: f.key})
+	if err != nil || res.Requeue || res.RequeueAfter != 0 { //nolint:staticcheck // requeue check
+		t.Fatalf("result = %+v, err = %v, want no requeue", res, err)
+	}
+
+	if n := len(f.restores()); n != 0 {
+		t.Fatalf("restores = %d, want 0", n)
+	}
+
+	if reason := testReadyReason(f.test()); reason != reasonProviderUnsupported {
+		t.Errorf("Ready reason = %q, want %s", reason, reasonProviderUnsupported)
+	}
+}

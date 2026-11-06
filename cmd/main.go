@@ -255,6 +255,8 @@ func main() {
 		Scheme:    mgr.GetScheme(),
 		Recorder:  mgr.GetEventRecorderFor("restoretest"),
 		APIReader: mgr.GetAPIReader(),
+
+		EnabledProviders: enabledProviders,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RestoreTest")
 		os.Exit(1)

@@ -59,6 +59,8 @@ type RestoreTestReconciler struct {
 	APIReader client.Reader
 	// Now returns the current time. Nil means time.Now.
 	Now func() time.Time
+	// EnabledProviders limits the providers this reconciler serves. Nil serves all of them.
+	EnabledProviders map[restorev1alpha1.Provider]bool
 }
 
 // trigger is one due request for a run. consume records in the status that the request was handled.
@@ -102,6 +104,13 @@ func (r *RestoreTestReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *RestoreTestReconciler) advance(ctx context.Context, test *restorev1alpha1.RestoreTest) (ctrl.Result, error) {
 	if test.Spec.Provider != restorev1alpha1.ProviderKopiur {
 		r.blockTest(test, reasonProviderUnsupported, fmt.Sprintf("provider %s is not supported yet", test.Spec.Provider))
+
+		return ctrl.Result{}, nil
+	}
+
+	// Tests read Kopiur snapshots, so they need the kopiur provider and its rights.
+	if r.EnabledProviders != nil && !r.EnabledProviders[restorev1alpha1.ProviderKopiur] {
+		r.blockTest(test, reasonProviderUnsupported, "provider kopiur is disabled")
 
 		return ctrl.Result{}, nil
 	}

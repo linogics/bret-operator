@@ -20,8 +20,14 @@ n=$(grep -c '^kind: Role$' <<<"$out" || true)
 # leader-election Role plus one Role per watched namespace
 [ "$n" = 4 ] || fail "expected 4 Roles (leader election, 2 watched, velero), got $n"
 grep -q 'name: WATCH_NAMESPACES' <<<"$out" || fail "WATCH_NAMESPACES env missing"
-# R14: pods, PVCs and namespaces stay in the ClusterRole
-awk '/^kind: ClusterRole$/{f=1} /^---/{f=0} f' <<<"$out" | grep -q 'persistentvolumeclaims' || fail "pods/pvcs left the ClusterRole"
+# R14: velero-only checks need namespaces rights that stay cluster-wide, and bret rules move to the Roles
+cr=$(awk 'BEGIN{RS="---\n"} /kind: ClusterRole\n/ && /-manager\n/' <<<"$out")
+grep -q 'persistentvolumeclaims' <<<"$cr" || fail "pods/pvcs left the ClusterRole"
+grep -q 'namespaces' <<<"$cr" || fail "namespaces rights left the ClusterRole"
+grep -q 'bret.linogics.io' <<<"$cr" && fail "bret.linogics.io rules in ClusterRole with watchNamespaces set"
+for ns in a b; do
+  awk 'BEGIN{RS="---\n"} /kind: Role\n/ && /namespace: '$ns'\n/ && /bret.linogics.io/' <<<"$out" | grep -q . || fail "no Role in watched namespace $ns"
+done
 out=$(helm template bret "$CHART" --set providers.velero.enabled=true --set 'watchNamespaces={app}')
 awk 'BEGIN{RS="---\n"} /kind: Role\n/ && /namespace: velero/ && /velero.io/' <<<"$out" | grep -q . || fail "velero Role missing in velero namespace"
 awk 'BEGIN{RS="---\n"} /kind: RoleBinding/ && /namespace: velero/' <<<"$out" | grep -q . || fail "velero RoleBinding missing in velero namespace"

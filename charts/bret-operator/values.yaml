@@ -73,7 +73,7 @@ providers:
     # -- Enable the Kopiur provider.
     enabled: true
   velero:
-    # -- Enable the Velero provider. Adds velero.io rights and the cluster-wide pod, PVC and namespace rights its checks need.
+    # -- Enable the Velero provider. Adds the velero.io rights. The cluster-wide pod, PVC and namespace rights are always rendered.
     enabled: false
     # -- Velero install namespace. With watchNamespaces set, the velero.io rights are bound here even if it is not listed.
     namespace: velero
