@@ -56,6 +56,6 @@ Comma list of the enabled providers.
 */}}
 {{- define "bret-operator.providers" -}}
 {{- $p := list -}}
-{{- range $name, $on := .Values.providers }}{{ if $on }}{{ $p = append $p $name }}{{ end }}{{ end -}}
+{{- range $name, $on := .Values.providers }}{{ if kindIs "map" $on }}{{ if $on.enabled }}{{ $p = append $p $name }}{{ end }}{{ else if $on }}{{ $p = append $p $name }}{{ end }}{{ end -}}
 {{- join "," (sortAlpha $p) -}}
 {{- end }}

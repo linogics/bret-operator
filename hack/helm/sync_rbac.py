@@ -32,7 +32,8 @@ def provider_rules(rules):
         text = yaml.safe_dump([rule], sort_keys=False)
         name = PROVIDER_GROUPS.get(rule["apiGroups"][0])
         if name:
-            text = f"{{{{- if $.Values.providers.{name} }}}}\n{text}{{{{- end }}}}\n"
+            enabled = ".enabled" if name == "velero" else ""
+            text = f"{{{{- if $.Values.providers.{name}{enabled} }}}}\n{text}{{{{- end }}}}\n"
         out.append(text)
     return "".join(out)
 
@@ -79,7 +80,20 @@ metadata:
     {{- include "bret-operator.labels" $ | nindent 4 }}
 rules:
 """
-        + provider_rules(rest)
+        + provider_rules([r for r in rest if r["apiGroups"] != ["velero.io"]])
+        + """{{- end }}
+{{- if and $.Values.watchNamespaces $.Values.providers.velero.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}-velero
+  namespace: {{ $.Values.providers.velero.namespace }}
+  labels:
+    {{- include "bret-operator.labels" $ | nindent 4 }}
+rules:
+"""
+        + yaml.safe_dump([r for r in rest if r["apiGroups"] == ["velero.io"]], sort_keys=False)
         + """{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
