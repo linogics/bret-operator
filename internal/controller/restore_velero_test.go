@@ -34,7 +34,7 @@ func TestVeleroRestoreSpec(t *testing.T) {
 	}
 
 	want := map[string]any{
-		"backupName":        "backup",
+		"backupName":        testBackupName,
 		"includedResources": []any{"persistentvolumeclaims", "persistentvolumes"},
 		"namespaceMapping":  map[string]any{"ns": "bret-scratch-r"},
 		"restorePVs":        true,
@@ -82,7 +82,7 @@ func pvcTarGz(t *testing.T, files map[string]string) []byte {
 }
 
 func TestVeleroPVCSizes(t *testing.T) {
-	data := pvcTarGz(t, map[string]string{"ns/a": "5Gi", "ns/b": "10Gi", "other/c": "1Gi", "ns/empty": ""})
+	data := pvcTarGz(t, map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi, "other/c": testSize1Gi, "ns/empty": ""})
 
 	got, err := veleroPVCSizes(bytes.NewReader(data), "ns")
 	if err != nil {
@@ -90,7 +90,7 @@ func TestVeleroPVCSizes(t *testing.T) {
 	}
 
 	a, b := got["a"], got["b"]
-	if len(got) != 2 || a.Cmp(resource.MustParse("5Gi")) != 0 || b.Cmp(resource.MustParse("10Gi")) != 0 {
+	if len(got) != 2 || a.Cmp(resource.MustParse(testSize5Gi)) != 0 || b.Cmp(resource.MustParse(testSize10Gi)) != 0 {
 		t.Fatalf("unexpected sizes %v", got)
 	}
 
@@ -101,7 +101,7 @@ func TestVeleroPVCSizes(t *testing.T) {
 
 func TestVeleroSourceSize(t *testing.T) {
 	blueprint := unstructuredObj("bret.linogics.io", "RestoreBlueprint", "bp", map[string]any{
-		"spec": map[string]any{"restoredVolumes": []any{map[string]any{"name": "data", "sourcePVC": "b"}}},
+		"spec": map[string]any{"restoredVolumes": []any{map[string]any{"name": testDataName, "sourcePVC": "b"}}},
 	})
 
 	tests := []struct {
@@ -111,10 +111,10 @@ func TestVeleroSourceSize(t *testing.T) {
 		bp     bool
 		want   string
 	}{
-		{"single pvc", map[string]string{"ns/a": "5Gi"}, 200, false, "5Gi"},
-		{"blueprint picks", map[string]string{"ns/a": "5Gi", "ns/b": "10Gi"}, 200, true, "10Gi"},
-		{"ambiguous without blueprint", map[string]string{"ns/a": "5Gi", "ns/b": "10Gi"}, 200, false, ""},
-		{"no pvc in namespace", map[string]string{"other/a": "5Gi"}, 200, false, ""},
+		{"single pvc", map[string]string{testPVCKeyA: testSize5Gi}, 200, false, testSize5Gi},
+		{"blueprint picks", map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi}, 200, true, testSize10Gi},
+		{"ambiguous without blueprint", map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi}, 200, false, ""},
+		{"no pvc in namespace", map[string]string{"other/a": testSize5Gi}, 200, false, ""},
 		{"download fails", nil, 500, false, ""},
 	}
 
@@ -130,6 +130,7 @@ func TestVeleroSourceSize(t *testing.T) {
 
 				_, _ = w.Write(body)
 			}))
+
 			defer srv.Close()
 
 			scheme := runtime.NewScheme()
@@ -209,7 +210,7 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 			defer cancel()
 
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": "1Gi"}))
+				_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": testSize1Gi}))
 			}))
 			defer srv.Close()
 
@@ -251,7 +252,7 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 				t.Fatalf("pod created before the scratch namespace exists: %v", err)
 			}
 
-			pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "data", Namespace: scratch.Name}}
+			pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: testDataName, Namespace: scratch.Name}}
 			if err := c.Create(ctx, scratch); err != nil {
 				t.Fatal(err)
 			}
@@ -267,7 +268,7 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 				t.Fatalf("check pod not in scratch namespace: %v", err)
 			}
 
-			if pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName != "data" {
+			if pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName != testDataName {
 				t.Fatalf("pod mounts %v, want restored PVC data", pod.Spec.Volumes[0])
 			}
 
@@ -329,7 +330,7 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 			defer cancel()
 
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": "1Gi"}))
+				_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": testSize1Gi}))
 			}))
 			defer srv.Close()
 

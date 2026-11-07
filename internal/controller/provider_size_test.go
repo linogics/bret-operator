@@ -21,7 +21,7 @@ func sizeTestRestore(provider restorev1alpha1.Provider) *restorev1alpha1.Restore
 		ObjectMeta: metav1.ObjectMeta{Name: "r", Namespace: "ns"},
 		Spec: restorev1alpha1.RestoreSpec{
 			Provider: provider,
-			Source:   restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "backup"}},
+			Source:   restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: testBackupName}},
 		},
 	}
 }
@@ -47,15 +47,15 @@ func TestSourceSize(t *testing.T) {
 	}
 
 	pvc := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{Name: "data", Namespace: "ns"},
+		ObjectMeta: metav1.ObjectMeta{Name: testDataName, Namespace: "ns"},
 		Spec: corev1.PersistentVolumeClaimSpec{Resources: corev1.VolumeResourceRequirements{
-			Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("5Gi")},
+			Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(testSize5Gi)},
 		}},
 	}
-	volsyncSource := unstructuredObj("volsync.backube", "ReplicationSource", "backup",
-		map[string]any{"spec": map[string]any{"sourcePVC": "data"}})
+	volsyncSource := unstructuredObj("volsync.backube", "ReplicationSource", testBackupName,
+		map[string]any{"spec": map[string]any{"sourcePVC": testDataName}})
 	snapshot := func(stats map[string]any) *unstructured.Unstructured {
-		return unstructuredObj(kopiurGroup, "Snapshot", "backup", map[string]any{"status": map[string]any{"stats": stats}})
+		return unstructuredObj(kopiurGroup, "Snapshot", testBackupName, map[string]any{testStatusKey: map[string]any{"stats": stats}})
 	}
 
 	tests := []struct {
@@ -67,7 +67,7 @@ func TestSourceSize(t *testing.T) {
 		{"kopiur size", restorev1alpha1.ProviderKopiur, []client.Object{snapshot(map[string]any{"sizeBytes": int64(10485760)})}, "10Mi"},
 		{"kopiur zero", restorev1alpha1.ProviderKopiur, []client.Object{snapshot(map[string]any{"sizeBytes": int64(0)})}, ""},
 		{"kopiur missing snapshot", restorev1alpha1.ProviderKopiur, nil, ""},
-		{"volsync pvc", restorev1alpha1.ProviderVolSync, []client.Object{volsyncSource, pvc}, "5Gi"},
+		{"volsync pvc", restorev1alpha1.ProviderVolSync, []client.Object{volsyncSource, pvc}, testSize5Gi},
 		{"volsync pvc missing", restorev1alpha1.ProviderVolSync, []client.Object{volsyncSource}, ""},
 		{"volsync source missing", restorev1alpha1.ProviderVolSync, nil, ""},
 	}

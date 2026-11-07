@@ -20,6 +20,8 @@ import (
 )
 
 const (
+	apiVersionAlpha1      = "v1alpha1"
+	fieldKind             = "kind"
 	readyConditionType    = "Ready"
 	restoreRequeueAfter   = 10 * time.Second
 	blueprintRequeueAfter = 30 * time.Second

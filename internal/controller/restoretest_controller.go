@@ -47,7 +47,7 @@ const (
 )
 
 // snapshotGVK is the Kopiur Snapshot kind. It is used as unstructured, so Kopiur is not a Go dependency.
-var snapshotGVK = schema.GroupVersionKind{Group: kopiurGroup, Version: "v1alpha1", Kind: "Snapshot"}
+var snapshotGVK = schema.GroupVersionKind{Group: kopiurGroup, Version: apiVersionAlpha1, Kind: "Snapshot"}
 
 // RestoreTestReconciler reconciles a RestoreTest object: it starts Restore objects on its triggers and retries failed attempts.
 type RestoreTestReconciler struct {

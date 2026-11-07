@@ -191,11 +191,11 @@ func newSnapshot(name string, labels map[string]string, phase string, ready time
 		"apiVersion": "kopiur.home-operations.com/v1alpha1",
 		"kind":       "Snapshot",
 		"metadata":   map[string]any{"name": name, "namespace": testNamespace},
-		"status": map[string]any{
+		testStatusKey: map[string]any{
 			"phase": phase,
 			"conditions": []any{map[string]any{
 				"type":               "Ready",
-				"status":             "True",
+				testStatusKey:        "True",
 				"lastTransitionTime": ready.UTC().Format(time.RFC3339),
 			}},
 		},

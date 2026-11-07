@@ -30,7 +30,7 @@ func checkPodBlueprint() *restorev1alpha1.RestoreBlueprint {
 				},
 			},
 			ScratchVolumes: []restorev1alpha1.ScratchVolume{
-				{Name: "Work Area", MountPath: "/scratch", Size: resource.MustParse("1Gi")},
+				{Name: testWorkArea, MountPath: "/scratch", Size: resource.MustParse("1Gi")},
 			},
 			ServiceAccountName: "checker",
 			NodeSelector:       map[string]string{"disk": "ssd"},
@@ -45,7 +45,7 @@ func TestBuildCheckPod(t *testing.T) {
 	restore := newTestRestore()
 	bp := checkPodBlueprint()
 
-	pod, err := buildCheckPod(restore, bp, "r1-scratch", map[string]string{"Work Area": "r1-scratch-work-area"})
+	pod, err := buildCheckPod(restore, bp, "r1-scratch", map[string]string{testWorkArea: testWorkAreaClaim})
 	if err != nil {
 		t.Fatalf("buildCheckPod: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestBuildCheckPod(t *testing.T) {
 		t.Errorf("restored volume claim %q, want r1-scratch", got)
 	}
 
-	if got := pvcClaim(pod, "scratch-work-area"); got != "r1-scratch-work-area" {
+	if got := pvcClaim(pod, "scratch-work-area"); got != testWorkAreaClaim {
 		t.Errorf("scratch volume claim %q, want r1-scratch-work-area", got)
 	}
 
@@ -107,14 +107,14 @@ func TestRestoredVolumesMapping(t *testing.T) {
 
 	bp := checkPodBlueprint()
 	bp.Spec.RestoreMount = ""
-	bp.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{{Name: "data", MountPath: "/data", SourcePVC: "pg-data"}}
+	bp.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{{Name: testDataName, MountPath: "/data", SourcePVC: "pg-data"}}
 
-	pod, err := buildCheckPod(newTestRestore(), bp, "r1-scratch", map[string]string{"Work Area": "r1-scratch-work-area"})
+	pod, err := buildCheckPod(newTestRestore(), bp, "r1-scratch", map[string]string{testWorkArea: testWorkAreaClaim})
 	if err != nil {
 		t.Fatalf("buildCheckPod: %v", err)
 	}
 
-	if got := pvcClaim(pod, "data"); got != "r1-scratch" {
+	if got := pvcClaim(pod, testDataName); got != "r1-scratch" {
 		t.Errorf("volume data claim %q, want r1-scratch", got)
 	}
 
@@ -124,8 +124,8 @@ func TestRestoredVolumesMapping(t *testing.T) {
 			mounts[m.Name] = m.MountPath
 		}
 
-		if mounts["data"] != "/data" {
-			t.Errorf("container %s: data mount %q, want /data", c.Name, mounts["data"])
+		if mounts[testDataName] != "/data" {
+			t.Errorf("container %s: data mount %q, want /data", c.Name, mounts[testDataName])
 		}
 	}
 }

@@ -9,6 +9,17 @@ const (
 	testCheckName  = "check"
 	testLabelKey   = "app"
 	testLabelValue = "pg"
+
+	testDataName      = "data"
+	testBackupName    = "backup"
+	testStatusKey     = "status"
+	testWorkArea      = "Work Area"
+	testWorkAreaClaim = "r1-scratch-work-area"
+	testSize1Gi       = "1Gi"
+	testSize5Gi       = "5Gi"
+	testSize10Gi      = "10Gi"
+	testPVCKeyA       = "ns/a"
+	testPVCKeyB       = "ns/b"
 )
 
 func quantityPtr(s string) *resource.Quantity {

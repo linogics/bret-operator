@@ -23,7 +23,7 @@ const (
 )
 
 // kopiurRestoreGVK is the Kopiur Restore kind. It is used as unstructured, so Kopiur is not a Go dependency.
-var kopiurRestoreGVK = schema.GroupVersionKind{Group: kopiurGroup, Version: "v1alpha1", Kind: "Restore"}
+var kopiurRestoreGVK = schema.GroupVersionKind{Group: kopiurGroup, Version: apiVersionAlpha1, Kind: "Restore"}
 
 // kopiurName is the name of the Kopiur Restore of one attempt.
 func kopiurName(restore *restorev1alpha1.Restore) string {
@@ -85,7 +85,7 @@ func kopiurRestoreObject(restore *restorev1alpha1.Restore, uid *int64) *unstruct
 
 	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": kopiurRestoreGVK.GroupVersion().String(),
-		"kind":       kopiurRestoreGVK.Kind,
+		fieldKind:    kopiurRestoreGVK.Kind,
 		"metadata": map[string]any{
 			keyName:      kopiurName(restore),
 			keyNamespace: restore.Namespace,

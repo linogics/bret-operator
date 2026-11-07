@@ -42,7 +42,7 @@ var _ = Describe("RestoreTest Controller", func() {
 					},
 					Spec: restorev1alpha1.RestoreTestSpec{
 						Provider:       restorev1alpha1.ProviderVelero,
-						BackupSelector: restorev1alpha1.BackupSelector{Name: "backup"},
+						BackupSelector: restorev1alpha1.BackupSelector{Name: testBackupName},
 						BlueprintRef:   restorev1alpha1.BlueprintRef{Name: testCheckName},
 						RestoreWindow:  metav1.Duration{Duration: 45 * time.Minute},
 					},

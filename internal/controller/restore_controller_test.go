@@ -48,7 +48,7 @@ var _ = Describe("Restore Controller", func() {
 					},
 					Spec: restorev1alpha1.RestoreSpec{
 						Provider: restorev1alpha1.ProviderVolSync,
-						Source:   restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "backup"}},
+						Source:   restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: testBackupName}},
 						Target:   restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
 
 						BlueprintRef: restorev1alpha1.BlueprintRef{Name: "bp"},

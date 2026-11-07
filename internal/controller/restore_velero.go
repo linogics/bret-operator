@@ -36,7 +36,7 @@ const (
 var (
 	veleroRestoreGVK   = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "Restore"}
 	downloadRequestGVK = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "DownloadRequest"}
-	blueprintGVK       = schema.GroupVersionKind{Group: "bret.linogics.io", Version: "v1alpha1", Kind: "RestoreBlueprint"}
+	blueprintGVK       = schema.GroupVersionKind{Group: "bret.linogics.io", Version: apiVersionAlpha1, Kind: "RestoreBlueprint"}
 
 	// Variables so tests can shorten them.
 	veleroDownloadWait = 30 * time.Second
@@ -157,9 +157,9 @@ func (r *RestoreReconciler) checkVelero(
 		return ctrl.Result{}, err
 	}
 
-	claim, err := r.restoredVeleroClaim(ctx, restore, pvcs.Items)
-	if err != nil || claim == "" {
-		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, err
+	claim := r.restoredVeleroClaim(ctx, restore, pvcs.Items)
+	if claim == "" {
+		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
 	}
 
 	claims := make(map[string]string, len(bp.Spec.ScratchVolumes))
@@ -184,7 +184,7 @@ func (r *RestoreReconciler) restoredVeleroClaim(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
 	pvcs []corev1.PersistentVolumeClaim,
-) (string, error) {
+) string {
 	var names []string
 
 	for i := range pvcs {
@@ -194,17 +194,17 @@ func (r *RestoreReconciler) restoredVeleroClaim(
 	}
 
 	if len(names) == 1 {
-		return names[0], nil
+		return names[0]
 	}
 
 	want := r.blueprintSourcePVC(ctx, restore)
 	for _, n := range names {
 		if n == want {
-			return n, nil
+			return n
 		}
 	}
 
-	return "", nil
+	return ""
 }
 
 // veleroSourceSize reads the PVC size from the backup contents. Failures to read the contents give nil,
@@ -241,10 +241,10 @@ func (r *RestoreReconciler) veleroSourceSize(ctx context.Context, restore *resto
 func (r *RestoreReconciler) downloadURL(ctx context.Context, restore *restorev1alpha1.Restore) (string, error) {
 	req := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": downloadRequestGVK.GroupVersion().String(),
-		"kind":       downloadRequestGVK.Kind,
+		fieldKind:    downloadRequestGVK.Kind,
 		"metadata":   map[string]any{keyName: veleroName(restore) + "-size", keyNamespace: veleroNamespace},
 		"spec": map[string]any{"target": map[string]any{
-			"kind": "BackupContents", keyName: restore.Spec.Source.BackupRef.Name,
+			fieldKind: "BackupContents", keyName: restore.Spec.Source.BackupRef.Name,
 		}},
 	}}
 
@@ -307,7 +307,7 @@ func (r *RestoreReconciler) blueprintSourcePVC(ctx context.Context, restore *res
 	return name
 }
 
-func fetchPVCSizes(ctx context.Context, url, namespace string) (map[string]resource.Quantity, error) {
+func fetchPVCSizes(ctx context.Context, url, namespace string) (_ map[string]resource.Quantity, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -320,7 +320,7 @@ func fetchPVCSizes(ctx context.Context, url, namespace string) (map[string]resou
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { err = errors.Join(err, resp.Body.Close()) }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download backup contents: %s", resp.Status)
@@ -330,12 +330,12 @@ func fetchPVCSizes(ctx context.Context, url, namespace string) (map[string]resou
 }
 
 // veleroPVCSizes returns the requested storage of every PVC of namespace in a backup contents tar.gz, by PVC name.
-func veleroPVCSizes(contents io.Reader, namespace string) (map[string]resource.Quantity, error) {
+func veleroPVCSizes(contents io.Reader, namespace string) (_ map[string]resource.Quantity, err error) {
 	gz, err := gzip.NewReader(contents)
 	if err != nil {
 		return nil, err
 	}
-	defer gz.Close()
+	defer func() { err = errors.Join(err, gz.Close()) }()
 
 	prefix := veleroPVCPrefix + namespace + "/"
 	sizes := map[string]resource.Quantity{}

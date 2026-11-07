@@ -18,8 +18,8 @@ func TestResolveSize(t *testing.T) {
 	}{
 		{
 			name:   "target size without source",
-			target: restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
-			want:   "1Gi",
+			target: restorev1alpha1.RestoreTarget{Size: quantityPtr(testSize1Gi)},
+			want:   testSize1Gi,
 		},
 		{
 			name:    "no size and no source",
@@ -28,7 +28,7 @@ func TestResolveSize(t *testing.T) {
 		},
 		{
 			name:    "target size smaller than source",
-			target:  restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
+			target:  restorev1alpha1.RestoreTarget{Size: quantityPtr(testSize1Gi)},
 			source:  quantityPtr("2Gi"),
 			wantErr: ErrInsufficientCapacity,
 		},
@@ -36,27 +36,27 @@ func TestResolveSize(t *testing.T) {
 			name:   "default applies min",
 			target: restorev1alpha1.RestoreTarget{},
 			source: quantityPtr("10Mi"),
-			want:   "1Gi",
+			want:   testSize1Gi,
 		},
 		{
 			name:   "exact percentage",
-			target: restorev1alpha1.RestoreTarget{AutoExpand: &restorev1alpha1.AutoExpand{Percentage: 10, Min: quantityPtr("1Gi")}},
-			source: quantityPtr("10Gi"),
-			want:   "1Gi",
+			target: restorev1alpha1.RestoreTarget{AutoExpand: &restorev1alpha1.AutoExpand{Percentage: 10, Min: quantityPtr(testSize1Gi)}},
+			source: quantityPtr(testSize10Gi),
+			want:   testSize1Gi,
 		},
 		{
 			name:   "max clamps",
-			target: restorev1alpha1.RestoreTarget{AutoExpand: &restorev1alpha1.AutoExpand{Percentage: 10, Max: quantityPtr("5Gi")}},
+			target: restorev1alpha1.RestoreTarget{AutoExpand: &restorev1alpha1.AutoExpand{Percentage: 10, Max: quantityPtr(testSize5Gi)}},
 			source: quantityPtr("100Gi"),
-			want:   "5Gi",
+			want:   testSize5Gi,
 		},
 		{
 			name: "fixed size idiom",
 			target: restorev1alpha1.RestoreTarget{AutoExpand: &restorev1alpha1.AutoExpand{
-				Percentage: 100, Min: quantityPtr("5Gi"), Max: quantityPtr("5Gi"),
+				Percentage: 100, Min: quantityPtr(testSize5Gi), Max: quantityPtr(testSize5Gi),
 			}},
 			source: quantityPtr("3Gi"),
-			want:   "5Gi",
+			want:   testSize5Gi,
 		},
 	}
 

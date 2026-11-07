@@ -14,7 +14,7 @@ import (
 
 // +kubebuilder:rbac:groups=volsync.backube,resources=replicationsources,verbs=get;list;watch
 
-var replicationSourceGVK = schema.GroupVersionKind{Group: "volsync.backube", Version: "v1alpha1", Kind: "ReplicationSource"}
+var replicationSourceGVK = schema.GroupVersionKind{Group: "volsync.backube", Version: apiVersionAlpha1, Kind: "ReplicationSource"}
 
 // sourceSize returns the size of the backed-up source, or nil when the provider cannot tell.
 func (r *RestoreReconciler) sourceSize(ctx context.Context, restore *restorev1alpha1.Restore) (*resource.Quantity, error) {

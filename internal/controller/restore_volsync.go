@@ -19,7 +19,7 @@ import (
 // volsyncMoverUID is the mover user of the restic restore. The default mover fails with a setgid error on the scratch volume.
 const volsyncMoverUID = int64(65534)
 
-var replicationDestinationGVK = schema.GroupVersionKind{Group: "volsync.backube", Version: "v1alpha1", Kind: "ReplicationDestination"}
+var replicationDestinationGVK = schema.GroupVersionKind{Group: "volsync.backube", Version: apiVersionAlpha1, Kind: "ReplicationDestination"}
 
 func volsyncName(restore *restorev1alpha1.Restore) string {
 	return restore.Name + "-volsync"
