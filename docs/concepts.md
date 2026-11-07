@@ -28,7 +28,7 @@ It does:
 - wait for that restore to finish,
 - create the check pod from the blueprint, with the restored volume mounted,
 - take the check pod's exit code as the verdict,
-- write the result to `status`, to Events, and to Prometheus metrics (planned),
+- write the result to `status`, to Events, and to Prometheus metrics,
 - clean up pods and volumes, or keep them for debugging when you ask it to.
 
 It does not:
@@ -48,6 +48,28 @@ It does not:
 Kopiur is alpha. The rows above are the ones the spike verified. Setup steps are in
 [backup-providers.md](backup-providers.md).
 
+Providers are switched on in the Helm chart with `providers.<name>.enabled`. Kopiur is on by
+default. Velero and VolSync are off by default. A `Restore` for a disabled provider fails with
+reason `ProviderUnsupported`.
+
+Velero and VolSync have these rules:
+
+- Velero: the restore runs in the Velero namespace (`providers.velero.namespace`, default
+  `velero`). The PVC and PVs are restored into the scratch namespace `bret-scratch-<restore name>`,
+  and the check pod runs there. A blueprint for Velero must not set `serviceAccountName`,
+  `imagePullSecrets`, or configMap/secret volumes. Such a blueprint fails with
+  `ProviderUnsupported`.
+- VolSync: the operator creates a `ReplicationDestination` with a restic mover. The repository
+  Secret and the source PVC come from the backup's `ReplicationSource`, in the backup namespace
+  (`backupRef.namespace`, or the `Restore` namespace when it is not set).
+
+## Volumes per restore
+
+A `RestoreBlueprint` may list one entry in `restoredVolumes`, or use `restoreMount`. Each
+`restoredVolumes` entry has `name`, `mountPath` and `sourcePVC` (the PVC in the backed-up
+namespace). More than one entry fails with `ProviderUnsupported` in v1. Restoring several
+volumes per check is a follow-up.
+
 ## The scratch-volume rule
 
 Every restore writes into a volume the operator creates for that attempt. The volume is
@@ -55,6 +77,25 @@ owned by the `Restore`. A restore never writes into a live application volume.
 
 The check pod mounts the scratch volume. It can read the restored data. It cannot change
 the application's own volume.
+
+## Scratch volume size
+
+`target.size` on a `Restore` is optional. When it is omitted, the size comes from the source:
+
+- Kopiur: the data size of the `Snapshot`.
+- Velero: the PVC request in the backup.
+- VolSync: the request of the source PVC.
+
+`target.autoExpand` derives the size from the source size:
+`clamp(source x percentage / 100, min, max)`. Its fields are `percentage` (above 0), and
+optional `min` and `max`, where `min` must not exceed `max`. When both `size` and `autoExpand`
+are omitted, the default is `percentage: 10` with `min: 1Gi`. For a fixed size, use
+`percentage: 100, min: X, max: X`.
+
+Two failures are reported as reasons on the `Restore`:
+
+- `SizeUnknown`: the source size is unknown and `target.size` is not set.
+- `InsufficientCapacity`: `target.size` is smaller than the source.
 
 ## The restore test lifecycle
 
@@ -86,7 +127,7 @@ the operator's phases.
 - `retries.count` is the number of extra attempts after the first. The maximum is 10. The
   default is 0.
 - `retries.backoff` is the wait between attempts. The default is `5m`.
-- Each retry and each cancel writes an Event with a reason (planned).
+- Each cancel writes a `RestoreCanceled` Event on the `Restore`. Events for retries are planned.
 
 ### restoreWindow
 
@@ -101,8 +142,9 @@ With `keepOnFailure: true` and the last attempt failed, the operator keeps:
 - the native restore object,
 - the scratch volume, so the restored data stays readable.
 
-Kept resources get the label `bret.linogics.io/retained: "true"` and an Event (planned).
-Kept resources are not deleted automatically. Delete them by hand, or delete the `Restore`.
+Kept resources get the label `bret.linogics.io/retained: "true"`. The `RestoreTest` lists them in
+`status.retainedResources`. Kept resources are not deleted automatically. Delete them by hand, or
+delete the `Restore`. There is no TTL in v1 (`retainedFor` is not implemented).
 
 Earlier failed attempts are always cleaned up. Only the last attempt is kept.
 
@@ -114,7 +156,7 @@ Applies when a trigger fires while a run is still going.
 |---|---|
 | `Skip` (default) | Write an Event and drop the trigger. |
 | `Queue` | Keep one pending run. It starts when the current run ends. Extra triggers are dropped. |
-| `Replace` | Cancel the running attempt (same cleanup as a timeout), then start a new one. |
+| `Replace` | Delete the running `Restore`, then start a new one. The operator does not wait for the old one's cleanup. Kubernetes garbage collection removes the objects it owned. |
 
 Manual runs follow the same policy.
 
@@ -125,18 +167,19 @@ A `RestoreTest` can use any mix of these triggers.
 | Trigger | Field | How it works |
 |---|---|---|
 | Schedule | `triggers.cron` | Standard 5-field cron, UTC. Each tick starts a run unless `overlapPolicy` says otherwise. |
-| After backup | `triggers.afterBackup.delay` | When a matching backup completes at time `T`, a run starts at `T + delay`. The newest handled backup is recorded in `status.lastHandled`, and only newer backups trigger a run. |
+| After backup | `triggers.afterBackup.delay` | When a matching backup completes at time `T`, a run starts at `T + delay`. The newest handled backup is recorded in `status.lastHandled`. A backup triggers a run only if it is newer than that (completion time, then name). Older backups never trigger. |
 | Manual | `triggers.manual: true` | Set the annotation `bret.linogics.io/run-now` on the `RestoreTest` to any new value. A new value starts one run. Reusing a value does nothing. |
 
 Example: a manual run needs no CLI. `kubectl annotate restoretest orders-db bret.linogics.io/run-now="$(date +%s)" --overwrite`
 
 ## Scope
 
-Namespaces (planned):
+Namespaces:
 
 - The operator watches all namespaces by default.
-- `watchNamespaces` in the chart values (planned) limits it to a list. Then the chart creates
-  `Role` and `RoleBinding` objects in each listed namespace.
+- `watchNamespaces` in the chart values is a list. Empty means cluster-wide. When it is set, the
+  controller cache and the namespaced `Role` and `RoleBinding` objects are limited to those
+  namespaces. The Velero rights stay in `providers.velero.namespace`, even if it is not listed.
 - A `RestoreTest` in a namespace that is not watched is ignored. The operator sets the
   condition `WatchedNamespace` to `False` on it (planned).
 - Pods and volumes always live in the namespace of the `Restore` or `RestoreTest`.

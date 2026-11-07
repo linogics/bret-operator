@@ -4,8 +4,8 @@ A `RestoreTest` says what to restore, when, how often to retry, and what to keep
 explains each field with an example. The complete field list is in
 [reference/api.md](reference/api.md).
 
-**Status:** the schema is implemented. The behavior is **planned**: the controller does not run
-restores yet. The rules below are the design the controller will follow.
+**Status:** implemented. The controller runs the schedule, the after-backup and manual triggers,
+the overlap policy and the retries. It is not yet run end to end on a cluster.
 
 ## A complete example
 
@@ -24,6 +24,8 @@ spec:
       app.kubernetes.io/name: orders-db
   blueprintRef:
     name: minimal
+  target:
+    size: 20Gi
   triggers:
     cron: "17 3 * * *"
     afterBackup:
@@ -60,6 +62,13 @@ Backups are looked up where the provider keeps them. For Velero that is the Vele
 `name` of a `RestoreBlueprint` in the same namespace as the `RestoreTest`. The blueprint is the
 check. See [blueprints.md](blueprints.md).
 
+### target
+
+`target` is the scratch volume each run restores into. It has the same fields as
+`Restore.spec.target`: `size`, `storageClassName` and `autoExpand`. In v1, `target.size` is
+required. Without it the test sets the condition reason `TargetMissing` and starts no run.
+The size rules for a `Restore` are in [concepts.md](concepts.md#scratch-volume-size).
+
 ### triggers
 
 Any combination of three triggers. A run starts when any one fires.
@@ -67,7 +76,7 @@ Any combination of three triggers. A run starts when any one fires.
 | Field | Example | Behavior |
 |---|---|---|
 | `cron` | `"17 3 * * *"` | 5-field cron in UTC. The pattern is checked by the API. |
-| `afterBackup.delay` | `30m` | After a new matching backup completes at time `T`, a run starts at `T + delay`. Only backups newer than `status.lastHandled` trigger a run. |
+| `afterBackup.delay` | `30m` | After a new matching backup completes at time `T`, a run starts at `T + delay`. A backup triggers a run only if it is newer than `status.lastHandled` (completion time, then name). Older backups never trigger. |
 | `manual` | `true` | Enables the run-now annotation. A new value on `bret.linogics.io/run-now` starts one run. |
 
 Pick the times on purpose. A test that starts while the backup is still writing can fail for no
@@ -90,7 +99,7 @@ Check how long a restore takes in your environment before you set this.
 | `backoff` | `5m` | Wait between attempts. |
 
 With `count: 2`, the operator makes up to three attempts. Each failed attempt is cleaned up
-before the next one starts. Every retry and cancel writes an Event with a reason.
+before the next one starts. A canceled attempt writes a `RestoreCanceled` Event on its `Restore`.
 
 Retries help with transient failures: an image pull that times out, a busy storage backend.
 They do not fix a broken check. A check that fails three times has a real problem.
@@ -104,7 +113,8 @@ Default `false`. When `true` and the last attempt failed, the operator keeps:
 - the scratch volume, so the restored data stays readable.
 
 The kept objects get the label `bret.linogics.io/retained: "true"`. They are not removed
-automatically. Inspect them, then delete them by hand. Earlier failed attempts are always removed.
+automatically, and v1 has no TTL (`retainedFor` is not implemented). Inspect them, then delete them
+by hand. Earlier failed attempts are always removed.
 
 Turn it on for a check you are still debugging. Leave it off in a long-running schedule, or
 failed runs pile up volumes.
@@ -117,7 +127,7 @@ What happens when a trigger fires while a run is still going.
 |---|---|
 | `Skip` (default) | Write an Event and drop the trigger. |
 | `Queue` | Keep one pending run. It starts when the running one ends. Extra triggers are dropped. |
-| `Replace` | Cancel the running attempt, clean it up, then start a new run. |
+| `Replace` | Delete the running `Restore`, then start a new run. The operator does not wait for the old one's cleanup. Kubernetes garbage collection removes the objects it owned. |
 
 `Skip` is the safe default. Use `Queue` when runs are short and you never want to miss one.
 Use `Replace` only when the newest backup must win.
@@ -129,7 +139,7 @@ Use `Replace` only when the newest backup must win.
 | `status.lastRun.time` | When the last run ended. |
 | `status.lastRun.result` | `Succeeded` or `Failed`. |
 | `status.lastRun.reason` | Why, for example `ImagePull`, `PVCPending`, `CheckFailed`. |
-| `status.nextRun` | Next cron tick (planned). |
+| `status.nextRun` | Next cron tick. |
 | `status.lastHandled` | Name and time of the newest backup `afterBackup` ran for. |
 | `status.retainedResources` | Names of kept objects when `keepOnFailure` kept a failed run. |
 | `status.conditions` | Standard conditions. `WatchedNamespace` in namespaced mode (planned). |
@@ -152,6 +162,8 @@ spec:
       velero.io/schedule-name: nightly-data
   blueprintRef:
     name: orders-db-check
+  target:
+    size: 20Gi
   triggers:
     cron: "30 4 * * *"
   restoreWindow: 60m
@@ -169,6 +181,8 @@ spec:
     name: orders-db-backup
   blueprintRef:
     name: orders-db-check
+  target:
+    size: 20Gi
   triggers:
     afterBackup:
       delay: 20m
@@ -184,6 +198,8 @@ spec:
     name: orders-db-data-1
   blueprintRef:
     name: orders-db-check
+  target:
+    size: 20Gi
   triggers:
     manual: true
 ```
@@ -191,5 +207,6 @@ spec:
 ## Namespaces and scope
 
 A `RestoreTest` lives in the namespace of the application it tests. Its pods and volumes go there
-too. The operator watches all namespaces by default. A chart setting to limit this to a list of
-namespaces is planned. See [concepts.md](concepts.md#scope).
+too. The operator watches all namespaces by default. The chart value `watchNamespaces` (a list)
+limits the operator to those namespaces. Empty means cluster-wide. See
+[concepts.md](concepts.md#scope).

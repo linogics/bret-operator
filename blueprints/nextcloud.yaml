@@ -1,3 +1,5 @@
+# NOT RUNNABLE BY THE OPERATOR IN V1: two restoredVolumes entries. Providers restore one PVC, so
+# the operator rejects this blueprint with ProviderUnsupported. Works with hack/blueprint-test.
 # TESTED: round trip PASS, negative test FAIL as expected.
 # Postgres data dir: PGDATA is <mount>/pgdata (same layout as the spike source).
 # pgdata-perms init sets 0700, Postgres refuses 2770 after restore (spike).
@@ -16,8 +18,10 @@ spec:
   restoredVolumes:
   - name: html
     mountPath: /var/www/html
+    sourcePVC: html
   - name: pgdata
     mountPath: /var/lib/postgresql/data
+    sourcePVC: pgdata
 
   initContainers:
   # The restored mount roots come back owned by root. Nextcloud (uid 33) needs its html root

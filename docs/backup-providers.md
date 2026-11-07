@@ -68,10 +68,18 @@ velero backup create orders-db-2026-11-14 \
 snapshot. A restore then works only while that snapshot exists. Off-cluster recovery does not
 work. The spike confirmed this.
 
+Enable the provider in the chart with `providers.velero.enabled: true`. The Velero install
+namespace is `providers.velero.namespace`, default `velero`.
+
 ### What the operator drives
 
-The operator creates a `velero.io/v1` `Restore` in the Velero namespace, targeting the scratch
-volume. It waits for `status.phase` to reach `Completed`, `PartiallyFailed` or `Failed`.
+The operator creates a `velero.io/v1` `Restore` in the Velero namespace. The PVC and PVs are
+restored into the scratch namespace `bret-scratch-<restore name>`, and the check pod runs in that
+namespace. The operator waits for `status.phase` to reach `Completed`, `PartiallyFailed` or
+`Failed`.
+
+Blueprints for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap or
+secret volumes. A blueprint that does fails with `ProviderUnsupported`.
 
 Restored workloads are a trap. Velero restores Deployments and StatefulSets as well, and they
 start and hold the restored RWO volume. Scale them to zero or delete them before the check
@@ -128,11 +136,14 @@ spec:
 For a database, set the mover's UID to the database's UID with `moverSecurityContext`
 (Postgres 17 uses 999). See [data-and-database.md](data-and-database.md).
 
+Enable the provider in the chart with `providers.volsync.enabled: true`.
+
 ### What the operator drives
 
-The operator creates a `ReplicationDestination` in the restore namespace, with a manual trigger,
-restic, `copyMethod: Direct` and `destinationPVC` set to the scratch volume. Done means
-`status.lastManualSync` equals the trigger value.
+The operator creates a `ReplicationDestination` in the restore namespace with a restic mover. The
+repository Secret and the source PVC come from the backup's `ReplicationSource`, in the backup
+namespace: `backupRef.namespace`, or the `Restore` namespace when `backupRef.namespace` is not set.
+Done means `status.lastManualSync` equals the trigger value.
 
 Mover pods use a default non-database UID and cannot read a Postgres data directory
 (`permission denied`). Set the mover UID to match the application.
@@ -144,6 +155,8 @@ changes. Delete the cache PVC and let VolSync create a new one.
 
 Verified with Kopiur 0.10.21. Kopiur is alpha. Its restore-related issue `kopiur#233` was not
 hit in the spike, but it is open.
+
+Enable the provider in the chart with `providers.kopiur.enabled`. It is on by default.
 
 ### Repository and policy
 

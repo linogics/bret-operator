@@ -12,6 +12,8 @@ spec:
       app.kubernetes.io/name: orders-db
   blueprintRef:
     name: minimal
+  target:
+    size: 20Gi                  # required in v1: scratch volume size for each run
   triggers:
     cron: "17 3 * * *"          # 03:17 UTC every day
     afterBackup:

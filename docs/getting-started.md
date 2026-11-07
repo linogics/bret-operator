@@ -4,8 +4,8 @@ This tutorial takes you from an empty cluster to a first backup check. It has fo
 
 1. Install the operator, and a backup tool with one backup.
 2. Run a check by hand, against a restored copy. This works today.
-3. Register the check and a schedule with the operator. The schedule part needs the controllers,
-   which are not written yet. This page marks which steps they affect.
+3. Register the check and a schedule with the operator. The operator runs the check on the
+   schedule and reports the result.
 4. Read the result.
 
 Time: about 30 minutes, excluding image pulls.
@@ -126,21 +126,20 @@ label selector and `blueprintRef` to your values:
 kubectl apply -f examples/restoretest.yaml
 ```
 
-**Status: planned.** The operator does not act on a `RestoreTest` yet. Once the controllers are
-built, the object should show the last result in its status:
+The operator now acts on the `RestoreTest`. The object shows the last result in its status:
 
 ```bash
 kubectl -n data get restoretests
-# NAME                 PROVIDER   BLUEPRINT   LAST RESULT   NEXT RUN
-# orders-db-nightly    volsync    minimal     Succeeded     2026-11-15T03:17:00Z
+# NAME                 PROVIDER   LAST        NEXT                   AGE
+# orders-db-nightly    volsync    Succeeded   2026-11-15T03:17:00Z   2d
 ```
 
-Until then, use the manual check from step 3c.
+Provider `volsync` needs the VolSync provider enabled in the chart. See
+[backup-providers.md](backup-providers.md).
 
 ## Step 6: Run a test on demand
 
-**Status: planned.** With `triggers.manual: true`, set a new value on the annotation to start a
-run:
+With `triggers.manual: true`, set a new value on the annotation to start a run:
 
 ```bash
 kubectl -n data annotate restoretest orders-db-nightly \
@@ -148,8 +147,6 @@ kubectl -n data annotate restoretest orders-db-nightly \
 ```
 
 ## Step 7: Read the result
-
-**Status: planned** for everything in this step.
 
 - Status: `kubectl -n data get restoretest orders-db-nightly -o yaml` shows `status.lastRun`
   with `result`, `time` and `reason`.
