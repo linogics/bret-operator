@@ -125,7 +125,7 @@ A `RestoreTest` can use any mix of these triggers.
 | Trigger | Field | How it works |
 |---|---|---|
 | Schedule | `triggers.cron` | Standard 5-field cron, UTC. Each tick starts a run unless `overlapPolicy` says otherwise. |
-| After backup | `triggers.afterBackup.delay` | When a matching backup completes at time `T`, a run starts at `T + delay`. Each backup name is recorded in `status.handledBackups`, so each backup is tested once. |
+| After backup | `triggers.afterBackup.delay` | When a matching backup completes at time `T`, a run starts at `T + delay`. The newest handled backup is recorded in `status.lastHandled`, and only newer backups trigger a run. |
 | Manual | `triggers.manual: true` | Set the annotation `bret.linogics.io/run-now` on the `RestoreTest` to any new value. A new value starts one run. Reusing a value does nothing. |
 
 Example: a manual run needs no CLI. `kubectl annotate restoretest orders-db bret.linogics.io/run-now="$(date +%s)" --overwrite`

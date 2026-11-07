@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"slices"
 	"sort"
 	"strconv"
 	"time"
@@ -316,6 +315,20 @@ func (r *RestoreTestReconciler) nextTrigger(ctx context.Context, test *restorev1
 	return nil, wait, nil
 }
 
+// isNewerThanWatermark reports whether b is strictly newer than the last handled backup.
+// Equal times are ordered by name, the same order completedBackups sorts by.
+func isNewerThanWatermark(b completedBackup, wm *restorev1alpha1.HandledBackup) bool {
+	if wm == nil {
+		return true
+	}
+
+	if !b.completed.Equal(wm.CreatedAt.Time) {
+		return b.completed.After(wm.CreatedAt.Time)
+	}
+
+	return b.name > wm.Name
+}
+
 // afterBackupTrigger returns the oldest completed backup whose delay has passed and that no run handled yet.
 // Otherwise it returns how long until the next such backup is due.
 func (r *RestoreTestReconciler) afterBackupTrigger(
@@ -332,7 +345,7 @@ func (r *RestoreTestReconciler) afterBackupTrigger(
 	var wait time.Duration
 
 	for _, b := range backups {
-		if slices.Contains(test.Status.HandledBackups, b.name) {
+		if !isNewerThanWatermark(b, test.Status.LastHandled) {
 			continue
 		}
 		// Backups that finished before this test existed are not new. Testing them all at once would be a surprise.
@@ -346,7 +359,7 @@ func (r *RestoreTestReconciler) afterBackupTrigger(
 				source: "backup-" + b.name,
 				backup: b.name,
 				consume: func() {
-					test.Status.HandledBackups = append(test.Status.HandledBackups, b.name)
+					test.Status.LastHandled = &restorev1alpha1.HandledBackup{Name: b.name, CreatedAt: metav1.NewTime(b.completed)}
 				},
 			}, 0, nil
 		}

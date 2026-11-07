@@ -267,12 +267,21 @@ spec:
                 description: CurrentRestore is the Restore of the run in progress,
                   empty when no run is in progress.
                 type: string
-              handledBackups:
-                description: HandledBackups lists backup names already used by an
-                  afterBackup trigger.
-                items:
-                  type: string
-                type: array
+              lastHandled:
+                description: LastHandled is the newest backup an afterBackup trigger
+                  used. Only newer backups trigger a run.
+                properties:
+                  createdAt:
+                    description: CreatedAt is the time the backup completed.
+                    format: date-time
+                    type: string
+                  name:
+                    description: Name is the backup name.
+                    type: string
+                required:
+                - createdAt
+                - name
+                type: object
               lastRun:
                 description: LastRun is the outcome of the most recent run.
                 properties:

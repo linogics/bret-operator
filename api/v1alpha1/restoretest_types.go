@@ -109,14 +109,22 @@ type LastRun struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// HandledBackup identifies the backup an afterBackup trigger used last.
+type HandledBackup struct {
+	// Name is the backup name.
+	Name string `json:"name"`
+	// CreatedAt is the time the backup completed.
+	CreatedAt metav1.Time `json:"createdAt"`
+}
+
 // RestoreTestStatus defines the observed state of RestoreTest.
 type RestoreTestStatus struct {
 	// LastRun is the outcome of the most recent run.
 	LastRun *LastRun `json:"lastRun,omitempty"`
 	// NextRun is when the next cron run is scheduled.
 	NextRun *metav1.Time `json:"nextRun,omitempty"`
-	// HandledBackups lists backup names already used by an afterBackup trigger.
-	HandledBackups []string `json:"handledBackups,omitempty"`
+	// LastHandled is the newest backup an afterBackup trigger used. Only newer backups trigger a run.
+	LastHandled *HandledBackup `json:"lastHandled,omitempty"`
 	// RetainedResources lists objects kept after a failed run for debugging.
 	RetainedResources []string `json:"retainedResources,omitempty"`
 	// CurrentRestore is the Restore of the run in progress, empty when no run is in progress.

@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"context"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
@@ -92,21 +94,70 @@ func TestBuildCheckPod(t *testing.T) {
 	}
 }
 
-func TestBuildCheckPodRejectsUnsupported(t *testing.T) {
+func TestBuildCheckPodRejectsMissingScratchClaim(t *testing.T) {
 	t.Parallel()
 
-	restore := newTestRestore()
+	if _, err := buildCheckPod(newTestRestore(), checkPodBlueprint(), "r1-scratch", nil); err == nil {
+		t.Error("missing scratch claim: want error, got none")
+	}
+}
 
-	restored := checkPodBlueprint()
-	restored.Spec.RestoreMount = ""
-	restored.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{{Name: "data", MountPath: "/data"}}
+func TestRestoredVolumesMapping(t *testing.T) {
+	t.Parallel()
 
-	if _, err := buildCheckPod(restore, restored, "r1-scratch", nil); err == nil {
-		t.Error("restoredVolumes blueprint: want error, got none")
+	bp := checkPodBlueprint()
+	bp.Spec.RestoreMount = ""
+	bp.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{{Name: "data", MountPath: "/data", SourcePVC: "pg-data"}}
+
+	pod, err := buildCheckPod(newTestRestore(), bp, "r1-scratch", map[string]string{"Work Area": "r1-scratch-work-area"})
+	if err != nil {
+		t.Fatalf("buildCheckPod: %v", err)
 	}
 
-	if _, err := buildCheckPod(restore, checkPodBlueprint(), "r1-scratch", nil); err == nil {
-		t.Error("missing scratch claim: want error, got none")
+	if got := pvcClaim(pod, "data"); got != "r1-scratch" {
+		t.Errorf("volume data claim %q, want r1-scratch", got)
+	}
+
+	for _, c := range pod.Spec.Containers {
+		mounts := map[string]string{}
+		for _, m := range c.VolumeMounts {
+			mounts[m.Name] = m.MountPath
+		}
+
+		if mounts["data"] != "/data" {
+			t.Errorf("container %s: data mount %q, want /data", c.Name, mounts["data"])
+		}
+	}
+}
+
+func TestRestoredVolumesRejectsMoreThanOne(t *testing.T) {
+	t.Parallel()
+
+	bp := checkPodBlueprint()
+	bp.Spec.RestoreMount = ""
+	bp.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{
+		{Name: "a", MountPath: "/a", SourcePVC: "pa"},
+		{Name: "b", MountPath: "/b", SourcePVC: "pb"},
+	}
+
+	if err := validateRestoredVolumes(bp); err == nil {
+		t.Error("two restoredVolumes: want error, got none")
+	}
+
+	c, r := fakeRestoreClient(t, newTestRestore(), bp)
+	key := types.NamespacedName{Namespace: testNamespace, Name: "r1"}
+
+	reconcileRestore(t, r, key)
+	reconcileRestore(t, r, key)
+
+	got := getRestore(t, c, key)
+	if readyReason(got) != reasonProviderUnsupported || got.Status.Phase != restorev1alpha1.RestorePhaseFailed {
+		t.Errorf("phase %q reason %q, want Failed/ProviderUnsupported", got.Status.Phase, readyReason(got))
+	}
+
+	pvcs := &corev1.PersistentVolumeClaimList{}
+	if err := c.List(context.Background(), pvcs); err != nil || len(pvcs.Items) != 0 {
+		t.Errorf("PVCs created for rejected restore: %d, err %v", len(pvcs.Items), err)
 	}
 }
 

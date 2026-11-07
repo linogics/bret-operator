@@ -422,7 +422,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `lastRun` _[LastRun](#lastrun)_ | LastRun is the outcome of the most recent run. |  |  |
 | `nextRun` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | NextRun is when the next cron run is scheduled. |  |  |
-| `handledBackups` _string array_ | HandledBackups lists backup names already used by an afterBackup trigger. |  |  |
+| `lastHandled` _[HandledBackup](#handledbackup)_ | LastHandled is the newest backup an afterBackup trigger used. Only newer backups trigger a run. |  |  |
 | `retainedResources` _string array_ | RetainedResources lists objects kept after a failed run for debugging. |  |  |
 | `currentRestore` _string_ | CurrentRestore is the Restore of the run in progress, empty when no run is in progress. |  |  |
 | `retryAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | RetryAt is when the next attempt of the run in progress is created. |  |  |

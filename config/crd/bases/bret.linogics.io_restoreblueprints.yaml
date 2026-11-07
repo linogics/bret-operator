@@ -3861,9 +3861,15 @@ spec:
                     name:
                       description: Name is the name of the restored volume entry.
                       type: string
+                    sourcePVC:
+                      description: SourcePVC is the name of the PVC in the backed-up
+                        namespace that this volume restores.
+                      minLength: 1
+                      type: string
                   required:
                   - mountPath
                   - name
+                  - sourcePVC
                   type: object
                 type: array
               runtimeClassName:

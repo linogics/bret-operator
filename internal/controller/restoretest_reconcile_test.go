@@ -283,9 +283,9 @@ func TestRestoreTestAfterBackupOneRunPerSnapshot(t *testing.T) {
 		t.Fatalf("restores after idle reconcile = %d, want 2", n)
 	}
 
-	handled := f.test().Status.HandledBackups
-	if len(handled) != 2 || handled[0] != "a" || handled[1] != "b" {
-		t.Errorf("handledBackups = %v, want [a b]", handled)
+	last := f.test().Status.LastHandled
+	if last == nil || last.Name != "b" {
+		t.Errorf("lastHandled = %v, want b", last)
 	}
 }
 
@@ -515,5 +515,32 @@ func TestRestoreTestKopiurDisabled(t *testing.T) {
 
 	if reason := testReadyReason(f.test()); reason != reasonProviderUnsupported {
 		t.Errorf("Ready reason = %q, want %s", reason, reasonProviderUnsupported)
+	}
+}
+
+func TestWatermarkTieBreaksOnName(t *testing.T) {
+	t.Parallel()
+
+	at := time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)
+	wm := &restorev1alpha1.HandledBackup{Name: "a", CreatedAt: metav1.NewTime(at)}
+
+	tests := []struct {
+		name string
+		b    completedBackup
+		wm   *restorev1alpha1.HandledBackup
+		want bool
+	}{
+		{"same time, greater name", completedBackup{name: "b", completed: at}, wm, true},
+		{"same backup", completedBackup{name: "a", completed: at}, wm, false},
+		{"same time, lesser name", completedBackup{name: "0", completed: at}, wm, false},
+		{"older", completedBackup{name: "z", completed: at.Add(-time.Second)}, wm, false},
+		{"newer", completedBackup{name: "0", completed: at.Add(time.Second)}, wm, true},
+		{"no watermark", completedBackup{name: "a", completed: at}, nil, true},
+	}
+
+	for _, tt := range tests {
+		if got := isNewerThanWatermark(tt.b, tt.wm); got != tt.want {
+			t.Errorf("%s: got %v, want %v", tt.name, got, tt.want)
+		}
 	}
 }

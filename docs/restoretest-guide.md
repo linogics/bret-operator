@@ -67,7 +67,7 @@ Any combination of three triggers. A run starts when any one fires.
 | Field | Example | Behavior |
 |---|---|---|
 | `cron` | `"17 3 * * *"` | 5-field cron in UTC. The pattern is checked by the API. |
-| `afterBackup.delay` | `30m` | After a new matching backup completes at time `T`, a run starts at `T + delay`. Each backup is tested once, recorded in `status.handledBackups`. |
+| `afterBackup.delay` | `30m` | After a new matching backup completes at time `T`, a run starts at `T + delay`. Only backups newer than `status.lastHandled` trigger a run. |
 | `manual` | `true` | Enables the run-now annotation. A new value on `bret.linogics.io/run-now` starts one run. |
 
 Pick the times on purpose. A test that starts while the backup is still writing can fail for no
@@ -130,7 +130,7 @@ Use `Replace` only when the newest backup must win.
 | `status.lastRun.result` | `Succeeded` or `Failed`. |
 | `status.lastRun.reason` | Why, for example `ImagePull`, `PVCPending`, `CheckFailed`. |
 | `status.nextRun` | Next cron tick (planned). |
-| `status.handledBackups` | Backup names that `afterBackup` already ran for. |
+| `status.lastHandled` | Name and time of the newest backup `afterBackup` ran for. |
 | `status.retainedResources` | Names of kept objects when `keepOnFailure` kept a failed run. |
 | `status.conditions` | Standard conditions. `WatchedNamespace` in namespaced mode (planned). |
 

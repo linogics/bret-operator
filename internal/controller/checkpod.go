@@ -33,12 +33,17 @@ func dnsLabel(s string) string {
 
 // validateBlueprint rejects blueprints that this round cannot run.
 func validateBlueprint(bp *restorev1alpha1.RestoreBlueprint) error {
-	if len(bp.Spec.RestoredVolumes) > 0 {
-		return fmt.Errorf("blueprint %s: restoredVolumes is not supported yet", bp.Name)
+	if bp.Spec.RestoreMount == "" && len(bp.Spec.RestoredVolumes) == 0 {
+		return fmt.Errorf("blueprint %s: restoreMount or restoredVolumes is required", bp.Name)
 	}
 
-	if bp.Spec.RestoreMount == "" {
-		return fmt.Errorf("blueprint %s: restoreMount is required", bp.Name)
+	return nil
+}
+
+// validateRestoredVolumes rejects blueprints with more than one restored volume: providers restore one PVC.
+func validateRestoredVolumes(bp *restorev1alpha1.RestoreBlueprint) error {
+	if len(bp.Spec.RestoredVolumes) > 1 {
+		return fmt.Errorf("blueprint %s: only one restoredVolumes entry is supported, got %d", bp.Name, len(bp.Spec.RestoredVolumes))
 	}
 
 	return nil
@@ -58,13 +63,23 @@ func buildCheckPod(
 	scratchClaims map[string]string,
 ) (*corev1.Pod, error) {
 	err := validateBlueprint(bp)
+	if err == nil {
+		err = validateRestoredVolumes(bp)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
 	spec := bp.Spec.DeepCopy()
-	volumes := []corev1.Volume{pvcVolume(restoredVolume, restoredClaim)}
-	mounts := []corev1.VolumeMount{{Name: restoredVolume, MountPath: spec.RestoreMount}}
+	volName, mountPath := restoredVolume, spec.RestoreMount
+
+	if len(spec.RestoredVolumes) > 0 {
+		volName, mountPath = spec.RestoredVolumes[0].Name, spec.RestoredVolumes[0].MountPath
+	}
+
+	volumes := []corev1.Volume{pvcVolume(volName, restoredClaim)}
+	mounts := []corev1.VolumeMount{{Name: volName, MountPath: mountPath}}
 
 	for _, sv := range spec.ScratchVolumes {
 		claim, ok := scratchClaims[sv.Name]

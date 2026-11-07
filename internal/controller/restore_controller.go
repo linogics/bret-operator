@@ -112,7 +112,16 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		return ctrl.Result{}, err
 	}
 
-	err := validateBlueprint(bp)
+	err := validateRestoredVolumes(bp)
+	if err != nil {
+		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+		r.block(restore, reasonProviderUnsupported, err.Error())
+		recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
+
+		return ctrl.Result{}, nil
+	}
+
+	err = validateBlueprint(bp)
 	if err != nil {
 		r.block(restore, reasonBlueprintUnsupported, err.Error())
 

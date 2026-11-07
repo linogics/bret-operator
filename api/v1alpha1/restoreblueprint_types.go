@@ -12,6 +12,9 @@ type RestoredVolume struct {
 	Name string `json:"name"`
 	// MountPath is where the restored volume is mounted in every container.
 	MountPath string `json:"mountPath"`
+	// SourcePVC is the name of the PVC in the backed-up namespace that this volume restores.
+	// +kubebuilder:validation:MinLength=1
+	SourcePVC string `json:"sourcePVC"`
 }
 
 // ScratchVolume is a PVC the operator creates for each attempt, for staging space the check needs.
