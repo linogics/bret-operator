@@ -5,6 +5,7 @@ CHART=${1:-charts/bret-operator}
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 out=$(helm template bret "$CHART" --set providers.velero.enabled=false)
+awk 'BEGIN{RS="---\n"} /kind: ClusterRole\n/ && /-manager\n/' <<<"$out" | grep -q 'namespaces' && fail "namespaces rule rendered with velero off"
 [ "$(grep -c 'velero.io' <<<"$out")" = 0 ] || fail "velero.io rendered with providers.velero.enabled=false"
 grep -q 'kopiur.home-operations.com' <<<"$out" || fail "kopiur rules missing by default"
 grep -q 'volsync.backube' <<<"$out" && fail "volsync rules rendered by default"

@@ -31,6 +31,9 @@ def provider_rules(rules):
     for rule in rules:
         text = yaml.safe_dump([rule], sort_keys=False)
         name = PROVIDER_GROUPS.get(rule["apiGroups"][0])
+        # Namespace rights exist only for the Velero scratch namespace.
+        if rule["resources"] == ["namespaces"]:
+            name = "velero"
         if name:
             text = f"{{{{- if $.Values.providers.{name}.enabled }}}}\n{text}{{{{- end }}}}\n"
         out.append(text)

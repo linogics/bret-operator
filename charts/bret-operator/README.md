@@ -42,7 +42,7 @@ Kubernetes: `>=1.29.0-0`
 | podLabels | object | `{}` | Extra labels added to the manager pod. |
 | podSecurityContext | object | `{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}` | Pod security context. The default follows the restricted Pod Security Standard. |
 | providers.kopiur.enabled | bool | `true` | Enable the Kopiur provider. |
-| providers.velero.enabled | bool | `false` | Enable the Velero provider. Adds the velero.io rights. The cluster-wide pod, PVC and namespace rights are always rendered. |
+| providers.velero.enabled | bool | `false` | Enable the Velero provider. Adds the velero.io rights and the cluster-wide namespace rights for the scratch namespace. Pod and PVC rights are always rendered. |
 | providers.velero.namespace | string | `"velero"` | Velero install namespace. With watchNamespaces set, the velero.io rights are bound here even if it is not listed. |
 | providers.volsync.enabled | bool | `false` | Enable the VolSync provider. |
 | replicaCount | int | `1` | Number of manager replicas. Leader election keeps one replica active. |
