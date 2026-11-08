@@ -84,6 +84,15 @@ func (r *RestoreReconciler) volsyncRepository(ctx context.Context, restore *rest
 		return "", fmt.Errorf("%w: ReplicationSource %s/%s has no spec.restic.repository", errRepositoryMissing, src.GetNamespace(), src.GetName())
 	}
 
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: repo, Namespace: restore.Namespace}}
+	if err := r.getObject(ctx, secret); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", fmt.Errorf("%w: secret %q not found in namespace %q", errRepositoryMissing, repo, restore.Namespace)
+		}
+
+		return "", err
+	}
+
 	return repo, nil
 }
 

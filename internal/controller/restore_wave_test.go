@@ -66,7 +66,7 @@ func TestVolSyncMoverUIDFromBlueprint(t *testing.T) {
 	restore := volsyncTestRestore()
 	bp := newTestBlueprint()
 	bp.Annotations = map[string]string{moverUIDAnnotation: `{"data": 70}`}
-	c, r := fakeRestoreClient(t, restore, bp, volsyncSource())
+	c, r := fakeRestoreClient(t, restore, bp, volsyncSource(), volsyncSecret())
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 
@@ -94,6 +94,21 @@ func TestVolSyncRepositoryMissing(t *testing.T) {
 
 	if _, err := volsyncDestination(t, c, restore); !errors.IsNotFound(err) {
 		t.Fatalf("ReplicationDestination created without repository: %v", err)
+	}
+}
+
+func TestVolSyncSecretMissing(t *testing.T) {
+	restore := volsyncTestRestore()
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource())
+
+	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
+
+	if reason := readyReason(getRestore(t, c, client.ObjectKeyFromObject(restore))); reason != reasonRepositoryMissing {
+		t.Fatalf("reason %q, want %s", reason, reasonRepositoryMissing)
+	}
+
+	if _, err := volsyncDestination(t, c, restore); !errors.IsNotFound(err) {
+		t.Fatalf("ReplicationDestination created without repository secret: %v", err)
 	}
 }
 

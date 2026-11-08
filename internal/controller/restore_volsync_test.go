@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,21 +29,26 @@ func volsyncSource() *unstructured.Unstructured {
 	src.SetGroupVersionKind(replicationSourceGVK)
 	src.SetNamespace(testNamespace)
 	src.SetName("b1")
-	_ = unstructured.SetNestedField(src.Object, "repo-secret", "spec", "restic", "repository")
+	_ = unstructured.SetNestedField(src.Object, testRepoSecret, "spec", "restic", "repository")
 
 	return src
 }
 
+// volsyncSecret is the restic repository Secret in the Restore namespace.
+func volsyncSecret() *corev1.Secret {
+	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: testRepoSecret, Namespace: testNamespace}}
+}
+
 func TestVolSyncRestoreSpec(t *testing.T) {
 	restore := volsyncTestRestore()
-	obj := volsyncDestinationObject(restore, "repo-secret", resource.MustParse("3Gi"), nil)
+	obj := volsyncDestinationObject(restore, testRepoSecret, resource.MustParse("3Gi"), nil)
 
 	if obj.GetNamespace() != testNamespace || obj.GetAPIVersion() != "volsync.backube/v1alpha1" || obj.GetKind() != "ReplicationDestination" {
 		t.Fatalf("unexpected identity %s %s/%s", obj.GetAPIVersion(), obj.GetNamespace(), obj.GetKind())
 	}
 
 	want := map[string]any{
-		"repository":     "repo-secret",
+		"repository":     testRepoSecret,
 		"copyMethod":     "Direct",
 		"destinationPVC": restoredClaimName(restore),
 		"capacity":       "3Gi",
@@ -68,7 +74,7 @@ func volsyncDestination(t *testing.T, c client.Client, restore *restorev1alpha1.
 func TestVolSyncRestoreWaitsOnLatestImage(t *testing.T) {
 	ctx := context.Background()
 	restore := volsyncTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource())
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource(), volsyncSecret())
 	key := client.ObjectKeyFromObject(restore)
 
 	reconcileToSizing(t, r, key) // Pending, then RD and PVC created
@@ -127,7 +133,7 @@ func TestVolSyncRestoreWaitsForSource(t *testing.T) {
 
 func TestVolSyncRestoreIsRouted(t *testing.T) {
 	restore := volsyncTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource())
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource(), volsyncSecret())
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 
@@ -139,7 +145,7 @@ func TestVolSyncRestoreIsRouted(t *testing.T) {
 func TestVolSyncRestoreSizeUnknownFails(t *testing.T) {
 	restore := volsyncTestRestore()
 	restore.Spec.Target.Size = nil
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource()) // source PVC is missing
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource(), volsyncSecret()) // source PVC is missing
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 	assertSizeFailure(t, c, restore, restorev1alpha1.ReasonSizeUnknown)
@@ -161,7 +167,7 @@ func TestVolSyncSourceInBackupNamespace(t *testing.T) {
 	pvc.Namespace, pvc.Name = "backups", testDataName // none in the Restore namespace
 	pvc.Spec.Resources.Requests = corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("2Gi")}
 
-	_, r := fakeRestoreClient(t, restore, src, pvc)
+	_, r := fakeRestoreClient(t, restore, src, pvc, volsyncSecret())
 
 	size, err := r.sourceSize(context.Background(), restore)
 	if err != nil || size == nil || size.Cmp(resource.MustParse("2Gi")) != 0 {
@@ -169,7 +175,7 @@ func TestVolSyncSourceInBackupNamespace(t *testing.T) {
 	}
 
 	repo, err := r.volsyncRepository(context.Background(), restore)
-	if err != nil || repo != "repo-secret" {
+	if err != nil || repo != testRepoSecret {
 		t.Fatalf("volsyncRepository = %q, %v; want repo-secret", repo, err)
 	}
 }

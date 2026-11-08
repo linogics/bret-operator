@@ -20,6 +20,7 @@ const (
 	testSize10Gi      = "10Gi"
 	testPVCKeyA       = "ns/a"
 	testPVCKeyB       = "ns/b"
+	testRepoSecret    = "repo-secret"
 )
 
 func quantityPtr(s string) *resource.Quantity {
