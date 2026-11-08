@@ -114,9 +114,11 @@ func (r *RestoreReconciler) reconcileVolSync(
 	case apierrors.IsNotFound(err):
 		repo, err := r.volsyncRepository(ctx, restore)
 		if errors.Is(err, errRepositoryMissing) {
+			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
 			r.block(restore, reasonRepositoryMissing, err.Error())
+			recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
 
-			return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
+			return ctrl.Result{}, nil
 		}
 
 		if err != nil || repo == "" {

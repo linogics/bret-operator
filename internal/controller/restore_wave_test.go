@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
@@ -85,11 +86,26 @@ func TestVolSyncRepositoryMissing(t *testing.T) {
 	src := volsyncSource()
 	unstructured.RemoveNestedField(src.Object, "spec", "restic")
 	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), src)
+	key := client.ObjectKeyFromObject(restore)
 
-	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
+	reconcileRestore(t, r, key)
 
-	if reason := readyReason(getRestore(t, c, client.ObjectKeyFromObject(restore))); reason != reasonRepositoryMissing {
+	res, err := r.Reconcile(context.Background(), reconcile.Request{NamespacedName: key})
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	got := getRestore(t, c, key)
+	if got.Status.Phase != restorev1alpha1.RestorePhaseFailed {
+		t.Fatalf("phase %q, want Failed", got.Status.Phase)
+	}
+
+	if reason := readyReason(got); reason != reasonRepositoryMissing {
 		t.Fatalf("reason %q, want %s", reason, reasonRepositoryMissing)
+	}
+
+	if res.RequeueAfter != 0 {
+		t.Fatalf("RequeueAfter %v, want 0", res.RequeueAfter)
 	}
 
 	if _, err := volsyncDestination(t, c, restore); !errors.IsNotFound(err) {
