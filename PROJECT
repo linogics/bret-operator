@@ -2,7 +2,7 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-domain: bret.linogics.io
+domain: linogics.io
 layout:
 - go.kubebuilder.io/v4
 plugins:
@@ -15,8 +15,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: bret.linogics.io
-  group: restore
+  domain: linogics.io
+  group: bret
   kind: Restore
   path: github.com/linogics/bret-operator/api/v1alpha1
   version: v1alpha1
@@ -24,8 +24,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: bret.linogics.io
-  group: restore
+  domain: linogics.io
+  group: bret
   kind: RestoreTest
   path: github.com/linogics/bret-operator/api/v1alpha1
   version: v1alpha1
@@ -33,8 +33,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: bret.linogics.io
-  group: restore
+  domain: linogics.io
+  group: bret
   kind: RestoreBlueprint
   path: github.com/linogics/bret-operator/api/v1alpha1
   version: v1alpha1
