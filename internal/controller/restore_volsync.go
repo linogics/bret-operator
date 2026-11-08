@@ -17,6 +17,7 @@ import (
 )
 
 // +kubebuilder:rbac:groups=volsync.backube,resources=replicationdestinations,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 
 // volsyncMoverUID is the mover user of the restic restore when the blueprint sets none. The default mover fails with a setgid error on the scratch volume.
 const volsyncMoverUID = int64(65534)

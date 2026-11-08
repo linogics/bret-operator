@@ -37,6 +37,9 @@ def provider_rules(rules, pod_cond=None):
         # Namespace rights exist only for the Velero scratch namespace.
         if rule["resources"] == ["namespaces"]:
             name = "velero"
+        # VolSync restores read the repository secret, so the secrets rule rides with volsync.
+        if rule["resources"] == ["secrets"]:
+            name = "volsync"
         if "pods" in rule["resources"]:
             text = f"{{{{- if {pod_cond} }}}}\n{text}{{{{- end }}}}\n"
         elif name:
@@ -72,9 +75,10 @@ metadata:
     )
     # Namespaces and events stay cluster-wide. Pods and PVCs are cluster-wide only with Velero on,
     # because its scratch namespaces are not watched; otherwise they move to the per-namespace Roles.
-    core = [r for r in manager if r["apiGroups"] == [""]]
+    core = [r for r in manager if r["apiGroups"] == [""] and r["resources"] != ["secrets"]]
     pods = [r for r in core if "pods" in r["resources"]]
-    rest = [r for r in manager if r["apiGroups"] != [""]]
+    # Secrets go with the cluster-wide rules or the per-namespace Roles, never both.
+    rest = [r for r in manager if r["apiGroups"] != [""] or r["resources"] == ["secrets"]]
     parts.append(
         "rules:\n"
         + provider_rules(core, "or (not .Values.watchNamespaces) $.Values.providers.velero.enabled")

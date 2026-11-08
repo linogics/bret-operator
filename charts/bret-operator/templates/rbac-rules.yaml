@@ -40,6 +40,14 @@ rules:
   - watch
 {{- end }}
 {{- if not .Values.watchNamespaces }}
+{{- if $.Values.providers.volsync.enabled }}
+- apiGroups:
+  - ''
+  resources:
+  - secrets
+  verbs:
+  - get
+{{- end }}
 - apiGroups:
   - bret.linogics.io
   resources:
@@ -164,6 +172,14 @@ rules:
   - list
   - patch
   - watch
+{{- end }}
+{{- if $.Values.providers.volsync.enabled }}
+- apiGroups:
+  - ''
+  resources:
+  - secrets
+  verbs:
+  - get
 {{- end }}
 - apiGroups:
   - bret.linogics.io

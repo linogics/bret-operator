@@ -32,6 +32,12 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
   - bret.linogics.io
   resources:
   - restoreblueprints

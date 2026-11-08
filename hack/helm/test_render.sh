@@ -49,4 +49,18 @@ out=$(helm template bret "$CHART" --set providers.velero.enabled=true --set 'wat
 awk 'BEGIN{RS="---\n"} /kind: Role\n/ && /namespace: velero/ && /velero.io/' <<<"$out" | grep -q . || fail "velero Role missing in velero namespace"
 awk 'BEGIN{RS="---\n"} /kind: RoleBinding/ && /namespace: velero/' <<<"$out" | grep -q . || fail "velero RoleBinding missing in velero namespace"
 awk 'BEGIN{RS="---\n"} /kind: Role\n/ && /namespace: app/ && /velero.io/' <<<"$out" | grep -q . && fail "velero.io leaked into watched Role"
+out=$(helm template bret "$CHART")
+cr=$(awk 'BEGIN{RS="---\n"} /kind: ClusterRole\n/ && /-manager\n/' <<<"$out")
+grep -q 'secrets' <<<"$cr" && fail "secrets rule rendered with volsync off"
+
+out=$(helm template bret "$CHART" --set providers.volsync.enabled=true)
+cr=$(awk 'BEGIN{RS="---\n"} /kind: ClusterRole\n/ && /-manager\n/' <<<"$out")
+grep -A3 'secrets' <<<"$cr" | grep -q -- '- get' || fail "secrets get missing with volsync on"
+
+out=$(helm template bret "$CHART" --set providers.volsync.enabled=true --set 'watchNamespaces={a,b}')
+cr=$(awk 'BEGIN{RS="---\n"} /kind: ClusterRole\n/ && /-manager\n/' <<<"$out")
+grep -q 'secrets' <<<"$cr" && fail "secrets in ClusterRole with watchNamespaces set"
+for ns in a b; do
+	awk 'BEGIN{RS="---\n"} /kind: Role\n/ && /namespace: '$ns'\n/ && /secrets/' <<<"$out" | grep -q . || fail "no secrets get in Role of $ns"
+done
 echo OK
