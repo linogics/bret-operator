@@ -116,7 +116,32 @@ func validateVeleroBlueprint(bp *restorev1alpha1.RestoreBlueprint) error {
 		}
 	}
 
+	for _, containers := range [][]corev1.Container{bp.Spec.InitContainers, bp.Spec.Containers} {
+		for i := range containers {
+			if usesSecretOrConfigMap(&containers[i]) {
+				return fmt.Errorf("blueprint %s: container %q uses a secret or configMap reference, not supported with Velero", bp.Name, containers[i].Name)
+			}
+		}
+	}
+
 	return nil
+}
+
+// usesSecretOrConfigMap reports whether a container reads env or envFrom from a Secret or ConfigMap.
+func usesSecretOrConfigMap(c *corev1.Container) bool {
+	for _, e := range c.Env {
+		if e.ValueFrom != nil && (e.ValueFrom.SecretKeyRef != nil || e.ValueFrom.ConfigMapKeyRef != nil) {
+			return true
+		}
+	}
+
+	for _, ef := range c.EnvFrom {
+		if ef.SecretRef != nil || ef.ConfigMapRef != nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 func veleroScratchName(restore *restorev1alpha1.Restore) string {

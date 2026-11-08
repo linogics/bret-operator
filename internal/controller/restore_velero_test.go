@@ -385,3 +385,39 @@ func TestVeleroRejectsHostPath(t *testing.T) {
 		t.Fatalf("err = %v, want a hostPath rejection", err)
 	}
 }
+
+func TestVeleroRejectsSecretAndConfigMapRefs(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*restorev1alpha1.RestoreBlueprint)
+		wantErr bool
+	}{
+		{"secretKeyRef env", func(bp *restorev1alpha1.RestoreBlueprint) {
+			bp.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "P", ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "s"}, Key: "k"},
+			}}}
+		}, true},
+		{"configMapRef envFrom", func(bp *restorev1alpha1.RestoreBlueprint) {
+			bp.Spec.Containers[0].EnvFrom = []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{}}}
+		}, true},
+		{"plain env", func(bp *restorev1alpha1.RestoreBlueprint) {
+			bp.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "P", Value: "v"}}
+		}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bp := newTestBlueprint()
+			tt.mutate(bp)
+
+			err := validateVeleroBlueprint(bp)
+			if tt.wantErr && (err == nil || !strings.Contains(err.Error(), "secret or configMap reference")) {
+				t.Fatalf("err = %v, want a secret or configMap rejection", err)
+			}
+
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected err = %v", err)
+			}
+		})
+	}
+}
