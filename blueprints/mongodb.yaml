@@ -13,35 +13,35 @@ spec:
   initContainers: []
 
   containers:
-  - name: check
-    image: mongo:7.0
-    securityContext:
-      runAsUser: 999
-      runAsGroup: 999
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -eu
+    - name: check
+      image: mongo:7.0
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
 
-        # Start mongod on the restored dbpath and stop it on exit.
-        mongod --dbpath /data/db --bind_ip 127.0.0.1 --port 27017 --fork \
-            --logpath /tmp/mongod.log
-        trap 'mongod --dbpath /data/db --shutdown || true' EXIT
+          # Start mongod on the restored dbpath and stop it on exit.
+          mongod --dbpath /data/db --bind_ip 127.0.0.1 --port 27017 --fork \
+              --logpath /tmp/mongod.log
+          trap 'mongod --dbpath /data/db --shutdown || true' EXIT
 
-        # Server must answer a command.
-        mongosh --quiet --host 127.0.0.1 \
-            --eval 'db.adminCommand({listDatabases: 1}).ok' | grep -qx 1
+          # Server must answer a command.
+          mongosh --quiet --host 127.0.0.1 \
+              --eval 'db.adminCommand({listDatabases: 1}).ok' | grep -qx 1
 
-        # Full validate (documents and indexes) of the canary collection.
-        mongosh --quiet --host 127.0.0.1 app \
-            --eval 'db.runCommand({validate: "bret_canary", full: true}).valid' | grep -qx true
+          # Full validate (documents and indexes) of the canary collection.
+          mongosh --quiet --host 127.0.0.1 app \
+              --eval 'db.runCommand({validate: "bret_canary", full: true}).valid' | grep -qx true
 
-        # Canary: stored sha256 must match the payload.
-        line=$(mongosh --quiet --host 127.0.0.1 app --eval '
-            const d = db.bret_canary.findOne({_id: "canary"});
-            print(d.sha256 + " " + d.payload)')
-        set -- $line
-        test "$(printf %s "$2" | sha256sum | cut -d' ' -f1)" = "$1"
+          # Canary: stored sha256 must match the payload.
+          line=$(mongosh --quiet --host 127.0.0.1 app --eval '
+              const d = db.bret_canary.findOne({_id: "canary"});
+              print(d.sha256 + " " + d.payload)')
+          set -- $line
+          test "$(printf %s "$2" | sha256sum | cut -d' ' -f1)" = "$1"
 
   volumes: []

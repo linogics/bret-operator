@@ -4,7 +4,7 @@
 
 | Tool | Version | Used for |
 |---|---|---|
-| Go | 1.24 or newer (see `go.mod`) | build, tests |
+| Go | 1.27.4 or newer (see `go.mod`) | build, tests |
 | kubectl | matching your cluster | cluster work |
 | Helm | 3.22.1 (CI pins this) | chart lint and package |
 | Docker or nerdctl | any | image build, kind |
@@ -21,6 +21,7 @@ make build           # manifests, generate, fmt, vet, then bin/manager
 make test            # unit tests and envtest; writes cover.out
 make lint            # golangci-lint v2.15.0 with the repo's .golangci.yml
 make lint-fix        # same, with auto-fixes
+make yamllint        # strict yamllint on tracked YAML; flow lists are forbidden, see .yamllint.yaml
 ```
 
 After you change a type in `api/v1alpha1/`:
@@ -28,10 +29,10 @@ After you change a type in `api/v1alpha1/`:
 ```bash
 make manifests generate   # CRDs in config/crd/bases, deepcopy functions
 make docs                 # API reference and chart README
-make helm-sync            # copy CRDs and RBAC into charts/bret-operator
+make helm-sync            # copy CRDs into charts/bret-operator-crds, RBAC into charts/bret-operator
 ```
 
-CI runs `make docs-check` and `make helm-lint`. Both fail when generated files are out of date.
+CI runs `make docs-check` and `make helm-lint`. Both fail when generated files are out of date. CI also runs `make yamllint`.
 Commit the regenerated files with your change.
 
 ## Local cluster
@@ -85,7 +86,8 @@ Blueprint tests do not run in CI. They need a cluster and several gigabytes of i
 | `internal/controller/` | Reconcilers. Empty scaffolds at this stage. |
 | `cmd/main.go` | Manager entry point and flags. |
 | `config/` | Kustomize bases: CRDs, RBAC, manager, metrics. |
-| `charts/bret-operator/` | Helm chart. CRDs and RBAC are copied from `config/`. |
+| `charts/bret-operator/` | Helm chart. RBAC is copied from `config/`. Depends on `charts/bret-operator-crds/`, which holds the CRDs. |
+| `charts/bret-operator-crds/` | Helm chart with the CRDs only. Copied from `config/crd/bases/`. |
 | `blueprints/` | Check drafts for each app. See `blueprints/INDEX.md`. |
 | `examples/` | Minimal blueprint, RestoreTest and Restore examples. |
 | `hack/blueprint-test/` | Blueprint harness and per-app seeds. |

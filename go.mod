@@ -1,6 +1,6 @@
 module github.com/linogics/bret-operator
 
-go 1.24.0
+go 1.27.4
 
 require (
 	github.com/onsi/ginkgo/v2 v2.22.0

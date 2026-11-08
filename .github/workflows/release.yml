@@ -2,7 +2,7 @@ name: Release
 
 # Runs on tags like v0.1.0 (or v0.2.0-rc.1). Publishes:
 #   - container image ghcr.io/linogics/bret-operator:<version> (amd64 and arm64)
-#   - Helm chart oci://ghcr.io/linogics/charts/bret-operator:<version>
+#   - Helm charts oci://ghcr.io/linogics/charts/bret-operator and bret-operator-crds:<version>
 #   - GitHub release with dist/install.yaml (plain manifests) and the chart .tgz
 
 on:
@@ -80,6 +80,7 @@ jobs:
       - name: Push chart to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push "dist/bret-operator-crds-$VERSION.tgz" "$CHART_REPO"
           helm push "dist/bret-operator-$VERSION.tgz" "$CHART_REPO"
 
       - name: Create GitHub release
@@ -91,6 +92,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "dist/install.yaml#install.yaml" \
             "dist/bret-operator-$VERSION.tgz" \
+            "dist/bret-operator-crds-$VERSION.tgz" \
             --title "bret-operator $VERSION" \
             --generate-notes \
             $prerelease_flag

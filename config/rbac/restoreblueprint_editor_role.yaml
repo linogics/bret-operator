@@ -13,21 +13,21 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: restoreblueprint-editor-role
 rules:
-- apiGroups:
-  - bret.linogics.io
-  resources:
-  - restoreblueprints
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - bret.linogics.io
-  resources:
-  - restoreblueprints/status
-  verbs:
-  - get
+  - apiGroups:
+      - bret.linogics.io
+    resources:
+      - restoreblueprints
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - bret.linogics.io
+    resources:
+      - restoreblueprints/status
+    verbs:
+      - get

@@ -13,40 +13,40 @@ spec:
   initContainers: []
 
   containers:
-  - name: check
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
-    securityContext:
-      runAsUser: 1000
-    env:
-    - name: discovery.type
-      value: single-node
-    - name: xpack.security.enabled
-      value: "false"
-    - name: cluster.name
-      value: bret-source-cluster   # must match the source cluster
-    - name: node.name
-      value: es-0                  # must match the source node
-    - name: ES_JAVA_OPTS
-      value: "-Xms512m -Xmx512m"
-    command:
-      - /bin/bash
-      - -c
-      - |
-        set -eu
+    - name: check
+      image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+      securityContext:
+        runAsUser: 1000
+      env:
+        - name: discovery.type
+          value: single-node
+        - name: xpack.security.enabled
+          value: "false"
+        - name: cluster.name
+          value: bret-source-cluster # must match the source cluster
+        - name: node.name
+          value: es-0              # must match the source node
+        - name: ES_JAVA_OPTS
+          value: "-Xms512m -Xmx512m"
+      command:
+        - /bin/bash
+        - -c
+        - |
+          set -eu
 
-        # Start a single node in the background and stop it on exit.
-        /usr/share/elasticsearch/bin/elasticsearch -d -p /tmp/es.pid
-        trap 'kill "$(cat /tmp/es.pid)" 2>/dev/null || true' EXIT
+          # Start a single node in the background and stop it on exit.
+          /usr/share/elasticsearch/bin/elasticsearch -d -p /tmp/es.pid
+          trap 'kill "$(cat /tmp/es.pid)" 2>/dev/null || true' EXIT
 
-        # Wait for yellow health (up to 120 s).
-        curl -fsS --retry 60 --retry-delay 2 --retry-connrefused \
-            'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=120s' \
-            >/dev/null
+          # Wait for yellow health (up to 120 s).
+          curl -fsS --retry 60 --retry-delay 2 --retry-connrefused \
+              'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=120s' \
+              >/dev/null
 
-        # Canary doc: payload must still hash to the stored sha256.
-        doc=$(curl -fsS http://127.0.0.1:9200/bret-canary/_doc/canary)
-        payload=$(printf %s "$doc" | sed -n 's/.*"payload":"\([^"]*\)".*/\1/p')
-        sha=$(printf %s "$doc" | sed -n 's/.*"sha256":"\([^"]*\)".*/\1/p')
-        test "$(printf %s "$payload" | sha256sum | cut -d' ' -f1)" = "$sha"
+          # Canary doc: payload must still hash to the stored sha256.
+          doc=$(curl -fsS http://127.0.0.1:9200/bret-canary/_doc/canary)
+          payload=$(printf %s "$doc" | sed -n 's/.*"payload":"\([^"]*\)".*/\1/p')
+          sha=$(printf %s "$doc" | sed -n 's/.*"sha256":"\([^"]*\)".*/\1/p')
+          test "$(printf %s "$payload" | sha256sum | cut -d' ' -f1)" = "$sha"
 
   volumes: []

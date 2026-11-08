@@ -20,6 +20,10 @@ Kubernetes operator that tests backups by restoring them from Velero, VolSync or
 
 Kubernetes: `>=1.29.0-0`
 
+| Repository | Name | Version |
+|------------|------|---------|
+| file://../bret-operator-crds | bret-operator-crds | >=0.0.0-0 |
+
 ## Values
 
 | Key | Type | Default | Description |

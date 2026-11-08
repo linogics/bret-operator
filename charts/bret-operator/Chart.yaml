@@ -18,6 +18,11 @@ keywords:
   - kopiur
   - operator
   - disaster-recovery
+dependencies:
+  # Any version works: the operator chart and the CRD chart are released together.
+  - name: bret-operator-crds
+    version: ">=0.0.0-0"
+    repository: "file://../bret-operator-crds"
 maintainers:
   - name: Tobias M.
     url: https://github.com/linogics

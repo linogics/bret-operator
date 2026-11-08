@@ -15,50 +15,50 @@ spec:
   # The restored mount root comes back owned by root. Home Assistant (uid 1000) creates its
   # DB, WAL and .storage files there, so an init container with no securityContext (root)
   # gives the root to uid 1000.
-  - name: config-perms
-    image: busybox:1.37
-    command:
-      - /bin/sh
-      - -c
-      - chown 1000:1000 /config
+    - name: config-perms
+      image: busybox:1.37
+      command:
+        - /bin/sh
+        - -c
+        - chown 1000:1000 /config
 
   containers:
-  - name: check
-    image: homeassistant/home-assistant:2024.9.0
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -eu
+    - name: check
+      image: homeassistant/home-assistant:2024.9.0
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
 
-        # Read-only integrity check of the recorder DB, before HA migrates it.
-        python3 - <<'PY'
-        import sqlite3
-        import sys
+          # Read-only integrity check of the recorder DB, before HA migrates it.
+          python3 - <<'PY'
+          import sqlite3
+          import sys
 
-        conn = sqlite3.connect("file:/config/home-assistant_v2.db?mode=ro", uri=True)
-        ok = conn.execute("pragma integrity_check").fetchone()[0] == "ok"
-        sys.exit(0 if ok else 1)
-        PY
+          conn = sqlite3.connect("file:/config/home-assistant_v2.db?mode=ro", uri=True)
+          ok = conn.execute("pragma integrity_check").fetchone()[0] == "ok"
+          sys.exit(0 if ok else 1)
+          PY
 
-        # Canary file checksum.
-        (cd /config/bret-canary && sha256sum -c canary.sha256)
+          # Canary file checksum.
+          (cd /config/bret-canary && sha256sum -c canary.sha256)
 
-        # Start HA in the background and stop it on exit.
-        python3 -m homeassistant --config /config --skip-pip >/tmp/ha.log 2>&1 &
-        pid=$!
-        trap 'kill $pid 2>/dev/null || true' EXIT
+          # Start HA in the background and stop it on exit.
+          python3 -m homeassistant --config /config --skip-pip >/tmp/ha.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
 
-        # HTTP API answers 401 without a token once the app is up (up to 170 s).
-        code=000
-        for i in $(seq 1 170); do
-          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/ || true)
-          [ "$code" = 401 ] && break
-          sleep 1
-        done
-        test "$code" = 401
+          # HTTP API answers 401 without a token once the app is up (up to 170 s).
+          code=000
+          for i in $(seq 1 170); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/ || true)
+            [ "$code" = 401 ] && break
+            sleep 1
+          done
+          test "$code" = 401
 
   volumes: []

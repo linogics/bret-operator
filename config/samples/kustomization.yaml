@@ -1,6 +1,6 @@
 ## Append samples of your project ##
 resources:
-- restore_v1alpha1_restore.yaml
-- restore_v1alpha1_restoretest.yaml
-- restore_v1alpha1_restoreblueprint.yaml
+  - restore_v1alpha1_restore.yaml
+  - restore_v1alpha1_restoretest.yaml
+  - restore_v1alpha1_restoreblueprint.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

@@ -13,15 +13,15 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: restore-admin-role
 rules:
-- apiGroups:
-  - bret.linogics.io
-  resources:
-  - restores
-  verbs:
-  - '*'
-- apiGroups:
-  - bret.linogics.io
-  resources:
-  - restores/status
-  verbs:
-  - get
+  - apiGroups:
+      - bret.linogics.io
+    resources:
+      - restores
+    verbs:
+      - '*'
+  - apiGroups:
+      - bret.linogics.io
+    resources:
+      - restores/status
+    verbs:
+      - get

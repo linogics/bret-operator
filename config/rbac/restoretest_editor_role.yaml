@@ -13,21 +13,21 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: restoretest-editor-role
 rules:
-- apiGroups:
-  - bret.linogics.io
-  resources:
-  - restoretests
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - bret.linogics.io
-  resources:
-  - restoretests/status
-  verbs:
-  - get
+  - apiGroups:
+      - bret.linogics.io
+    resources:
+      - restoretests
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - bret.linogics.io
+    resources:
+      - restoretests/status
+    verbs:
+      - get

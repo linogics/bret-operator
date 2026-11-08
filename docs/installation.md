@@ -29,7 +29,8 @@ helm install bret-operator oci://ghcr.io/linogics/charts/bret-operator \
 To install from a checkout of this repository:
 
 ```bash
-make helm-sync                       # copies CRDs and RBAC from config/ into the chart
+make helm-sync                       # copies CRDs into charts/bret-operator-crds, RBAC into charts/bret-operator
+helm dependency build ./charts/bret-operator   # bundles the CRD chart as a dependency
 helm install bret-operator ./charts/bret-operator \
   --namespace bret-operator-system \
   --create-namespace
@@ -119,13 +120,14 @@ Plain manifests do not upgrade cleanly across versions. Prefer the Helm chart fo
 
 ## Upgrading
 
-Helm installs CRDs from `crds/` once. It does not update them on upgrade. A new release can
-change the CRD schema, so apply the CRDs yourself before you upgrade the chart:
+The CRDs ship in the `bret-operator-crds` chart, which the `bret-operator` chart depends on. Helm
+installs CRDs once and does not update them on upgrade. A new release can change the CRD schema,
+so apply the CRDs yourself before you upgrade the chart:
 
 ```bash
 kubectl apply --server-side -f https://github.com/linogics/bret-operator/releases/download/v0.1.0/install.yaml
 # or, from a checkout:
-kubectl apply --server-side -f charts/bret-operator/crds/
+kubectl apply --server-side -f charts/bret-operator-crds/crds/
 helm upgrade bret-operator oci://ghcr.io/linogics/charts/bret-operator --version 0.2.0 -n bret-operator-system
 ```
 

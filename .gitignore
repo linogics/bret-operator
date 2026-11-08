@@ -43,6 +43,8 @@ Dockerfile.cross
 *.swo
 *~
 dist/
+# helm dependency build output (the bundled CRD chart)
+charts/*/charts/
 
 # local planning docs and tool state, never committed
 docs/superpowers/

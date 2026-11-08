@@ -6,7 +6,8 @@ metadata:
   name: data
 spec:
   storageClassName: csi-hostpath-sc
-  accessModes: ["ReadWriteOnce"]
+  accessModes:
+    - "ReadWriteOnce"
   resources:
     requests:
       storage: 1Gi
@@ -18,33 +19,36 @@ metadata:
 spec:
   restartPolicy: Never
   initContainers:
-  - name: chown-data
-    image: busybox:1.37
-    securityContext:
-      runAsUser: 0
-    command: [/bin/sh, -c, "chown 1000:1000 /data"]
-    volumeMounts:
-    - name: data
-      mountPath: /data
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 1000:1000 /data"
+      volumeMounts:
+        - name: data
+          mountPath: /data
   containers:
-  - name: seed
-    image: busybox:1.37
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
-    command:
-    - /bin/sh
-    - -c
-    - |
-      set -eu
-      payload="canary-payload-$(date +%s)"
-      printf '%s' "$payload" > /data/canary.txt
-      sha256sum /data/canary.txt | cut -d ' ' -f 1 > /data/canary.sha256
-      sync
-    volumeMounts:
-    - name: data
-      mountPath: /data
+    - name: seed
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          payload="canary-payload-$(date +%s)"
+          printf '%s' "$payload" > /data/canary.txt
+          sha256sum /data/canary.txt | cut -d ' ' -f 1 > /data/canary.sha256
+          sync
+      volumeMounts:
+        - name: data
+          mountPath: /data
   volumes:
-  - name: data
-    persistentVolumeClaim:
-      claimName: data
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

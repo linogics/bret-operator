@@ -16,7 +16,8 @@ metadata:
   name: data
 spec:
   storageClassName: csi-hostpath-sc
-  accessModes: ["ReadWriteOnce"]
+  accessModes:
+    - "ReadWriteOnce"
   resources:
     requests:
       storage: 1Gi
@@ -28,51 +29,54 @@ metadata:
 spec:
   restartPolicy: Never
   initContainers:
-  - name: chown-data
-    image: busybox:1.37
-    securityContext:
-      runAsUser: 0
-    command: [/bin/sh, -c, "chown 1000:1000 /home/node/.n8n"]
-    volumeMounts:
-    - name: data
-      mountPath: /home/node/.n8n
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 1000:1000 /home/node/.n8n"
+      volumeMounts:
+        - name: data
+          mountPath: /home/node/.n8n
   containers:
-  - name: seed
-    image: n8nio/n8n:1.60.0
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
-    envFrom:
-    - secretRef:
-        name: n8n-secrets
-    command:
-    - /bin/sh
-    - -c
-    - |
-      set -eu
-      cat > /tmp/creds.json <<'JSON'
-      [{"id":"1","name":"bret-canary","type":"httpBasicAuth","data":{"user":"bret","password":"seed-password-not-secret"},"nodesAccess":[]}]
-      JSON
-      cat > /tmp/wf.json <<'JSON'
-      [{"id":"1","name":"bret-canary","nodes":[],"connections":{},"active":false,"settings":{}}]
-      JSON
-      n8n import:credentials --input=/tmp/creds.json
-      n8n import:workflow --input=/tmp/wf.json
-      n8n start >/tmp/seed-n8n.log 2>&1 &
-      pid=$!
-      for i in $(seq 1 180); do
-        wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 && break
-        sleep 1
-      done
-      wget -qO- http://127.0.0.1:5678/healthz | grep -q '"status":"ok"'
-      sync
-      # Crash-consistent point: no clean shutdown.
-      kill -9 "$pid"
-      sleep 2
-    volumeMounts:
-    - name: data
-      mountPath: /home/node/.n8n
+    - name: seed
+      image: n8nio/n8n:1.60.0
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      envFrom:
+        - secretRef:
+            name: n8n-secrets
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          cat > /tmp/creds.json <<'JSON'
+          [{"id":"1","name":"bret-canary","type":"httpBasicAuth","data":{"user":"bret","password":"seed-password-not-secret"},"nodesAccess":[]}]
+          JSON
+          cat > /tmp/wf.json <<'JSON'
+          [{"id":"1","name":"bret-canary","nodes":[],"connections":{},"active":false,"settings":{}}]
+          JSON
+          n8n import:credentials --input=/tmp/creds.json
+          n8n import:workflow --input=/tmp/wf.json
+          n8n start >/tmp/seed-n8n.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 180); do
+            wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 && break
+            sleep 1
+          done
+          wget -qO- http://127.0.0.1:5678/healthz | grep -q '"status":"ok"'
+          sync
+          # Crash-consistent point: no clean shutdown.
+          kill -9 "$pid"
+          sleep 2
+      volumeMounts:
+        - name: data
+          mountPath: /home/node/.n8n
   volumes:
-  - name: data
-    persistentVolumeClaim:
-      claimName: data
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

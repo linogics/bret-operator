@@ -13,34 +13,34 @@ spec:
   initContainers: []
 
   containers:
-  - name: check
-    image: gitea/gitea:1.22
-    securityContext:
-      runAsUser: 1000
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -eu
+    - name: check
+      image: gitea/gitea:1.22
+      securityContext:
+        runAsUser: 1000
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
 
-        # Start the web server with the restored app.ini and stop it on exit.
-        gitea web --config /data/gitea/conf/app.ini >/tmp/gitea.log 2>&1 &
-        pid=$!
-        trap 'kill $pid 2>/dev/null || true' EXIT
+          # Start the web server with the restored app.ini and stop it on exit.
+          gitea web --config /data/gitea/conf/app.ini >/tmp/gitea.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
 
-        # Wait for health (up to 120 s).
-        for i in $(seq 1 120); do
-          wget -qO- http://127.0.0.1:3000/api/healthz >/dev/null 2>&1 && break
-          sleep 1
-        done
+          # Wait for health (up to 120 s).
+          for i in $(seq 1 120); do
+            wget -qO- http://127.0.0.1:3000/api/healthz >/dev/null 2>&1 && break
+            sleep 1
+          done
 
-        # Health: DB opened and migrated, app serving.
-        wget -qO- http://127.0.0.1:3000/api/healthz | grep -q '"status": *"pass"'
+          # Health: DB opened and migrated, app serving.
+          wget -qO- http://127.0.0.1:3000/api/healthz | grep -q '"status": *"pass"'
 
-        # Canary: git objects and file content must match the stored checksum.
-        base=http://127.0.0.1:3000/bret/canary/raw/branch/main
-        got=$(wget -qO- "$base/canary.txt" | sha256sum | cut -d' ' -f1)
-        want=$(wget -qO- "$base/canary.sha256" | cut -d' ' -f1)
-        test "$got" = "$want"
+          # Canary: git objects and file content must match the stored checksum.
+          base=http://127.0.0.1:3000/bret/canary/raw/branch/main
+          got=$(wget -qO- "$base/canary.txt" | sha256sum | cut -d' ' -f1)
+          want=$(wget -qO- "$base/canary.sha256" | cut -d' ' -f1)
+          test "$got" = "$want"
 
   volumes: []

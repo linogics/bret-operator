@@ -14,46 +14,46 @@ spec:
   initContainers:
   # The restored mount root comes back owned by root. n8n (uid 1000) writes its SQLite DB and
   # config there, so an init container with no securityContext (root) gives the root to uid 1000.
-  - name: data-perms
-    image: busybox:1.37
-    command:
-      - /bin/sh
-      - -c
-      - chown 1000:1000 /home/node/.n8n
+    - name: data-perms
+      image: busybox:1.37
+      command:
+        - /bin/sh
+        - -c
+        - chown 1000:1000 /home/node/.n8n
 
   containers:
-  - name: check
-    image: n8nio/n8n:1.60.0
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
-    envFrom:
-    - secretRef:
-        name: n8n-secrets
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -eu
+    - name: check
+      image: n8nio/n8n:1.60.0
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      envFrom:
+        - secretRef:
+            name: n8n-secrets
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
 
-        # Decrypted export. Fails if N8N_ENCRYPTION_KEY does not match the stored credentials.
-        n8n export:credentials --all --decrypted --output /tmp/creds.json
-        grep -q '"name": *"bret-canary"' /tmp/creds.json
+          # Decrypted export. Fails if N8N_ENCRYPTION_KEY does not match the stored credentials.
+          n8n export:credentials --all --decrypted --output /tmp/creds.json
+          grep -q '"name": *"bret-canary"' /tmp/creds.json
 
-        # Workflow export must contain the canary workflow.
-        n8n export:workflow --all --output /tmp/wf.json
-        grep -q '"name": *"bret-canary"' /tmp/wf.json
+          # Workflow export must contain the canary workflow.
+          n8n export:workflow --all --output /tmp/wf.json
+          grep -q '"name": *"bret-canary"' /tmp/wf.json
 
-        # Start the app in the background and stop it on exit.
-        n8n start >/tmp/n8n.log 2>&1 &
-        pid=$!
-        trap 'kill $pid 2>/dev/null || true' EXIT
+          # Start the app in the background and stop it on exit.
+          n8n start >/tmp/n8n.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
 
-        # App boots on the restored DB and reports healthy (up to 120 s).
-        for i in $(seq 1 120); do
-          wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 && break
-          sleep 1
-        done
-        wget -qO- http://127.0.0.1:5678/healthz | grep -q '"status":"ok"'
+          # App boots on the restored DB and reports healthy (up to 120 s).
+          for i in $(seq 1 120); do
+            wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 && break
+            sleep 1
+          done
+          wget -qO- http://127.0.0.1:5678/healthz | grep -q '"status":"ok"'
 
   volumes: []

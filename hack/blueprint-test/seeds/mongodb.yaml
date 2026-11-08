@@ -1,3 +1,5 @@
+# Shell one-liners in block scalars are the content, not prose.
+# yamllint disable rule:line-length
 # Seed for blueprints/mongodb.yaml. Dbpath is /data/db (uid 999), the mount root.
 # Writes the canary with journal acknowledgement, then kill -9 mongod so the backup is
 # crash-consistent. The check must recover from the journal on boot.
@@ -7,7 +9,8 @@ metadata:
   name: data
 spec:
   storageClassName: csi-hostpath-sc
-  accessModes: ["ReadWriteOnce"]
+  accessModes:
+    - "ReadWriteOnce"
   resources:
     requests:
       storage: 2Gi
@@ -19,42 +22,45 @@ metadata:
 spec:
   restartPolicy: Never
   initContainers:
-  - name: chown-data
-    image: busybox:1.37
-    securityContext:
-      runAsUser: 0
-    command: [/bin/sh, -c, "chown 999:999 /data/db"]
-    volumeMounts:
-    - name: data
-      mountPath: /data/db
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 999:999 /data/db"
+      volumeMounts:
+        - name: data
+          mountPath: /data/db
   containers:
-  - name: seed
-    image: mongo:7.0
-    securityContext:
-      runAsUser: 999
-      runAsGroup: 999
-    command:
-    - /bin/sh
-    - -c
-    - |
-      set -eu
-      mongod --dbpath /data/db --bind_ip 127.0.0.1 --port 27017 --logpath /tmp/mongod.log >/tmp/mongod.stdout 2>&1 &
-      pid=$!
-      for i in $(seq 1 120); do
-        mongosh --quiet --host 127.0.0.1 --eval 'db.adminCommand({ping: 1}).ok' 2>/dev/null | grep -qx 1 && break
-        sleep 1
-      done
-      payload="seed-canary-payload-not-secret"
-      sha=$(printf %s "$payload" | sha256sum | cut -d' ' -f1)
-      mongosh --quiet --host 127.0.0.1 app --eval "db.bret_canary.insertOne({_id: 'canary', payload: '$payload', sha256: '$sha'}, {writeConcern: {w: 1, j: true}})"
-      mongosh --quiet --host 127.0.0.1 app --eval "db.filler.insertMany(Array.from({length: 1000}, (_, i) => ({n: i, h: i * 7})), {writeConcern: {w: 1, j: true}}).insertedCount"
-      # Crash-consistent point: no clean shutdown.
-      kill -9 "$pid"
-      sleep 2
-    volumeMounts:
-    - name: data
-      mountPath: /data/db
+    - name: seed
+      image: mongo:7.0
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          mongod --dbpath /data/db --bind_ip 127.0.0.1 --port 27017 --logpath /tmp/mongod.log >/tmp/mongod.stdout 2>&1 &
+          pid=$!
+          for i in $(seq 1 120); do
+            mongosh --quiet --host 127.0.0.1 --eval 'db.adminCommand({ping: 1}).ok' 2>/dev/null | grep -qx 1 && break
+            sleep 1
+          done
+          payload="seed-canary-payload-not-secret"
+          sha=$(printf %s "$payload" | sha256sum | cut -d' ' -f1)
+          mongosh --quiet --host 127.0.0.1 app --eval "db.bret_canary.insertOne({_id: 'canary', payload: '$payload', sha256: '$sha'}, {writeConcern: {w: 1, j: true}})"
+          mongosh --quiet --host 127.0.0.1 app --eval "db.filler.insertMany(Array.from({length: 1000}, (_, i) => ({n: i, h: i * 7})), {writeConcern: {w: 1, j: true}}).insertedCount"
+          # Crash-consistent point: no clean shutdown.
+          kill -9 "$pid"
+          sleep 2
+      volumeMounts:
+        - name: data
+          mountPath: /data/db
   volumes:
-  - name: data
-    persistentVolumeClaim:
-      claimName: data
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

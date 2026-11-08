@@ -13,15 +13,15 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: restoretest-admin-role
 rules:
-- apiGroups:
-  - bret.linogics.io
-  resources:
-  - restoretests
-  verbs:
-  - '*'
-- apiGroups:
-  - bret.linogics.io
-  resources:
-  - restoretests/status
-  verbs:
-  - get
+  - apiGroups:
+      - bret.linogics.io
+    resources:
+      - restoretests
+    verbs:
+      - '*'
+  - apiGroups:
+      - bret.linogics.io
+    resources:
+      - restoretests/status
+    verbs:
+      - get

@@ -235,23 +235,38 @@ docs-check: docs ## Fail if generated docs or chart files are out of date (CI ga
 		exit 1; \
 	fi
 
+##@ YAML
+
+YAMLLINT_VERSION ?= 1.37.1
+
+.PHONY: yamllint
+yamllint: ## Lint all tracked YAML files (needs yamllint on PATH, see .github/workflows/yamllint.yml).
+	git ls-files -co --exclude-standard '*.yaml' '*.yml' | grep -v -e '^config/crd/bases/' -e '/crds/' -e '/templates/' -e '/charts/.*/charts/' -e '^config/rbac/role.yaml$$' | xargs yamllint --strict -c .yamllint.yaml
+
 ##@ Helm
 
 CHART_DIR ?= charts/bret-operator
+CRDS_CHART_DIR ?= charts/bret-operator-crds
 
 .PHONY: helm-sync
-helm-sync: manifests ## Copy CRDs and RBAC rules from config/ into the Helm chart.
-	cp config/crd/bases/*.yaml $(CHART_DIR)/crds/
+helm-sync: manifests ## Copy CRDs and RBAC rules from config/ into the Helm charts.
+	cp config/crd/bases/*.yaml $(CRDS_CHART_DIR)/crds/
 	python3 hack/helm/sync_rbac.py config/rbac $(CHART_DIR)/templates
 
+.PHONY: helm-deps
+helm-deps: ## Build the chart dependencies (bundles bret-operator-crds into the operator chart).
+	helm dependency build $(CHART_DIR)
+
 .PHONY: helm-lint
-helm-lint: helm-sync ## Lint the Helm chart and render it with default values.
+helm-lint: helm-sync helm-deps ## Lint both charts and render the operator chart with default values.
+	helm lint $(CRDS_CHART_DIR) --strict
 	helm lint $(CHART_DIR) --strict
 	helm template bret $(CHART_DIR) >/dev/null
 
 .PHONY: helm-package
-helm-package: helm-lint ## Package the chart into dist/ with VERSION as chart and app version.
+helm-package: helm-lint ## Package both charts into dist/ with VERSION as chart and app version.
 	mkdir -p dist
+	helm package $(CRDS_CHART_DIR) --destination dist --version $(VERSION) --app-version $(VERSION)
 	helm package $(CHART_DIR) --destination dist --version $(VERSION) --app-version $(VERSION)
 
 ##@ Dependencies

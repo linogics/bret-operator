@@ -15,91 +15,97 @@ spec:
   restoreMount: /var/lib/postgresql/data
 
   initContainers:
-  - name: pgdata-perms
-    image: busybox:1.37
-    securityContext:
-      runAsUser: 999
-      runAsGroup: 999
-    env:
-    - name: PGDATA
-      value: /var/lib/postgresql/data/pgdata
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -eu
+    - name: pgdata-perms
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
 
-        # Postgres refuses a data dir that is not 0700 or 0750. Restore can leave it wider.
-        test -f "$PGDATA/PG_VERSION"
-        chmod 0700 "$PGDATA"
-  - name: postgres
-    image: postgres:17.12
-    restartPolicy: Always
-    securityContext:
-      runAsUser: 999
-      runAsGroup: 999
-    env:
-    - name: PGDATA
-      value: /var/lib/postgresql/data/pgdata
-    command: ["postgres", "-c", "listen_addresses=127.0.0.1"]
-    startupProbe:
-      exec:
-        command: ["pg_isready", "-h", "127.0.0.1"]
-      periodSeconds: 2
-      failureThreshold: 90
+          # Postgres refuses a data dir that is not 0700 or 0750. Restore can leave it wider.
+          test -f "$PGDATA/PG_VERSION"
+          chmod 0700 "$PGDATA"
+    - name: postgres
+      image: postgres:17.12
+      restartPolicy: Always
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+      command:
+        - "postgres"
+        - "-c"
+        - "listen_addresses=127.0.0.1"
+      startupProbe:
+        exec:
+          command:
+            - "pg_isready"
+            - "-h"
+            - "127.0.0.1"
+        periodSeconds: 2
+        failureThreshold: 90
 
   containers:
-  - name: check
-    image: quay.io/keycloak/keycloak:26.0
-    env:
-    - name: KC_DB
-      value: postgres
-    - name: KC_DB_URL
-      value: jdbc:postgresql://127.0.0.1:5432/keycloak
-    - name: KC_DB_USERNAME
-      value: keycloak
-    - name: KC_HEALTH_ENABLED
-      value: "true"
-    envFrom:
-    - secretRef:
-        name: keycloak-db
-    command:
-      - /bin/bash
-      - -c
-      - |
-        set -eu
+    - name: check
+      image: quay.io/keycloak/keycloak:26.0
+      env:
+        - name: KC_DB
+          value: postgres
+        - name: KC_DB_URL
+          value: jdbc:postgresql://127.0.0.1:5432/keycloak
+        - name: KC_DB_USERNAME
+          value: keycloak
+        - name: KC_HEALTH_ENABLED
+          value: "true"
+      envFrom:
+        - secretRef:
+            name: keycloak-db
+      command:
+        - /bin/bash
+        - -c
+        - |
+          set -eu
 
-        # The image has no curl or wget. Plain HTTP GET over bash /dev/tcp.
-        # Prints the body on success, returns 1 unless the status is 200.
-        http_get() {
-          local hostport=${1#http://} path status line
-          path=/${hostport#*/}
-          hostport=${hostport%%/*}
-          exec 3<>"/dev/tcp/${hostport%%:*}/${hostport##*:}" || return 1
-          printf 'GET %s HTTP/1.0\r\nHost: %s\r\n\r\n' "$path" "$hostport" >&3
-          read -r status <&3 || return 1
-          case $status in
-            *" 200 "*) ;;
-            *) return 1 ;;
-          esac
-          while IFS= read -r line <&3 && [ -n "${line%$'\r'}" ]; do :; done
-          cat <&3
-        }
+          # The image has no curl or wget. Plain HTTP GET over bash /dev/tcp.
+          # Prints the body on success, returns 1 unless the status is 200.
+          http_get() {
+            local hostport=${1#http://} path status line
+            path=/${hostport#*/}
+            hostport=${hostport%%/*}
+            exec 3<>"/dev/tcp/${hostport%%:*}/${hostport##*:}" || return 1
+            printf 'GET %s HTTP/1.0\r\nHost: %s\r\n\r\n' "$path" "$hostport" >&3
+            read -r status <&3 || return 1
+            case $status in
+              *" 200 "*) ;;
+              *) return 1 ;;
+            esac
+            while IFS= read -r line <&3 && [ -n "${line%$'\r'}" ]; do :; done
+            cat <&3
+          }
 
-        # Start runs Liquibase migrations against the restored schema.
-        /opt/keycloak/bin/kc.sh start --http-enabled=true --hostname-strict=false \
-            >/tmp/kc.log 2>&1 &
-        pid=$!
-        trap 'kill $pid 2>/dev/null || true' EXIT
+          # Start runs Liquibase migrations against the restored schema.
+          /opt/keycloak/bin/kc.sh start --http-enabled=true --hostname-strict=false \
+              >/tmp/kc.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
 
-        # Wait for readiness (up to 170 s), then require status UP.
-        for i in $(seq 1 170); do
-          http_get http://127.0.0.1:9000/health/ready >/dev/null && break
-          sleep 1
-        done
-        http_get http://127.0.0.1:9000/health/ready | grep -q '"status": "UP"'
+          # Wait for readiness (up to 170 s), then require status UP.
+          for i in $(seq 1 170); do
+            http_get http://127.0.0.1:9000/health/ready >/dev/null && break
+            sleep 1
+          done
+          http_get http://127.0.0.1:9000/health/ready | grep -q '"status": "UP"'
 
-        # Canary realm must be served with its OIDC discovery document.
-        http_get http://127.0.0.1:8080/realms/bret-canary/.well-known/openid-configuration >/dev/null
+          # Canary realm must be served with its OIDC discovery document.
+          http_get http://127.0.0.1:8080/realms/bret-canary/.well-known/openid-configuration >/dev/null
 
   volumes: []

@@ -1,3 +1,5 @@
+# Shell one-liners in block scalars are the content, not prose.
+# yamllint disable rule:line-length
 # Seed for blueprints/gitea.yaml. Mount is /data, owned by uid 1000.
 # Starts gitea on a fresh app.ini and SQLite DB, creates user bret and public repo bret/canary
 # through the API, commits canary.txt and canary.sha256 on main, then kill -9 the server so the
@@ -8,7 +10,8 @@ metadata:
   name: data
 spec:
   storageClassName: csi-hostpath-sc
-  accessModes: ["ReadWriteOnce"]
+  accessModes:
+    - "ReadWriteOnce"
   resources:
     requests:
       storage: 1Gi
@@ -20,75 +23,78 @@ metadata:
 spec:
   restartPolicy: Never
   initContainers:
-  - name: chown-data
-    image: busybox:1.37
-    securityContext:
-      runAsUser: 0
-    command: [/bin/sh, -c, "chown 1000:1000 /data"]
-    volumeMounts:
-    - name: data
-      mountPath: /data
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 1000:1000 /data"
+      volumeMounts:
+        - name: data
+          mountPath: /data
   containers:
-  - name: seed
-    image: gitea/gitea:1.22
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
-    command:
-    - /bin/sh
-    - -c
-    - |
-      mkdir -p /data/gitea/conf /data/git/repositories
-      secret=$(gitea generate secret SECRET_KEY)
-      internal=$(gitea generate secret INTERNAL_TOKEN)
-      cat > /data/gitea/conf/app.ini <<INI
-      APP_NAME = Bret Canary
-      RUN_MODE = prod
-      [database]
-      DB_TYPE = sqlite3
-      PATH = /data/gitea/gitea.db
-      [repository]
-      ROOT = /data/git/repositories
-      [server]
-      HTTP_PORT = 3000
-      ROOT_URL = http://127.0.0.1:3000/
-      APP_DATA_PATH = /data/gitea
-      DISABLE_SSH = true
-      LFS_START_SERVER = false
-      [security]
-      INSTALL_LOCK = true
-      SECRET_KEY = $secret
-      INTERNAL_TOKEN = $internal
-      [log]
-      MODE = console
-      ROOT_PATH = /tmp
-      INI
-      PW=seed-pass-not-secret
-      gitea web --config /data/gitea/conf/app.ini >/tmp/seed-gitea.log 2>&1 &
-      pid=$!
-      for i in $(seq 1 120); do
-        curl -fsS http://127.0.0.1:3000/api/healthz >/dev/null 2>&1 && break
-        sleep 1
-      done
-      curl -fsS http://127.0.0.1:3000/api/healthz >/dev/null || exit 1
-      gitea admin user create --config /data/gitea/conf/app.ini --username bret --password "$PW" --email bret@example.invalid --admin --must-change-password=false || exit 1
-      api=http://127.0.0.1:3000/api/v1
-      curl -fsS -u "bret:$PW" -H 'Content-Type: application/json' -d '{"name":"canary","auto_init":true,"default_branch":"main","private":false}' "$api/user/repos" >/dev/null || exit 1
-      payload="canary-payload-$(date +%s)"
-      sha=$(printf '%s' "$payload" | sha256sum | cut -d ' ' -f 1)
-      put() {
-        b64=$(printf '%s' "$2" | base64 | tr -d '\n')
-        curl -fsS -u "bret:$PW" -X POST -H 'Content-Type: application/json' -d "{\"content\":\"$b64\",\"branch\":\"main\",\"message\":\"add $1\"}" "$api/repos/bret/canary/contents/$1" >/dev/null
-      }
-      put canary.txt "$payload" || exit 1
-      put canary.sha256 "$(printf '%s  canary.txt\n' "$sha")" || exit 1
-      # Crash-consistent point: no clean shutdown.
-      kill -9 "$pid"
-      sync
-    volumeMounts:
-    - name: data
-      mountPath: /data
+    - name: seed
+      image: gitea/gitea:1.22
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      command:
+        - /bin/sh
+        - -c
+        - |
+          mkdir -p /data/gitea/conf /data/git/repositories
+          secret=$(gitea generate secret SECRET_KEY)
+          internal=$(gitea generate secret INTERNAL_TOKEN)
+          cat > /data/gitea/conf/app.ini <<INI
+          APP_NAME = Bret Canary
+          RUN_MODE = prod
+          [database]
+          DB_TYPE = sqlite3
+          PATH = /data/gitea/gitea.db
+          [repository]
+          ROOT = /data/git/repositories
+          [server]
+          HTTP_PORT = 3000
+          ROOT_URL = http://127.0.0.1:3000/
+          APP_DATA_PATH = /data/gitea
+          DISABLE_SSH = true
+          LFS_START_SERVER = false
+          [security]
+          INSTALL_LOCK = true
+          SECRET_KEY = $secret
+          INTERNAL_TOKEN = $internal
+          [log]
+          MODE = console
+          ROOT_PATH = /tmp
+          INI
+          PW=seed-pass-not-secret
+          gitea web --config /data/gitea/conf/app.ini >/tmp/seed-gitea.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 120); do
+            curl -fsS http://127.0.0.1:3000/api/healthz >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3000/api/healthz >/dev/null || exit 1
+          gitea admin user create --config /data/gitea/conf/app.ini --username bret --password "$PW" --email bret@example.invalid --admin --must-change-password=false || exit 1
+          api=http://127.0.0.1:3000/api/v1
+          curl -fsS -u "bret:$PW" -H 'Content-Type: application/json' -d '{"name":"canary","auto_init":true,"default_branch":"main","private":false}' "$api/user/repos" >/dev/null || exit 1
+          payload="canary-payload-$(date +%s)"
+          sha=$(printf '%s' "$payload" | sha256sum | cut -d ' ' -f 1)
+          put() {
+            b64=$(printf '%s' "$2" | base64 | tr -d '\n')
+            curl -fsS -u "bret:$PW" -X POST -H 'Content-Type: application/json' -d "{\"content\":\"$b64\",\"branch\":\"main\",\"message\":\"add $1\"}" "$api/repos/bret/canary/contents/$1" >/dev/null
+          }
+          put canary.txt "$payload" || exit 1
+          put canary.sha256 "$(printf '%s  canary.txt\n' "$sha")" || exit 1
+          # Crash-consistent point: no clean shutdown.
+          kill -9 "$pid"
+          sync
+      volumeMounts:
+        - name: data
+          mountPath: /data
   volumes:
-  - name: data
-    persistentVolumeClaim:
-      claimName: data
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

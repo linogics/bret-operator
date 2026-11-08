@@ -3,6 +3,7 @@
 set -euo pipefail
 CHART=${1:-charts/bret-operator}
 fail() { echo "FAIL: $*" >&2; exit 1; }
+helm dependency build "$CHART" >/dev/null
 
 out=$(helm template bret "$CHART" --set providers.velero.enabled=false)
 awk 'BEGIN{RS="---\n"} /kind: ClusterRole\n/ && /-manager\n/' <<<"$out" | grep -q 'namespaces' && fail "namespaces rule rendered with velero off"
