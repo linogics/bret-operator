@@ -43,3 +43,9 @@ Dockerfile.cross
 *.swo
 *~
 dist/
+
+# local planning docs and tool state, never committed
+docs/superpowers/
+.superpowers/
+.claude/
+.codegraph/
