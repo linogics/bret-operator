@@ -9,9 +9,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
@@ -260,5 +263,99 @@ func TestRestoreTestDeletesEarlierAttempts(t *testing.T) {
 	restores := f.restores()
 	if len(restores) != 1 || restores[0].Labels[attemptLabel] != "2" {
 		t.Fatalf("restores after the run settled = %d, want only attempt 2", len(restores))
+	}
+}
+
+// deleteWithBrokenReads reconciles a Restore once, deletes it and reconciles again while reads of the
+// kinds that match fail with err. The Restore must be released.
+func deleteWithBrokenReads(t *testing.T, provider restorev1alpha1.Provider, kind string, err error) {
+	t.Helper()
+
+	restore := newTestRestore()
+	restore.Spec.Provider = provider
+
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
+	key := client.ObjectKeyFromObject(restore)
+
+	reconcileRestore(t, r, key)
+
+	if delErr := c.Delete(context.Background(), getRestore(t, c, key)); delErr != nil {
+		t.Fatal(delErr)
+	}
+
+	r.Client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+		Get: func(ctx context.Context, cl client.WithWatch, k client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			if u, ok := obj.(*unstructured.Unstructured); ok && u.GetKind() == kind {
+				return err
+			}
+
+			return cl.Get(ctx, k, obj, opts...)
+		},
+	})
+
+	reconcileRestore(t, r, key)
+
+	if getErr := c.Get(context.Background(), key, &restorev1alpha1.Restore{}); !errors.IsNotFound(getErr) {
+		t.Fatalf("restore stuck terminating: %v", getErr)
+	}
+}
+
+func TestFinalizerIgnoresMissingCRD(t *testing.T) {
+	deleteWithBrokenReads(t, restorev1alpha1.ProviderKopiur, kopiurRestoreGVK.Kind,
+		&meta.NoKindMatchError{GroupKind: kopiurRestoreGVK.GroupKind(), SearchedVersions: []string{"v1alpha1"}})
+}
+
+func TestFinalizerIgnoresForbiddenVelero(t *testing.T) {
+	deleteWithBrokenReads(t, restorev1alpha1.ProviderVelero, veleroRestoreGVK.Kind,
+		errors.NewForbidden(schema.GroupResource{Group: "velero.io", Resource: "restores"}, "x", nil))
+}
+
+func TestFinalizerSkipsDisabledProvider(t *testing.T) {
+	restore := newTestRestore()
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+	r.EnabledProviders = map[restorev1alpha1.Provider]bool{restorev1alpha1.ProviderVolSync: true}
+	key := client.ObjectKeyFromObject(restore)
+
+	kopiur := kopiurStub(restore)
+	if err := c.Create(context.Background(), kopiurRestoreObject(restore, nil)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.cleanup(context.Background(), getRestore(t, c, key)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(kopiur), kopiur); err != nil {
+		t.Fatalf("disabled provider object was touched: %v", err)
+	}
+}
+
+func TestPreUpgradeRestoreWithoutSizeFails(t *testing.T) {
+	restore := newTestRestore()
+	c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+	key := client.ObjectKeyFromObject(restore)
+
+	stored := getRestore(t, c, key)
+	started := metav1.NewTime(time.Now())
+	deadline := metav1.NewTime(started.Add(time.Hour))
+	stored.Status = restorev1alpha1.RestoreStatus{
+		Phase: restorev1alpha1.RestorePhaseRunning, Attempt: 1, StartTime: &started, Deadline: &deadline,
+		ProviderRef: &restorev1alpha1.ProviderRef{Kind: "Restore", Name: "r1-kopiur", Namespace: testNamespace},
+	}
+
+	if err := c.Status().Update(context.Background(), stored); err != nil {
+		t.Fatal(err)
+	}
+
+	reconcileRestore(t, r, key)
+
+	got := getRestore(t, c, key)
+	if got.Status.Phase != restorev1alpha1.RestorePhaseFailed || readyReason(got) != restorev1alpha1.ReasonSizeUnknown {
+		t.Fatalf("phase %q reason %q, want Failed SizeUnknown", got.Status.Phase, readyReason(got))
+	}
+
+	pvcs := &corev1.PersistentVolumeClaimList{}
+	if err := c.List(context.Background(), pvcs); err != nil || len(pvcs.Items) != 0 {
+		t.Fatalf("PVCs created: %v %d", err, len(pvcs.Items))
 	}
 }

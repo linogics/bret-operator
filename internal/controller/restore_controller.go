@@ -265,14 +265,15 @@ func (r *RestoreReconciler) progress(
 }
 
 // scratchSize resolves the scratch size once and stores it in the status. Later reconciles reuse it, so the
-// source is read once. A Restore that already has a provider object needs no size: its objects exist.
+// source is read once.
 func (r *RestoreReconciler) scratchSize(ctx context.Context, restore *restorev1alpha1.Restore) (resource.Quantity, error) {
 	if restore.Status.ResolvedSize != nil {
 		return *restore.Status.ResolvedSize, nil
 	}
 
+	// A Restore from before the size was stored has no size to create objects with.
 	if restore.Status.ProviderRef != nil {
-		return resource.Quantity{}, nil
+		return resource.Quantity{}, ErrSizeUnknown
 	}
 
 	source, err := r.sourceSize(ctx, restore)

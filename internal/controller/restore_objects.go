@@ -5,6 +5,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -58,14 +59,18 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 
 	objs := []client.Object{
 		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: checkPodName(restore), Namespace: restore.Namespace}},
-		kopiurStub(restore),
 	}
 
-	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
+	// Objects of a disabled provider are not read: the operator has no rights for them.
+	if r.providerEnabled(restorev1alpha1.ProviderKopiur) {
+		objs = append(objs, kopiurStub(restore))
+	}
+
+	if restore.Spec.Provider == restorev1alpha1.ProviderVelero && r.providerEnabled(restorev1alpha1.ProviderVelero) {
 		objs = append(objs, r.veleroStub(restore), veleroScratchNamespace(restore))
 	}
 
-	if restore.Spec.Provider == restorev1alpha1.ProviderVolSync {
+	if restore.Spec.Provider == restorev1alpha1.ProviderVolSync && r.providerEnabled(restorev1alpha1.ProviderVolSync) {
 		objs = append(objs, volsyncStub(restore))
 	}
 
@@ -86,11 +91,11 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 func (r *RestoreReconciler) cleanupObject(ctx context.Context, obj client.Object, keep bool) error {
 	err := r.getObject(ctx, obj)
 	if err != nil {
-		return client.IgnoreNotFound(err)
+		return ignoreUncleanable(err)
 	}
 
 	if !keep {
-		return client.IgnoreNotFound(r.Delete(ctx, obj))
+		return ignoreUncleanable(r.Delete(ctx, obj))
 	}
 
 	base := obj.DeepCopyObject().(client.Object)
@@ -103,7 +108,17 @@ func (r *RestoreReconciler) cleanupObject(ctx context.Context, obj client.Object
 	labels[retainedLabel] = "true"
 	obj.SetLabels(labels)
 
-	return r.Patch(ctx, obj, client.MergeFrom(base))
+	return ignoreUncleanable(r.Patch(ctx, obj, client.MergeFrom(base)))
+}
+
+// ignoreUncleanable drops the errors of objects that cannot exist or cannot be reached: a missing object,
+// a CRD that is not installed, or no RBAC for it. Returning them would keep the finalizer forever.
+func ignoreUncleanable(err error) error {
+	if apierrors.IsNotFound(err) || apierrors.IsForbidden(err) || meta.IsNoMatchError(err) {
+		return nil
+	}
+
+	return err
 }
 
 // getObject reads obj through the API reader when one is set. Provider objects use it, so no
