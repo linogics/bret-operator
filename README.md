@@ -8,13 +8,15 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3--Clause-green" alt="License: BSD-3-Clause"></a>
 </p>
 
+**bret** stands for **Backup REstore Test**.
+
 bret-operator tests your Kubernetes backups. It restores a backup from Velero, VolSync or
 Kopiur into a scratch volume, runs your check in a throwaway pod, and records the result.
 
 **Status: early.** The CRDs, the Helm chart and the release pipeline exist. The `Restore` and
-`RestoreTest` controllers work for the Kopiur provider. Velero and VolSync are not implemented yet.
-Blueprint checks can also be run by hand. See
-[docs/README.md](docs/README.md) for the full status table.
+`RestoreTest` controllers work for the Kopiur provider. The Velero and VolSync providers are
+implemented, and their live checks are still being run. Blueprint checks can also be run by hand.
+See [docs/README.md](docs/README.md) for the full status table.
 
 ## Quick links
 
