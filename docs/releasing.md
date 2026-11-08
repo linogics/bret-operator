@@ -17,7 +17,7 @@ It publishes three things, all for the same version.
    notes, and tell users to apply the CRDs first (see [installation.md](installation.md#upgrading)).
 4. The version you tag is a valid semantic version. Use `-rc.1` suffixes for pre-releases. The
    workflow marks those as pre-releases on GitHub.
-5. The blueprint catalog status in [blueprints/INDEX.md](../blueprints/INDEX.md) matches what you
+5. The check catalog status in [checks/INDEX.md](../checks/INDEX.md) matches what you
    claim in the release notes.
 
 ## Cut the release

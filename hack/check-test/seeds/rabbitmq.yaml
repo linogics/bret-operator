@@ -1,0 +1,72 @@
+# Seed for checks/rabbitmq.yaml. Mount is /var/lib/rabbitmq (uid 999), HOME of the node.
+# Node name must equal the check's RABBITMQ_NODENAME (mnesia is tied to it).
+# Declares durable queue bret.canary, publishes one persistent message, then kill -9 beam so
+# the backup is crash-consistent. The check must recover the message store on boot.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 999:999 /var/lib/rabbitmq"
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/rabbitmq
+  containers:
+    - name: seed
+      image: rabbitmq:3.13-management
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      env:
+        - name: RABBITMQ_NODENAME
+          value: rabbit@localhost
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          rabbitmq-server -detached
+          for i in $(seq 1 120); do
+            rabbitmq-diagnostics -q ping >/dev/null 2>&1 && break
+            sleep 1
+          done
+          rabbitmqctl await_startup --timeout 180
+          rabbitmqadmin -u guest -p guest declare queue name=bret.canary durable=true
+          rabbitmqadmin -u guest -p guest publish exchange=amq.default routing_key=bret.canary \
+              payload=seed-canary-payload-not-secret properties='{"delivery_mode":2}'
+          rabbitmqctl await_startup --timeout 60
+          rabbitmqctl list_queues -q name messages | grep '^bret.canary'
+          sleep 5
+          # Crash-consistent point: kill the Erlang VM without a clean stop.
+          for p in /proc/[0-9]*; do
+            if grep -q beam "$p/cmdline" 2>/dev/null; then kill -9 "${p#/proc/}" || true; fi
+          done
+          sleep 2
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/rabbitmq
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

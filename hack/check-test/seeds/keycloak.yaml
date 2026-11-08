@@ -1,0 +1,154 @@
+# Shell one-liners in block scalars are the content, not prose.
+# yamllint disable rule:line-length
+# Seed for checks/keycloak.yaml. PGDATA is /var/lib/postgresql/data/pgdata, uid 999.
+# Test-only values: keycloak-db and the Keycloak bootstrap admin below.
+# Postgres runs as a native sidecar. Keycloak 26.0 runs in the seed container, creates its
+# schema, then creates realm bret-canary through kcadm. Keycloak is killed -9 after that.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-db
+type: Opaque
+stringData:
+  KC_DB_PASSWORD: seed-keycloak-db-not-secret
+  POSTGRES_PASSWORD: seed-keycloak-db-not-secret
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 999:999 /var/lib/postgresql/data"
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+    - name: initdb
+      image: postgres:17.12
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+      command:
+        - "initdb"
+        - "-D"
+        - "/var/lib/postgresql/data/pgdata"
+        - "-U"
+        - "postgres"
+        - "--auth=trust"
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+    - name: postgres
+      image: postgres:17.12
+      restartPolicy: Always
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      command:
+        - "postgres"
+        - "-D"
+        - "/var/lib/postgresql/data/pgdata"
+        - "-c"
+        - "listen_addresses=127.0.0.1"
+      startupProbe:
+        exec:
+          command:
+            - "pg_isready"
+            - "-h"
+            - "127.0.0.1"
+        periodSeconds: 2
+        failureThreshold: 90
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+    - name: create-db
+      image: postgres:17.12
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      command:
+        - psql
+        - -h
+        - 127.0.0.1
+        - -U
+        - postgres
+        - -v
+        - ON_ERROR_STOP=1
+        - -c
+        - "create role keycloak login password 'seed-keycloak-db-not-secret'"
+        - -c
+        - "create database keycloak owner keycloak"
+  containers:
+    - name: seed
+      image: quay.io/keycloak/keycloak:26.0
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      envFrom:
+        - secretRef:
+            name: keycloak-db
+      env:
+        - name: HOME
+          value: /tmp
+        - name: KC_DB
+          value: postgres
+        - name: KC_DB_URL
+          value: jdbc:postgresql://127.0.0.1:5432/keycloak
+        - name: KC_DB_USERNAME
+          value: keycloak
+        - name: KEYCLOAK_ADMIN
+          value: seed-admin-not-secret
+        - name: KEYCLOAK_ADMIN_PASSWORD
+          value: seed-admin-password-not-secret
+      command:
+        - /bin/bash
+        - -c
+        - |
+          set -eu
+          /opt/keycloak/bin/kc.sh start --http-enabled=true --hostname-strict=false >/tmp/seed-kc.log 2>&1 &
+          pid=$!
+          ok=0
+          for i in $(seq 1 170); do
+            if /opt/keycloak/bin/kcadm.sh config credentials --server http://127.0.0.1:8080 --realm master --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD" >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ok" = 1
+          /opt/keycloak/bin/kcadm.sh create realms -s realm=bret-canary -s enabled=true
+          /opt/keycloak/bin/kcadm.sh get realms/bret-canary --fields realm
+          sync
+          # Crash-consistent point for Keycloak. Postgres is stopped by kubelet at pod end.
+          kill -9 "$pid"
+          sleep 2
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

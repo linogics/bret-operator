@@ -1,0 +1,66 @@
+# TESTED: round trip PASS, negative test FAIL as expected.
+# Restore check for uptime-kuma 1.23 with SQLite (/app/data/kuma.db). One PVC.
+# Canary contract: monitor named bret-canary exists in kuma.db, seeded before the backup.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreCheck
+metadata:
+  name: uptime-kuma
+  namespace: default
+spec:
+  restoreMount: /app/data
+
+  initContainers:
+  # The restored mount root comes back owned by root. Uptime Kuma runs as node (1000) and writes
+  # its DB journal there, so an init container with no securityContext (root) fixes it.
+    - name: data-perms
+      image: busybox:1.37
+      command:
+        - /bin/sh
+        - -c
+        - chown 1000:1000 /app/data
+
+  containers:
+    - name: check
+      image: louislam/uptime-kuma:1.23.15
+      securityContext:
+        runAsUser: 1000
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          # Read-only DB check first (uses the sqlite3 module shipped in the app image).
+          cat > /tmp/kuma-db.js <<'JS'
+          const sqlite3 = require('/app/node_modules/@louislam/sqlite3');
+          const db = new sqlite3.Database('/app/data/kuma.db', sqlite3.OPEN_READONLY);
+          db.get('pragma integrity_check', (e, r) => {
+            if (e || r.integrity_check !== 'ok') {
+              console.error('integrity failed', e);
+              process.exit(1);
+            }
+          });
+          db.get("select count(*) as n from monitor where name = 'bret-canary'", (e, r) => {
+            if (e || r.n !== 1) {
+              console.error('canary monitor missing', e);
+              process.exit(1);
+            }
+            console.log('kuma db ok');
+          });
+          JS
+          node /tmp/kuma-db.js
+
+          # App boots on the restored DB and serves its entry page.
+          cd /app
+          node server/server.js >/tmp/kuma.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+
+          # Wait for the entry page (up to 120 s).
+          for i in $(seq 1 120); do
+            curl -fsS http://127.0.0.1:3001/api/entry-page >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3001/api/entry-page | grep -q 'type'
+
+  volumes: []

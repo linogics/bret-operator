@@ -1,0 +1,178 @@
+# Shell one-liners in block scalars are the content, not prose.
+# yamllint disable rule:line-length
+# Seed for checks/wordpress.yaml. Two PVCs named by the restoredVolumes keys: html and mysql.
+# html is /var/www/html (uid 33). mysql is /var/lib/mysql (uid 999, the PVC root).
+# Test-only values: the wordpress-db Secret and the WordPress admin password below.
+# MariaDB runs as a native sidecar. WordPress is installed with wp-load.php, then the canary
+# post and the uploaded canary file are written, then the sidecar is stopped at pod end.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wordpress-db
+type: Opaque
+stringData:
+  WORDPRESS_DB_USER: wordpress
+  WORDPRESS_DB_PASSWORD: seed-wordpress-db-not-secret
+  WORDPRESS_DB_NAME: wordpress
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: html
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: chown-html
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 33:33 /var/www/html"
+      volumeMounts:
+        - name: html
+          mountPath: /var/www/html
+    - name: chown-mysql
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 999:999 /var/lib/mysql"
+      volumeMounts:
+        - name: mysql
+          mountPath: /var/lib/mysql
+    - name: install-db
+      image: mariadb:11.4
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      command:
+        - mariadb-install-db
+        - --user=mysql
+        - --datadir=/var/lib/mysql
+        - --skip-test-db
+        - --auth-root-authentication-method=normal
+      volumeMounts:
+        - name: mysql
+          mountPath: /var/lib/mysql
+    - name: mariadb
+      image: mariadb:11.4
+      restartPolicy: Always
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      command:
+        - mariadbd
+        - --user=mysql
+        - --datadir=/var/lib/mysql
+        - --bind-address=127.0.0.1
+        - --port=3306
+      startupProbe:
+        exec:
+          command:
+            - "mariadb-admin"
+            - "--host=127.0.0.1"
+            - "ping"
+        periodSeconds: 2
+        failureThreshold: 90
+      volumeMounts:
+        - name: mysql
+          mountPath: /var/lib/mysql
+    - name: create-db
+      image: mariadb:11.4
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      envFrom:
+        - secretRef:
+            name: wordpress-db
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          mariadb -h 127.0.0.1 -P 3306 -u root -e "create database $WORDPRESS_DB_NAME; create user '$WORDPRESS_DB_USER'@'%' identified by '$WORDPRESS_DB_PASSWORD'; grant all on $WORDPRESS_DB_NAME.* to '$WORDPRESS_DB_USER'@'%'; flush privileges"
+  containers:
+    - name: seed
+      image: wordpress:6.6-php8.3-apache
+      securityContext:
+        runAsUser: 33
+        runAsGroup: 33
+      envFrom:
+        - secretRef:
+            name: wordpress-db
+      env:
+        - name: WORDPRESS_DB_HOST
+          value: 127.0.0.1
+        - name: WP_ADMIN_PASS
+          value: seed-wordpress-admin-not-secret
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          cp -a /usr/src/wordpress/. /var/www/html/
+          cp /usr/src/wordpress/wp-config-docker.php /var/www/html/wp-config.php
+          mkdir -p /var/www/html/wp-content/uploads
+          printf '%s' 'seed-canary-payload-not-secret' > /var/www/html/wp-content/uploads/bret-canary.txt
+          sha=$(sha256sum /var/www/html/wp-content/uploads/bret-canary.txt | cut -d ' ' -f 1)
+          cat > /tmp/install.php <<'PHP'
+          <?php
+          $_SERVER['HTTP_HOST'] = '127.0.0.1';
+          $_SERVER['SERVER_NAME'] = '127.0.0.1';
+          $_SERVER['REQUEST_METHOD'] = 'GET';
+          $_SERVER['REQUEST_URI'] = '/';
+          define('WP_INSTALLING', true);
+          require '/var/www/html/wp-load.php';
+          require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+          $r = wp_install('Bret Canary', 'bret', 'bret@example.invalid', true, '', getenv('WP_ADMIN_PASS'));
+          if (is_wp_error($r)) { fwrite(STDERR, $r->get_error_message() . "\n"); exit(1); }
+          $id = wp_insert_post(array(
+              'post_title' => 'bret-canary',
+              'post_name' => 'bret-canary',
+              'post_content' => getenv('CANARY_SHA'),
+              'post_status' => 'publish',
+              'post_author' => 1,
+          ), true);
+          if (is_wp_error($id)) { fwrite(STDERR, $id->get_error_message() . "\n"); exit(1); }
+          echo "canary post $id\n";
+          PHP
+          CANARY_SHA="$sha" php /tmp/install.php
+          sync
+      volumeMounts:
+        - name: html
+          mountPath: /var/www/html
+  volumes:
+    - name: html
+      persistentVolumeClaim:
+        claimName: html
+    - name: mysql
+      persistentVolumeClaim:
+        claimName: mysql

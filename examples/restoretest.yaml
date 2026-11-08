@@ -1,5 +1,5 @@
 # RestoreTest: test the newest orders-db backup every night, and after each new backup.
-# Blueprint: examples/restoreblueprint-minimal.yaml (or your own).
+# Check: examples/restorecheck-minimal.yaml (or your own).
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
@@ -10,7 +10,7 @@ spec:
   backupSelector:
     labels:
       app.kubernetes.io/name: orders-db
-  blueprintRef:
+  restoreCheckRef:
     name: minimal
   target:
     size: 20Gi                  # required in v1: scratch volume size for each run

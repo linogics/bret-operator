@@ -74,7 +74,7 @@ func volsyncDestination(t *testing.T, c client.Client, restore *restorev1alpha1.
 func TestVolSyncRestoreWaitsOnLatestImage(t *testing.T) {
 	ctx := context.Background()
 	restore := volsyncTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource(), volsyncSecret())
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), volsyncSource(), volsyncSecret())
 	key := client.ObjectKeyFromObject(restore)
 
 	reconcileToSizing(t, r, key) // Pending, then RD and PVC created
@@ -118,7 +118,7 @@ func TestVolSyncRestoreWaitsOnLatestImage(t *testing.T) {
 
 func TestVolSyncRestoreWaitsForSource(t *testing.T) {
 	restore := volsyncTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+	c, r := fakeRestoreClient(t, restore, newTestCheck())
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 
@@ -133,7 +133,7 @@ func TestVolSyncRestoreWaitsForSource(t *testing.T) {
 
 func TestVolSyncRestoreIsRouted(t *testing.T) {
 	restore := volsyncTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource(), volsyncSecret())
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), volsyncSource(), volsyncSecret())
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 
@@ -145,7 +145,7 @@ func TestVolSyncRestoreIsRouted(t *testing.T) {
 func TestVolSyncRestoreSizeUnknownFails(t *testing.T) {
 	restore := volsyncTestRestore()
 	restore.Spec.Target.Size = nil
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource(), volsyncSecret()) // source PVC is missing
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), volsyncSource(), volsyncSecret()) // source PVC is missing
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 	assertSizeFailure(t, c, restore, restorev1alpha1.ReasonSizeUnknown)

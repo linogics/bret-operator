@@ -1,0 +1,111 @@
+# Seed for checks/vaultwarden.yaml. Mount is /data, owned by uid 65534 (nobody, the image user).
+# Init "migrate" starts vaultwarden once so it creates and migrates db.sqlite3, then stops it.
+# Main "seed" inserts the canary user bret-canary@example.invalid into users and exits 0.
+# Nothing else runs against the DB when the seed writes, so the copy is consistent.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 65534:65534 /data"
+      volumeMounts:
+        - name: data
+          mountPath: /data
+    - name: migrate
+      image: vaultwarden/server:1.32.0
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+      env:
+        - name: ROCKET_ADDRESS
+          value: 127.0.0.1
+        - name: ROCKET_PORT
+          value: "8080"
+      command:
+        - /bin/sh
+        - -c
+        - |
+          /vaultwarden >/tmp/seed-vw.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 120); do
+            curl -fs -o /dev/null http://127.0.0.1:8080/alive && break
+            sleep 1
+          done
+          curl -fs -o /dev/null http://127.0.0.1:8080/alive || exit 1
+          kill "$pid"
+          wait "$pid" 2>/dev/null
+          test -s /data/db.sqlite3 || exit 1
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  containers:
+    - name: seed
+      image: python:3.12-slim-bookworm
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+      command:
+        - python3
+        - -c
+        - |
+          import sqlite3
+          import time
+          import uuid
+
+          conn = sqlite3.connect("/data/db.sqlite3")
+          now = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+          known = {
+              "uuid": str(uuid.uuid4()),
+              "enabled": 1,
+              "created_at": now,
+              "updated_at": now,
+              "email": "bret-canary@example.invalid",
+              "name": "bret-canary",
+              "password_hash": b"seed-hash",
+              "salt": b"seed-salt",
+              "password_iterations": 600000,
+              "akey": "seed-akey",
+              "security_stamp": str(uuid.uuid4()),
+              "client_kdf_type": 0,
+              "client_kdf_iter": 600000,
+              "login_verify_count": 0,
+          }
+          row = {}
+          for cid, name, typ, notnull, dflt, pk in conn.execute("pragma table_info(users)"):
+              if name in known:
+                  row[name] = known[name]
+              elif notnull and dflt is None and not pk:
+                  row[name] = b"" if "BLOB" in typ.upper() else (0 if "INT" in typ.upper() else "")
+          cols = ", ".join(row)
+          marks = ", ".join("?" for _ in row)
+          conn.execute(f"insert into users ({cols}) values ({marks})", list(row.values()))
+          conn.commit()
+          conn.close()
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

@@ -8,7 +8,7 @@ controllers exist (see the status table in [README.md](README.md)).
 
 | Requirement | Version | Why |
 |---|---|---|
-| Kubernetes | 1.29 or newer | Native sidecars in blueprints (`initContainers` with `restartPolicy: Always`). |
+| Kubernetes | 1.29 or newer | Native sidecars in checks (`initContainers` with `restartPolicy: Always`). |
 | Helm | 3.14 or newer (the release is tested with 3.22.1) | Installs the chart. |
 | CSI driver with snapshot support | any | `copyMethod: Snapshot` needs a `VolumeSnapshotClass`. |
 | Backup tool | Velero 1.18, VolSync 0.17, or Kopiur 0.10 (alpha) | The operator drives its restore objects. |
@@ -45,7 +45,7 @@ kubectl get crd | grep bret.linogics.io
 ```
 
 Expected: the deployment is `1/1 Available`, and three CRDs are listed:
-`restoreblueprints`, `restores`, `restoretests`.
+`restorechecks`, `restores`, `restoretests`.
 
 ### Values you will likely change
 
@@ -140,11 +140,11 @@ helm uninstall bret-operator -n bret-operator-system
 ```
 
 Helm leaves the CRDs and any custom resources in place. Remove them only if you no longer
-need your `Restore`, `RestoreTest` and `RestoreBlueprint` objects:
+need your `Restore`, `RestoreTest` and `RestoreCheck` objects:
 
 ```bash
-kubectl delete restoretests,restores,restoreblueprints --all -A
-kubectl delete crd restores.bret.linogics.io restoretests.bret.linogics.io restoreblueprints.bret.linogics.io
+kubectl delete restoretests,restores,restorechecks --all -A
+kubectl delete crd restores.bret.linogics.io restoretests.bret.linogics.io restorechecks.bret.linogics.io
 ```
 
 Deleting a CRD deletes every object of that kind. Back up the objects first if you keep them.

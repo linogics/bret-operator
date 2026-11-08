@@ -13,13 +13,13 @@ import (
 
 const (
 	restoreLabel   = "bret.linogics.io/restore"
-	blueprintLabel = "bret.linogics.io/blueprint"
+	checkLabel     = "bret.linogics.io/check"
 	restoredVolume = "restored-data"
 )
 
 var nonDNSLabelChars = regexp.MustCompile(`[^a-z0-9-]`)
 
-// dnsLabel mirrors dns() in hack/blueprint-test/render.py, so names match the rendered test pods.
+// dnsLabel mirrors dns() in hack/check-test/render.py, so names match the rendered test pods.
 func dnsLabel(s string) string {
 	s = nonDNSLabelChars.ReplaceAllString(strings.ToLower(s), "-")
 	s = strings.Trim(s, "-")
@@ -31,19 +31,19 @@ func dnsLabel(s string) string {
 	return s
 }
 
-// validateBlueprint rejects blueprints that this round cannot run.
-func validateBlueprint(bp *restorev1alpha1.RestoreBlueprint) error {
+// validateCheck rejects checks that this round cannot run.
+func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
 	if bp.Spec.RestoreMount == "" && len(bp.Spec.RestoredVolumes) == 0 {
-		return fmt.Errorf("blueprint %s: restoreMount or restoredVolumes is required", bp.Name)
+		return fmt.Errorf("check %s: restoreMount or restoredVolumes is required", bp.Name)
 	}
 
 	return nil
 }
 
-// validateRestoredVolumes rejects blueprints with more than one restored volume: providers restore one PVC.
-func validateRestoredVolumes(bp *restorev1alpha1.RestoreBlueprint) error {
+// validateRestoredVolumes rejects checks with more than one restored volume: providers restore one PVC.
+func validateRestoredVolumes(bp *restorev1alpha1.RestoreCheck) error {
 	if len(bp.Spec.RestoredVolumes) > 1 {
-		return fmt.Errorf("blueprint %s: only one restoredVolumes entry is supported, got %d", bp.Name, len(bp.Spec.RestoredVolumes))
+		return fmt.Errorf("check %s: only one restoredVolumes entry is supported, got %d", bp.Name, len(bp.Spec.RestoredVolumes))
 	}
 
 	return nil
@@ -54,15 +54,15 @@ func checkPodName(restore *restorev1alpha1.Restore) string {
 	return restore.Name + "-check"
 }
 
-// buildCheckPod renders the check pod for one attempt, the same way hack/blueprint-test/render.py does.
+// buildCheckPod renders the check pod for one attempt, the same way hack/check-test/render.py does.
 // restoredClaim is mounted at restoreMount; scratchClaims maps scratch volume names to their PVC names.
 func buildCheckPod(
 	restore *restorev1alpha1.Restore,
-	bp *restorev1alpha1.RestoreBlueprint,
+	bp *restorev1alpha1.RestoreCheck,
 	restoredClaim string,
 	scratchClaims map[string]string,
 ) (*corev1.Pod, error) {
-	err := validateBlueprint(bp)
+	err := validateCheck(bp)
 	if err == nil {
 		err = validateRestoredVolumes(bp)
 	}
@@ -99,8 +99,8 @@ func buildCheckPod(
 			Name:      checkPodName(restore),
 			Namespace: restore.Namespace,
 			Labels: map[string]string{
-				restoreLabel:   restore.Name,
-				blueprintLabel: dnsLabel(bp.Name),
+				restoreLabel: restore.Name,
+				checkLabel:   dnsLabel(bp.Name),
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -120,7 +120,7 @@ func buildCheckPod(
 	}, nil
 }
 
-// withMounts returns copies of containers with mounts appended, leaving the blueprint untouched.
+// withMounts returns copies of containers with mounts appended, leaving the check untouched.
 func withMounts(containers []corev1.Container, mounts []corev1.VolumeMount) []corev1.Container {
 	out := make([]corev1.Container, 0, len(containers))
 

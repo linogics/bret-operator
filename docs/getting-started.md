@@ -40,7 +40,7 @@ Check it:
 
 ```bash
 kubectl -n bret-operator-system get deploy
-kubectl get crd restores.bret.linogics.io restoretests.bret.linogics.io restoreblueprints.bret.linogics.io
+kubectl get crd restores.bret.linogics.io restoretests.bret.linogics.io restorechecks.bret.linogics.io
 ```
 
 The deployment should show `1/1` ready. The three CRDs should be listed.
@@ -79,16 +79,16 @@ kubectl -n restore-test get pvc orders-db-restored
 
 ### 3b. Write the check
 
-The smallest check is in [examples/restoreblueprint-minimal.yaml](../examples/restoreblueprint-minimal.yaml).
+The smallest check is in [examples/restorecheck-minimal.yaml](../examples/restorecheck-minimal.yaml).
 It reads one file and checks its hash. For your application, write a check that reads your
-data, as described in [blueprints.md](blueprints.md).
+data, as described in [checks.md](checks.md).
 
 ### 3c. Run the check
 
 Run the check against the restored PVC:
 
 ```bash
-hack/blueprint-test/check.sh examples/restoreblueprint-minimal.yaml restore-test check-minimal data=orders-db-restored
+hack/check-test/check.sh examples/restorecheck-minimal.yaml restore-test check-minimal data=orders-db-restored
 ```
 
 The last line should be:
@@ -98,29 +98,29 @@ VERDICT: PASS (check-minimal)
 ```
 
 If it says `VERDICT: FAIL`, read the logs printed above it. Common causes are in
-[testing-blueprints.md](testing-blueprints.md#reading-a-failure).
+[testing-checks.md](testing-checks.md#reading-a-failure).
 
 ### 3d. Prove the check can fail
 
 Change the check so it expects the wrong value, run it again, and confirm `VERDICT: FAIL`. A
 check that always passes is not a check. Undo the change afterwards.
 
-## Step 4: Register the blueprint with the operator
+## Step 4: Register the check with the operator
 
-Apply the blueprint in the namespace of your restore tests:
+Apply the check in the namespace of your restore tests:
 
 ```bash
-kubectl apply -f examples/restoreblueprint-minimal.yaml
-kubectl -n data get restoreblueprints
+kubectl apply -f examples/restorecheck-minimal.yaml
+kubectl -n data get restorechecks
 ```
 
-The `RestoreBlueprint` object stores the check. The operator reads it when a test runs. Only
-cluster admins should create blueprints, because a blueprint runs a pod with your chosen image.
+The `RestoreCheck` object stores the check. The operator reads it when a test runs. Only
+cluster admins should create checks, because a check runs a pod with your chosen image.
 
 ## Step 5: Create a restore test with a schedule
 
 Copy [examples/restoretest.yaml](../examples/restoretest.yaml), then set `provider`, the backup
-label selector and `blueprintRef` to your values:
+label selector and `restoreCheckRef` to your values:
 
 ```bash
 kubectl apply -f examples/restoretest.yaml
@@ -161,7 +161,7 @@ in the namespace. Read the pod logs first, then delete them.
 
 ```bash
 kubectl delete restoretest orders-db-nightly -n data --ignore-not-found
-kubectl delete -f examples/restoreblueprint-minimal.yaml --ignore-not-found
+kubectl delete -f examples/restorecheck-minimal.yaml --ignore-not-found
 kubectl delete namespace restore-test --ignore-not-found
 helm uninstall bret-operator -n bret-operator-system
 ```
@@ -171,7 +171,7 @@ removing them.
 
 ## Next steps
 
-- Write a check for your own app: [blueprints.md](blueprints.md).
+- Write a check for your own app: [checks.md](checks.md).
 - Set up schedules, retries and keep-on-failure: [restoretest-guide.md](restoretest-guide.md).
 - Apps with a database and files: [data-and-database.md](data-and-database.md).
 - Something broke: [troubleshooting.md](troubleshooting.md).

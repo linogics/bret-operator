@@ -22,9 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the bret-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-  - restoreblueprint_admin_role.yaml
-  - restoreblueprint_editor_role.yaml
-  - restoreblueprint_viewer_role.yaml
+  - restorecheck_admin_role.yaml
+  - restorecheck_editor_role.yaml
+  - restorecheck_viewer_role.yaml
   - restoretest_admin_role.yaml
   - restoretest_editor_role.yaml
   - restoretest_viewer_role.yaml

@@ -1,0 +1,43 @@
+# TESTED: round trip PASS, negative test FAIL as expected.
+# Restore check for mariadb 11.4. Database-only, one PVC.
+# Canary contract: table bret.canary(id int primary key, payload text, sha256 char(64)),
+# row id=1 with sha256 = sha2(payload, 256), seeded before the backup.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreCheck
+metadata:
+  name: mariadb
+  namespace: default
+spec:
+  restoreMount: /var/lib/mysql
+
+  initContainers: []
+
+  containers:
+    - name: check
+      image: mariadb:11.4
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          # Start mariadbd on the restored datadir, socket only.
+          mariadbd --user=mysql --datadir=/var/lib/mysql --socket=/tmp/mariadb.sock \
+              --skip-networking >/tmp/mariadbd.log 2>&1 &
+          for i in $(seq 1 150); do
+            mariadb-admin -S /tmp/mariadb.sock -u root ping >/dev/null 2>&1 && break
+            sleep 1
+          done
+          trap 'mariadb-admin -S /tmp/mariadb.sock -u root shutdown || true' EXIT
+
+          # Table-level check across all databases.
+          mariadb-check -S /tmp/mariadb.sock -u root --all-databases --check
+
+          # Canary row: payload must still hash to the stored sha256.
+          sql="select count(*) from bret.canary where id = 1 and sha2(payload, 256) = sha256"
+          test "$(mariadb -S /tmp/mariadb.sock -u root -N -e "$sql")" = 1
+
+  volumes: []

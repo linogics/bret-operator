@@ -22,7 +22,7 @@ Symptoms seen in the apps:
 - Pi-hole: lists in the DB that are not applied, or missing DNS records.
 - n8n: credentials that cannot be decrypted (key mismatch, not drift).
 
-(Source: `blueprints/INDEX.md`, "Apps that have data and a database".)
+(Source: `checks/INDEX.md`, "Apps that have data and a database".)
 
 ## Rules
 
@@ -58,9 +58,9 @@ Files plus Postgres, two PVCs.
 - Restore: both PVCs in one attempt, from one backup selector.
 - Repair if drift happens: `occ files:scan` can fix listings but may drop or duplicate
   entries. (Index.)
-- Check (`blueprints/nextcloud.yaml`): `occ status` shows installed, `occ integrity:check-core`
+- Check (`checks/nextcloud.yaml`): `occ status` shows installed, `occ integrity:check-core`
   passes, and the canary `oc_filecache.size` equals the file size on disk.
-- Blueprint uses a native sidecar for Postgres (design delta). The check rewrites
+- Check uses a native sidecar for Postgres (design delta). The check rewrites
   `dbhost` to `127.0.0.1` in `config.php`.
 - Open issue: `pdo_pgsql` in the image is assumed, not verified.
 
@@ -87,6 +87,6 @@ Files plus MariaDB, two PVCs.
 
 | Item | State |
 |---|---|
-| `restoredVolumes` in `RestoreBlueprint` | design delta, proposed |
+| `restoredVolumes` in `RestoreCheck` | design delta, proposed |
 | Group key tying several `Restore` objects to one backup point | design delta, proposed, not specified |
 | Native-sidecar init containers | design delta, needs a decision |

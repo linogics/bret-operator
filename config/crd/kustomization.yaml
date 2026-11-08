@@ -4,7 +4,7 @@
 resources:
   - bases/bret.linogics.io_restores.yaml
   - bases/bret.linogics.io_restoretests.yaml
-  - bases/bret.linogics.io_restoreblueprints.yaml
+  - bases/bret.linogics.io_restorechecks.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

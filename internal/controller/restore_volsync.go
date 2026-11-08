@@ -19,7 +19,7 @@ import (
 // +kubebuilder:rbac:groups=volsync.backube,resources=replicationdestinations,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 
-// volsyncMoverUID is the mover user of the restic restore when the blueprint sets none. The default mover fails with a setgid error on the scratch volume.
+// volsyncMoverUID is the mover user of the restic restore when the check sets none. The default mover fails with a setgid error on the scratch volume.
 const volsyncMoverUID = int64(65534)
 
 var errRepositoryMissing = errors.New(reasonRepositoryMissing)
@@ -102,7 +102,7 @@ func (r *RestoreReconciler) volsyncRepository(ctx context.Context, restore *rest
 func (r *RestoreReconciler) reconcileVolSync(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
-	bp *restorev1alpha1.RestoreBlueprint,
+	bp *restorev1alpha1.RestoreCheck,
 	size resource.Quantity,
 	uid *int64,
 ) (ctrl.Result, error) {

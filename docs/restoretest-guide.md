@@ -22,7 +22,7 @@ spec:
   backupSelector:
     labels:
       app.kubernetes.io/name: orders-db
-  blueprintRef:
+  restoreCheckRef:
     name: minimal
   target:
     size: 20Gi
@@ -57,10 +57,10 @@ Set at least one. The API rejects an empty selector.
 
 Backups are looked up where the provider keeps them. For Velero that is the Velero namespace.
 
-### blueprintRef
+### restoreCheckRef
 
-`name` of a `RestoreBlueprint` in the same namespace as the `RestoreTest`. The blueprint is the
-check. See [blueprints.md](blueprints.md).
+`name` of a `RestoreCheck` in the same namespace as the `RestoreTest`. The check is the
+check. See [checks.md](checks.md).
 
 ### target
 
@@ -161,7 +161,7 @@ spec:
   backupSelector:
     labels:
       velero.io/schedule-name: nightly-data
-  blueprintRef:
+  restoreCheckRef:
     name: orders-db-check
   target:
     size: 20Gi
@@ -180,7 +180,7 @@ spec:
   provider: volsync
   backupSelector:
     name: orders-db-backup
-  blueprintRef:
+  restoreCheckRef:
     name: orders-db-check
   target:
     size: 20Gi
@@ -197,7 +197,7 @@ spec:
   provider: kopiur
   backupSelector:
     name: orders-db-data-1
-  blueprintRef:
+  restoreCheckRef:
     name: orders-db-check
   target:
     size: 20Gi

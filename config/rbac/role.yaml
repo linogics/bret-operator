@@ -40,7 +40,7 @@ rules:
 - apiGroups:
   - bret.linogics.io
   resources:
-  - restoreblueprints
+  - restorechecks
   - restores
   - restoretests
   verbs:
@@ -54,7 +54,7 @@ rules:
 - apiGroups:
   - bret.linogics.io
   resources:
-  - restoreblueprints/finalizers
+  - restorechecks/finalizers
   - restores/finalizers
   - restoretests/finalizers
   verbs:
@@ -62,7 +62,7 @@ rules:
 - apiGroups:
   - bret.linogics.io
   resources:
-  - restoreblueprints/status
+  - restorechecks/status
   - restores/status
   - restoretests/status
   verbs:

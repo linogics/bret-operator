@@ -11,17 +11,17 @@ Read this first.
 
 | Part | Status |
 |---|---|
-| CRDs `Restore`, `RestoreTest`, `RestoreBlueprint` (schema, validation, printer columns) | Implemented. Generated from `api/v1alpha1/`. |
+| CRDs `Restore`, `RestoreTest`, `RestoreCheck` (schema, validation, printer columns) | Implemented. Generated from `api/v1alpha1/`. |
 | Helm chart and plain manifests | Implemented. See [installation.md](installation.md). |
 | Restore controller (Kopiur provider) | Implemented: scratch PVC, Kopiur restore, check pod, window, cleanup, retention, status, Events, metrics. Verified on a kind cluster (success and failure). |
 | Velero and VolSync providers | Implemented: Velero `Restore` and VolSync `ReplicationDestination` (restic mover). Each provider is enabled in the Helm chart with `providers.<name>.enabled`. A disabled provider reports `ProviderUnsupported`. |
 | Scratch volume size | Implemented: `target.size`, or the size derived from the source, with `target.autoExpand`. Reasons `SizeUnknown` and `InsufficientCapacity`. |
-| `restoredVolumes` | Implemented for one entry per blueprint (`name`, `mountPath`, `sourcePVC`). More than one entry fails with `ProviderUnsupported` in v1. |
+| `restoredVolumes` | Implemented for one entry per check (`name`, `mountPath`, `sourcePVC`). More than one entry fails with `ProviderUnsupported` in v1. |
 | RestoreTest controller | Implemented: cron, afterBackup, manual trigger, overlap policy, retries. Unit tests only. Not yet run end to end on a cluster. |
 | `watchNamespaces` (chart) | Implemented: limits the controller cache and namespaced Roles to a list of namespaces. |
 | Metrics `bret_restore_*`, `bret_restoretest_*` | Implemented. Not yet checked by a Prometheus scrape. |
-| `RestoreBlueprint` check files in `blueprints/` | Drafts. Being tested by hand with the harness in [testing-blueprints.md](testing-blueprints.md). Each app's result is in [blueprints/INDEX.md](../blueprints/INDEX.md). |
-| Blueprint check by hand (`hack/blueprint-test/`) | Works. Restores a backup with Kopiur and runs a blueprint against it. |
+| `RestoreCheck` check files in `checks/` | Drafts. Being tested by hand with the harness in [testing-checks.md](testing-checks.md). Each app's result is in [checks/INDEX.md](../checks/INDEX.md). |
+| Check check by hand (`hack/check-test/`) | Works. Restores a backup with Kopiur and runs a check against it. |
 
 Not in v1: `retainedFor` (a TTL for kept resources). Kept resources are removed by hand. Anything
 still marked **planned** in these docs is not in the code yet. The design is in
@@ -33,16 +33,16 @@ still marked **planned** in these docs is not in the code yet. The design is in
 2. [getting-started.md](getting-started.md): tutorial from an empty cluster to a first check.
 3. [installation.md](installation.md): install and upgrade the operator (Helm or manifests).
 4. [backup-providers.md](backup-providers.md): set up Velero, VolSync or Kopiur so restores work.
-5. [blueprints.md](blueprints.md): write a `RestoreBlueprint` check.
+5. [checks.md](checks.md): write a `RestoreCheck` check.
 6. [restoretest-guide.md](restoretest-guide.md): schedule and tune restore tests.
-7. [testing-blueprints.md](testing-blueprints.md): run a check by hand before the operator does it.
+7. [testing-checks.md](testing-checks.md): run a check by hand before the operator does it.
 
 ## Reference
 
 | Document | Content |
 |---|---|
 | [reference/api.md](reference/api.md) | Generated field reference for all three kinds. Do not edit by hand. |
-| [blueprints/INDEX.md](../blueprints/INDEX.md) | Catalog of app blueprints, their volumes, checks and test status. |
+| [checks/INDEX.md](../checks/INDEX.md) | Catalog of app checks, their volumes, checks and test status. |
 | [best-practices.md](best-practices.md) | Rules for backups and restore tests. |
 | [data-and-database.md](data-and-database.md) | Apps that have files and a database. Keeping them in one restore point. |
 | [troubleshooting.md](troubleshooting.md) | Known errors and their fixes, from the kind spike. |

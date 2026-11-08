@@ -2,7 +2,7 @@
 
 bret-operator restores with a backup tool you already run. This page shows the setup that
 the kind spike verified. Each provider needs a backup that the tool can restore, and a
-`RestoreBlueprint` that checks the result.
+`RestoreCheck` that checks the result.
 
 The examples use an S3-compatible endpoint named `s3.example.internal`. Replace it with your
 own. The spike used Versity Gateway as the S3 endpoint, which is open source. MinIO's open
@@ -81,8 +81,8 @@ namespace, so no other namespace of the backup is restored. The operator copies 
 `pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch namespace. The operator waits for `status.phase` to reach `Completed`, `PartiallyFailed` or
 `Failed`.
 
-Blueprints for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap, secret
-or hostPath volumes. A blueprint that does fails with `ProviderUnsupported`.
+Checks for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap, secret
+or hostPath volumes. A check that does fails with `ProviderUnsupported`.
 
 Restored workloads are a trap. Velero restores Deployments and StatefulSets as well, and they
 start and hold the restored RWO volume. Scale them to zero or delete them before the check
@@ -151,9 +151,9 @@ The Secret itself must exist in the `Restore` namespace. Without `spec.restic.re
 Done means `status.lastManualSync` equals the trigger value.
 
 Mover pods use a default non-database UID and cannot read a Postgres data directory
-(`permission denied`). The operator takes the mover UID from the blueprint (annotation
+(`permission denied`). The operator takes the mover UID from the check (annotation
 `bret.linogics.io/mover-uid`, else the first container's `runAsUser`) and uses 65534 when the
-blueprint sets none.
+check sets none.
 
 A VolSync cache volume made by an earlier mover UID causes `permission denied` after the UID
 changes. Delete the cache PVC and let VolSync create a new one.

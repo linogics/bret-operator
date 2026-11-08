@@ -9,7 +9,7 @@
 | Helm | 3.22.1 (CI pins this) | chart lint and package |
 | Docker or nerdctl | any | image build, kind |
 | kind | v0.33 or newer | local clusters |
-| Python 3 with PyYAML | 3.10 or newer | blueprint harness |
+| Python 3 with PyYAML | 3.10 or newer | check harness |
 
 The Makefile downloads its own copies of controller-gen, setup-envtest, golangci-lint,
 kustomize, crd-ref-docs and helm-docs into `bin/`.
@@ -50,7 +50,7 @@ external-snapshotter v8.7.0. Create a `VolumeSnapshotClass` named `csi-hostpath-
 `StorageClass` named `csi-hostpath-sc`.
 
 Install the backup tools you test with. See [backup-providers.md](backup-providers.md). The
-blueprint harness expects an S3-compatible endpoint named `versitygw.storage.svc.cluster.local:7070`
+check harness expects an S3-compatible endpoint named `versitygw.storage.svc.cluster.local:7070`
 with buckets `kopiur`, `velero` and `volsync`. The spike used Versity Gateway with the posix
 backend for this.
 
@@ -67,16 +67,16 @@ Delete the cluster when done:
 kind delete cluster --name bret-spike
 ```
 
-## Blueprint tests
+## Check tests
 
-Blueprint tests need a cluster with Kopiur and the S3 endpoint above. Read
-[testing-blueprints.md](testing-blueprints.md). Run one app:
+Check tests need a cluster with Kopiur and the S3 endpoint above. Read
+[testing-checks.md](testing-checks.md). Run one app:
 
 ```bash
-TIMEOUT=900 bash hack/blueprint-test/roundtrip.sh postgres
+TIMEOUT=900 bash hack/check-test/roundtrip.sh postgres
 ```
 
-Blueprint tests do not run in CI. They need a cluster and several gigabytes of images.
+Check tests do not run in CI. They need a cluster and several gigabytes of images.
 
 ## Layout
 
@@ -88,9 +88,9 @@ Blueprint tests do not run in CI. They need a cluster and several gigabytes of i
 | `config/` | Kustomize bases: CRDs, RBAC, manager, metrics. |
 | `charts/bret-operator/` | Helm chart. RBAC is copied from `config/`. Depends on `charts/bret-operator-crds/`, which holds the CRDs. |
 | `charts/bret-operator-crds/` | Helm chart with the CRDs only. Copied from `config/crd/bases/`. |
-| `blueprints/` | Check drafts for each app. See `blueprints/INDEX.md`. |
-| `examples/` | Minimal blueprint, RestoreTest and Restore examples. |
-| `hack/blueprint-test/` | Blueprint harness and per-app seeds. |
+| `checks/` | Check drafts for each app. See `checks/INDEX.md`. |
+| `examples/` | Minimal check, RestoreTest and Restore examples. |
+| `hack/check-test/` | Check harness and per-app seeds. |
 | `hack/helm/sync_rbac.py` | Copies RBAC rules into the chart. |
 | `docs/` | This documentation. `docs/reference/api.md` is generated. |
 | `docs/superpowers/specs/` | Design document. |

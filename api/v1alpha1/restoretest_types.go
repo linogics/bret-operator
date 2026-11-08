@@ -37,9 +37,9 @@ type BackupSelector struct {
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
-// BlueprintRef names the RestoreBlueprint used for the check.
-type BlueprintRef struct {
-	// Name is the name of the RestoreBlueprint in the same namespace.
+// RestoreCheckRef names the RestoreCheck used for the check.
+type RestoreCheckRef struct {
+	// Name is the name of the RestoreCheck in the same namespace.
 	Name string `json:"name"`
 }
 
@@ -79,8 +79,8 @@ type RestoreTestSpec struct {
 	Provider Provider `json:"provider"`
 	// BackupSelector chooses which backups the restores read from.
 	BackupSelector BackupSelector `json:"backupSelector"`
-	// BlueprintRef names the check to run against each restored volume.
-	BlueprintRef BlueprintRef `json:"blueprintRef"`
+	// RestoreCheckRef names the check to run against each restored volume.
+	RestoreCheckRef RestoreCheckRef `json:"restoreCheckRef"`
 	// Target is the scratch volume each run restores into, with the same meaning as Restore.spec.target.
 	Target RestoreTarget `json:"target,omitempty"`
 	// Triggers defines what starts a run.

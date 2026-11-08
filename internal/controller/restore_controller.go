@@ -21,26 +21,26 @@ import (
 )
 
 const (
-	apiVersionAlpha1      = "v1alpha1"
-	fieldKind             = "kind"
-	readyConditionType    = "Ready"
-	restoreRequeueAfter   = 10 * time.Second
-	blueprintRequeueAfter = 30 * time.Second
-	defaultRestoreWindow  = 45 * time.Minute
+	apiVersionAlpha1     = "v1alpha1"
+	fieldKind            = "kind"
+	readyConditionType   = "Ready"
+	restoreRequeueAfter  = 10 * time.Second
+	checkRequeueAfter    = 30 * time.Second
+	defaultRestoreWindow = 45 * time.Minute
 )
 
 // Event and condition reasons for Restore.
 const (
-	reasonRestoreStarted       = "RestoreStarted"
-	reasonRestoreSucceeded     = "RestoreSucceeded"
-	reasonRestoreFailed        = "RestoreFailed"
-	reasonRestoreCanceled      = "RestoreCanceled"
-	reasonCheckPassed          = "CheckPassed"
-	reasonCheckFailed          = "CheckFailed"
-	reasonProviderUnsupported  = "ProviderUnsupported"
-	reasonBlueprintNotFound    = "BlueprintNotFound"
-	reasonBlueprintUnsupported = "BlueprintUnsupported"
-	reasonRepositoryMissing    = "RepositoryMissing"
+	reasonRestoreStarted      = "RestoreStarted"
+	reasonRestoreSucceeded    = "RestoreSucceeded"
+	reasonRestoreFailed       = "RestoreFailed"
+	reasonRestoreCanceled     = "RestoreCanceled"
+	reasonCheckPassed         = "CheckPassed"
+	reasonCheckFailed         = "CheckFailed"
+	reasonProviderUnsupported = "ProviderUnsupported"
+	reasonCheckNotFound       = "CheckNotFound"
+	reasonCheckUnsupported    = "CheckUnsupported"
+	reasonRepositoryMissing   = "RepositoryMissing"
 )
 
 // cleanupFinalizer makes the Restore remove its provider objects, scratch namespace and PVCs on deletion.
@@ -63,7 +63,7 @@ type RestoreReconciler struct {
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores/finalizers,verbs=update
-// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restorechecks,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=pods;persistentvolumeclaims,verbs=get;list;watch;create;patch;delete
 // +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;patch;delete
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
@@ -134,14 +134,14 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		return ctrl.Result{}, nil
 	}
 
-	bp := &restorev1alpha1.RestoreBlueprint{}
+	bp := &restorev1alpha1.RestoreCheck{}
 
-	key := client.ObjectKey{Namespace: restore.Namespace, Name: restore.Spec.BlueprintRef.Name}
+	key := client.ObjectKey{Namespace: restore.Namespace, Name: restore.Spec.RestoreCheckRef.Name}
 	if err := r.Get(ctx, key, bp); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.block(restore, reasonBlueprintNotFound, fmt.Sprintf("RestoreBlueprint %s not found", key.Name))
+			r.block(restore, reasonCheckNotFound, fmt.Sprintf("RestoreCheck %s not found", key.Name))
 
-			return ctrl.Result{RequeueAfter: blueprintRequeueAfter}, nil
+			return ctrl.Result{RequeueAfter: checkRequeueAfter}, nil
 		}
 
 		return ctrl.Result{}, err
@@ -156,15 +156,15 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		return ctrl.Result{}, nil
 	}
 
-	err = validateBlueprint(bp)
+	err = validateCheck(bp)
 	if err != nil {
-		r.block(restore, reasonBlueprintUnsupported, err.Error())
+		r.block(restore, reasonCheckUnsupported, err.Error())
 
 		return ctrl.Result{}, nil
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
-		if err = validateVeleroBlueprint(bp); err != nil {
+		if err = validateVeleroCheck(bp); err != nil {
 			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
 			r.block(restore, reasonProviderUnsupported, err.Error())
 			recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
@@ -175,7 +175,7 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 
 	uid, err := moverUID(bp)
 	if err != nil {
-		r.block(restore, reasonBlueprintUnsupported, err.Error())
+		r.block(restore, reasonCheckUnsupported, err.Error())
 
 		return ctrl.Result{}, nil
 	}
@@ -199,7 +199,7 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 func (r *RestoreReconciler) progress(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
-	bp *restorev1alpha1.RestoreBlueprint,
+	bp *restorev1alpha1.RestoreCheck,
 	uid *int64,
 ) (ctrl.Result, error) {
 	size, err := r.scratchSize(ctx, restore)
@@ -291,11 +291,11 @@ func (r *RestoreReconciler) scratchSize(ctx context.Context, restore *restorev1a
 	return size, nil
 }
 
-// ensureClaims creates the restored PVC and the blueprint scratch PVCs. It returns the scratch claims by volume name.
+// ensureClaims creates the restored PVC and the check scratch PVCs. It returns the scratch claims by volume name.
 func (r *RestoreReconciler) ensureClaims(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
-	bp *restorev1alpha1.RestoreBlueprint,
+	bp *restorev1alpha1.RestoreCheck,
 	size resource.Quantity,
 ) (map[string]string, error) {
 	if _, err := r.ensure(ctx, restore, restoredPVC(restore, size)); err != nil {
@@ -305,11 +305,11 @@ func (r *RestoreReconciler) ensureClaims(
 	return r.ensureScratchClaims(ctx, restore, bp)
 }
 
-// ensureScratchClaims creates the blueprint scratch PVCs. It returns them by volume name.
+// ensureScratchClaims creates the check scratch PVCs. It returns them by volume name.
 func (r *RestoreReconciler) ensureScratchClaims(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
-	bp *restorev1alpha1.RestoreBlueprint,
+	bp *restorev1alpha1.RestoreCheck,
 ) (map[string]string, error) {
 	claims := make(map[string]string, len(bp.Spec.ScratchVolumes))
 
@@ -330,13 +330,13 @@ func (r *RestoreReconciler) ensureScratchClaims(
 func (r *RestoreReconciler) check(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
-	bp *restorev1alpha1.RestoreBlueprint,
+	bp *restorev1alpha1.RestoreCheck,
 	restoredClaim, namespace string,
 	claims map[string]string,
 ) (ctrl.Result, error) {
 	pod, err := buildCheckPod(restore, bp, restoredClaim, claims)
 	if err != nil {
-		r.block(restore, reasonBlueprintUnsupported, err.Error())
+		r.block(restore, reasonCheckUnsupported, err.Error())
 
 		return ctrl.Result{}, nil
 	}

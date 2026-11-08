@@ -41,10 +41,10 @@ var _ = Describe("RestoreTest Controller", func() {
 						Namespace: testNamespace,
 					},
 					Spec: restorev1alpha1.RestoreTestSpec{
-						Provider:       restorev1alpha1.ProviderVelero,
-						BackupSelector: restorev1alpha1.BackupSelector{Name: testBackupName},
-						BlueprintRef:   restorev1alpha1.BlueprintRef{Name: testCheckName},
-						RestoreWindow:  metav1.Duration{Duration: 45 * time.Minute},
+						Provider:        restorev1alpha1.ProviderVelero,
+						BackupSelector:  restorev1alpha1.BackupSelector{Name: testBackupName},
+						RestoreCheckRef: restorev1alpha1.RestoreCheckRef{Name: testCheckName},
+						RestoreWindow:   metav1.Duration{Duration: 45 * time.Minute},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

@@ -73,12 +73,12 @@ func newRestoreTestObject() *restorev1alpha1.RestoreTest {
 	return &restorev1alpha1.RestoreTest{
 		ObjectMeta: metav1.ObjectMeta{Name: "t1", Namespace: testNamespace},
 		Spec: restorev1alpha1.RestoreTestSpec{
-			Provider:       restorev1alpha1.ProviderKopiur,
-			BackupSelector: restorev1alpha1.BackupSelector{Name: "b1"},
-			BlueprintRef:   restorev1alpha1.BlueprintRef{Name: testApp},
-			Target:         restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
-			RestoreWindow:  metav1.Duration{Duration: 45 * time.Minute},
-			OverlapPolicy:  restorev1alpha1.OverlapPolicySkip,
+			Provider:        restorev1alpha1.ProviderKopiur,
+			BackupSelector:  restorev1alpha1.BackupSelector{Name: "b1"},
+			RestoreCheckRef: restorev1alpha1.RestoreCheckRef{Name: testApp},
+			Target:          restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
+			RestoreWindow:   metav1.Duration{Duration: 45 * time.Minute},
+			OverlapPolicy:   restorev1alpha1.OverlapPolicySkip,
 		},
 	}
 }

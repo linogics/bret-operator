@@ -35,7 +35,7 @@ resources:
   controller: true
   domain: linogics.io
   group: bret
-  kind: RestoreBlueprint
+  kind: RestoreCheck
   path: github.com/linogics/bret-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

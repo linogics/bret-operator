@@ -66,7 +66,7 @@ PostgreSQL 17.12. See [spike-findings.md](spike-findings.md).
 
 - **Cause:** the restored data directory has the wrong mode. A pod `fsGroup` changed it to `2770`.
 - **Fix:** remove `fsGroup` from the database container. Or run a `pgdata-perms` init container
-  that runs `chmod 0700 "$PGDATA"` as the database UID. The Postgres blueprints do this.
+  that runs `chmod 0700 "$PGDATA"` as the database UID. The Postgres checks do this.
 
 ### Postgres: `another server might be running; trying to start server anyway`
 
@@ -98,13 +98,13 @@ PostgreSQL 17.12. See [spike-findings.md](spike-findings.md).
 
 ## Operator
 
-### `kubectl apply` of a `RestoreBlueprint` is rejected: `exactly one of restoreMount or restoredVolumes must be set`
+### `kubectl apply` of a `RestoreCheck` is rejected: `exactly one of restoreMount or restoredVolumes must be set`
 
 - **Cause:** both fields are set, or neither is.
-- **Fix:** keep exactly one. See [blueprints.md](blueprints.md#anatomy).
+- **Fix:** keep exactly one. See [checks.md](checks.md#anatomy).
 
 ### Nothing happens after a `RestoreTest` is created
 
 - **Cause:** the controllers are not implemented yet. See the status table in
   [README.md](README.md).
-- **Fix:** run the check by hand with [testing-blueprints.md](testing-blueprints.md).
+- **Fix:** run the check by hand with [testing-checks.md](testing-checks.md).

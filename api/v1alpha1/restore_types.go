@@ -88,8 +88,8 @@ type RestoreSpec struct {
 	Source RestoreSource `json:"source"`
 	// Target is the scratch volume to restore into.
 	Target RestoreTarget `json:"target"`
-	// BlueprintRef is the RestoreBlueprint that checks the restored data.
-	BlueprintRef BlueprintRef `json:"blueprintRef"`
+	// RestoreCheckRef is the RestoreCheck that checks the restored data.
+	RestoreCheckRef RestoreCheckRef `json:"restoreCheckRef"`
 	// RestoreWindow is the deadline for this attempt, covering the restore, image pulls and the check.
 	// +kubebuilder:default="45m"
 	RestoreWindow metav1.Duration `json:"restoreWindow,omitempty"`

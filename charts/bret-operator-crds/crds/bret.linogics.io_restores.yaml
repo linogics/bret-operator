@@ -54,17 +54,6 @@ spec:
           spec:
             description: Spec is the desired state of the restore.
             properties:
-              blueprintRef:
-                description: BlueprintRef is the RestoreBlueprint that checks the
-                  restored data.
-                properties:
-                  name:
-                    description: Name is the name of the RestoreBlueprint in the same
-                      namespace.
-                    type: string
-                required:
-                - name
-                type: object
               keepOnFailure:
                 default: false
                 description: KeepOnFailure keeps the check pod, the scratch volume
@@ -77,6 +66,17 @@ spec:
                 - volsync
                 - kopiur
                 type: string
+              restoreCheckRef:
+                description: RestoreCheckRef is the RestoreCheck that checks the restored
+                  data.
+                properties:
+                  name:
+                    description: Name is the name of the RestoreCheck in the same
+                      namespace.
+                    type: string
+                required:
+                - name
+                type: object
               restoreWindow:
                 default: 45m
                 description: RestoreWindow is the deadline for this attempt, covering
@@ -151,8 +151,8 @@ spec:
                     type: string
                 type: object
             required:
-            - blueprintRef
             - provider
+            - restoreCheckRef
             - source
             - target
             type: object

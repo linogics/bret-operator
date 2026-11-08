@@ -39,7 +39,7 @@ const (
 var (
 	veleroRestoreGVK   = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "Restore"}
 	downloadRequestGVK = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "DownloadRequest"}
-	blueprintGVK       = schema.GroupVersionKind{Group: "bret.linogics.io", Version: apiVersionAlpha1, Kind: "RestoreBlueprint"}
+	checkGVK           = schema.GroupVersionKind{Group: "bret.linogics.io", Version: apiVersionAlpha1, Kind: "RestoreCheck"}
 
 	// Variables so tests can shorten them.
 	veleroDownloadWait = 30 * time.Second
@@ -94,32 +94,32 @@ func (r *RestoreReconciler) veleroRestoreObject(restore *restorev1alpha1.Restore
 	return obj
 }
 
-// validateVeleroBlueprint rejects blueprints that point at objects of the Restore namespace,
+// validateVeleroCheck rejects checks that point at objects of the Restore namespace,
 // because the Velero check pod runs in the scratch namespace.
-func validateVeleroBlueprint(bp *restorev1alpha1.RestoreBlueprint) error {
+func validateVeleroCheck(bp *restorev1alpha1.RestoreCheck) error {
 	switch {
 	case bp.Spec.ServiceAccountName != "":
-		return fmt.Errorf("blueprint %s: serviceAccountName is not supported with Velero", bp.Name)
+		return fmt.Errorf("check %s: serviceAccountName is not supported with Velero", bp.Name)
 	case len(bp.Spec.ImagePullSecrets) > 0:
-		return fmt.Errorf("blueprint %s: imagePullSecrets is not supported with Velero", bp.Name)
+		return fmt.Errorf("check %s: imagePullSecrets is not supported with Velero", bp.Name)
 	}
 
 	for i := range bp.Spec.Volumes {
 		v := bp.Spec.Volumes[i]
 
 		if v.ConfigMap != nil || v.Secret != nil {
-			return fmt.Errorf("blueprint %s: volumes[%d] %q uses a configMap or secret, not supported with Velero", bp.Name, i, v.Name)
+			return fmt.Errorf("check %s: volumes[%d] %q uses a configMap or secret, not supported with Velero", bp.Name, i, v.Name)
 		}
 
 		if v.HostPath != nil {
-			return fmt.Errorf("blueprint %s: volumes[%d] %q uses a hostPath, not supported with Velero", bp.Name, i, v.Name)
+			return fmt.Errorf("check %s: volumes[%d] %q uses a hostPath, not supported with Velero", bp.Name, i, v.Name)
 		}
 	}
 
 	for _, containers := range [][]corev1.Container{bp.Spec.InitContainers, bp.Spec.Containers} {
 		for i := range containers {
 			if usesSecretOrConfigMap(&containers[i]) {
-				return fmt.Errorf("blueprint %s: container %q uses a secret or configMap reference, not supported with Velero", bp.Name, containers[i].Name)
+				return fmt.Errorf("check %s: container %q uses a secret or configMap reference, not supported with Velero", bp.Name, containers[i].Name)
 			}
 		}
 	}
@@ -156,7 +156,7 @@ func veleroScratchNamespace(restore *restorev1alpha1.Restore) *corev1.Namespace 
 func (r *RestoreReconciler) reconcileVelero(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
-	bp *restorev1alpha1.RestoreBlueprint,
+	bp *restorev1alpha1.RestoreCheck,
 ) (ctrl.Result, error) {
 	cur := r.veleroStub(restore)
 	phase := ""
@@ -200,7 +200,7 @@ func (r *RestoreReconciler) reconcileVelero(
 func (r *RestoreReconciler) checkVelero(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
-	bp *restorev1alpha1.RestoreBlueprint,
+	bp *restorev1alpha1.RestoreCheck,
 ) (ctrl.Result, error) {
 	ns := veleroScratchNamespace(restore)
 
@@ -263,7 +263,7 @@ func (r *RestoreReconciler) copyPodSecurity(ctx context.Context, restore *restor
 	return r.Patch(ctx, scratch, client.MergeFrom(base))
 }
 
-// restoredVeleroClaim is the PVC Velero restored. With several, the blueprint sourcePVC picks one.
+// restoredVeleroClaim is the PVC Velero restored. With several, the check sourcePVC picks one.
 // Scratch claims of the operator carry the restore label and are skipped. "" means not there yet.
 func (r *RestoreReconciler) restoredVeleroClaim(
 	ctx context.Context,
@@ -282,7 +282,7 @@ func (r *RestoreReconciler) restoredVeleroClaim(
 		return names[0]
 	}
 
-	want := r.blueprintSourcePVC(ctx, restore)
+	want := r.checkSourcePVC(ctx, restore)
 	for _, n := range names {
 		if n == want {
 			return n
@@ -312,7 +312,7 @@ func (r *RestoreReconciler) veleroSourceSize(ctx context.Context, restore *resto
 			name = n
 		}
 	} else {
-		name = r.blueprintSourcePVC(ctx, restore)
+		name = r.checkSourcePVC(ctx, restore)
 	}
 
 	if size, ok := sizes[name]; ok {
@@ -365,17 +365,17 @@ func (r *RestoreReconciler) downloadURL(ctx context.Context, restore *restorev1a
 	}
 }
 
-// blueprintSourcePVC is restoredVolumes[0].sourcePVC of the Restore's blueprint, or "".
+// checkSourcePVC is restoredVolumes[0].sourcePVC of the Restore's check, or "".
 // It is read unstructured, so it does not depend on the typed field.
-func (r *RestoreReconciler) blueprintSourcePVC(ctx context.Context, restore *restorev1alpha1.Restore) string {
-	if restore.Spec.BlueprintRef.Name == "" {
+func (r *RestoreReconciler) checkSourcePVC(ctx context.Context, restore *restorev1alpha1.Restore) string {
+	if restore.Spec.RestoreCheckRef.Name == "" {
 		return ""
 	}
 
 	bp := &unstructured.Unstructured{}
-	bp.SetGroupVersionKind(blueprintGVK)
+	bp.SetGroupVersionKind(checkGVK)
 	bp.SetNamespace(restore.Namespace)
-	bp.SetName(restore.Spec.BlueprintRef.Name)
+	bp.SetName(restore.Spec.RestoreCheckRef.Name)
 
 	if err := r.getObject(ctx, bp); err != nil {
 		return ""

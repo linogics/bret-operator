@@ -219,7 +219,7 @@ func main() {
 		if veleroOn {
 			cacheOpts.ByObject = map[client.Object]cache.ByObject{}
 			for _, o := range []client.Object{
-				&restorev1alpha1.Restore{}, &restorev1alpha1.RestoreTest{}, &restorev1alpha1.RestoreBlueprint{},
+				&restorev1alpha1.Restore{}, &restorev1alpha1.RestoreTest{}, &restorev1alpha1.RestoreCheck{},
 			} {
 				cacheOpts.ByObject[o] = cache.ByObject{Namespaces: nsConfig}
 			}
@@ -278,11 +278,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.RestoreBlueprintReconciler{
+	if err := (&controller.RestoreCheckReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "RestoreBlueprint")
+		setupLog.Error(err, "unable to create controller", "controller", "RestoreCheck")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

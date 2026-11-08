@@ -12,11 +12,11 @@ on a schedule, checks the restored data, and tells you when the check fails.
 
 | Kind | Short name | Purpose | Who writes it |
 |---|---|---|---|
-| `RestoreBlueprint` | `rblueprint` | The check: a pod template that runs against restored data. Exit code 0 means pass. | You, once per app. |
-| `RestoreTest` | `rtest` | The schedule and policy: which backups, which blueprint, when, how many retries. | You. |
+| `RestoreCheck` | `rcheck` | The check: a pod template that runs against restored data. Exit code 0 means pass. | You, once per app. |
+| `RestoreTest` | `rtest` | The schedule and policy: which backups, which check, when, how many retries. | You. |
 | `Restore` | `restore` | One restore attempt run: the native restore object plus the check pod. Created by hand or by a `RestoreTest`. | You, or the operator. |
 
-A typical setup has one `RestoreBlueprint` per application, and one `RestoreTest` per backup
+A typical setup has one `RestoreCheck` per application, and one `RestoreTest` per backup
 source that feeds it.
 
 ## What the operator does, and what it does not do
@@ -26,7 +26,7 @@ It does:
 - create the native restore object of the chosen tool (Velero `Restore`, VolSync
   `ReplicationDestination`, or Kopiur `Restore`), pointed at a scratch volume,
 - wait for that restore to finish,
-- create the check pod from the blueprint, with the restored volume mounted,
+- create the check pod from the check, with the restored volume mounted,
 - take the check pod's exit code as the verdict,
 - write the result to `status`, to Events, and to Prometheus metrics,
 - clean up pods and volumes, or keep them for debugging when you ask it to.
@@ -61,19 +61,19 @@ Velero and VolSync have these rules:
   `<namespace>/<name>`, so equal Restore names in two namespaces never share data. The operator
   copies the `pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch
   namespace before the check pod starts, so the pod runs under the same Pod Security rules. A
-  blueprint for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap, secret
-  or hostPath volumes. Such a blueprint fails with `ProviderUnsupported`. Velero restores at the
+  check for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap, secret
+  or hostPath volumes. Such a check fails with `ProviderUnsupported`. Velero restores at the
   original size, so `target.size` and `autoExpand` only gate the run.
 - VolSync: the operator creates a `ReplicationDestination` with a restic mover. The repository
   Secret name and the source PVC come from the backup's `ReplicationSource`, in the backup namespace
   (`backupRef.namespace`, or the `Restore` namespace when it is not set). The Secret itself must
   exist in the `Restore` namespace. A `ReplicationSource` without `spec.restic.repository` sets the
-  reason `RepositoryMissing`. The mover UID comes from the blueprint (annotation
+  reason `RepositoryMissing`. The mover UID comes from the check (annotation
   `bret.linogics.io/mover-uid`, else the first container's `runAsUser`), and falls back to 65534.
 
 ## Volumes per restore
 
-A `RestoreBlueprint` may list one entry in `restoredVolumes`, or use `restoreMount`. Each
+A `RestoreCheck` may list one entry in `restoredVolumes`, or use `restoreMount`. Each
 `restoredVolumes` entry has `name`, `mountPath` and `sourcePVC` (the PVC in the backed-up
 namespace). More than one entry fails with `ProviderUnsupported` in v1. Restoring several
 volumes per check is a follow-up.
@@ -116,8 +116,8 @@ One attempt, in order:
 2. Create the native restore object, targeting the scratch volume.
 3. Wait until the native restore is done, or until `restoreWindow` runs out.
    On timeout: delete the native object and the scratch volume, mark the attempt `Canceled`.
-4. Create the check pod from the `RestoreBlueprint`. The restored volume is mounted at the
-   blueprint's `restoreMount` (or at each `restoredVolumes` path).
+4. Create the check pod from the `RestoreCheck`. The restored volume is mounted at the
+   check's `restoreMount` (or at each `restoredVolumes` path).
 5. Wait for the check pod to finish, or for `restoreWindow` to run out.
 6. Exit code 0 from every check container: phase `Succeeded`.
    Anything else: phase `Failed` for this attempt.

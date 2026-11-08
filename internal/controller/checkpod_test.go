@@ -12,12 +12,12 @@ import (
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
 
-func checkPodBlueprint() *restorev1alpha1.RestoreBlueprint {
+func checkPodCheck() *restorev1alpha1.RestoreCheck {
 	uid := int64(999)
 
-	return &restorev1alpha1.RestoreBlueprint{
+	return &restorev1alpha1.RestoreCheck{
 		ObjectMeta: metav1.ObjectMeta{Name: testApp, Namespace: testNamespace},
-		Spec: restorev1alpha1.RestoreBlueprintSpec{
+		Spec: restorev1alpha1.RestoreCheckSpec{
 			RestoreMount: testMountPath,
 			InitContainers: []corev1.Container{
 				{Name: "perms", Image: "busybox"},
@@ -43,7 +43,7 @@ func TestBuildCheckPod(t *testing.T) {
 	t.Parallel()
 
 	restore := newTestRestore()
-	bp := checkPodBlueprint()
+	bp := checkPodCheck()
 
 	pod, err := buildCheckPod(restore, bp, "r1-scratch", map[string]string{testWorkArea: testWorkAreaClaim})
 	if err != nil {
@@ -63,7 +63,7 @@ func TestBuildCheckPod(t *testing.T) {
 	}
 
 	if pod.Spec.ServiceAccountName != "checker" || pod.Spec.PriorityClassName != "high" || pod.Spec.NodeSelector["disk"] != "ssd" {
-		t.Errorf("pod-level fields not copied from blueprint: %+v", pod.Spec)
+		t.Errorf("pod-level fields not copied from check: %+v", pod.Spec)
 	}
 
 	if got := pvcClaim(pod, restoredVolume); got != "r1-scratch" {
@@ -90,14 +90,14 @@ func TestBuildCheckPod(t *testing.T) {
 	}
 
 	if len(bp.Spec.InitContainers[0].VolumeMounts) != 0 {
-		t.Errorf("buildCheckPod changed the blueprint's init container mounts")
+		t.Errorf("buildCheckPod changed the check's init container mounts")
 	}
 }
 
 func TestBuildCheckPodRejectsMissingScratchClaim(t *testing.T) {
 	t.Parallel()
 
-	if _, err := buildCheckPod(newTestRestore(), checkPodBlueprint(), "r1-scratch", nil); err == nil {
+	if _, err := buildCheckPod(newTestRestore(), checkPodCheck(), "r1-scratch", nil); err == nil {
 		t.Error("missing scratch claim: want error, got none")
 	}
 }
@@ -105,7 +105,7 @@ func TestBuildCheckPodRejectsMissingScratchClaim(t *testing.T) {
 func TestRestoredVolumesMapping(t *testing.T) {
 	t.Parallel()
 
-	bp := checkPodBlueprint()
+	bp := checkPodCheck()
 	bp.Spec.RestoreMount = ""
 	bp.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{{Name: testDataName, MountPath: "/data", SourcePVC: "pg-data"}}
 
@@ -133,7 +133,7 @@ func TestRestoredVolumesMapping(t *testing.T) {
 func TestRestoredVolumesRejectsMoreThanOne(t *testing.T) {
 	t.Parallel()
 
-	bp := checkPodBlueprint()
+	bp := checkPodCheck()
 	bp.Spec.RestoreMount = ""
 	bp.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{
 		{Name: "a", MountPath: "/a", SourcePVC: "pa"},
@@ -164,7 +164,7 @@ func TestRestoredVolumesRejectsMoreThanOne(t *testing.T) {
 func TestMoverUID(t *testing.T) {
 	t.Parallel()
 
-	bp := checkPodBlueprint()
+	bp := checkPodCheck()
 
 	uid, err := moverUID(bp)
 	if err != nil || uid == nil || *uid != 999 {

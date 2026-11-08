@@ -44,7 +44,7 @@ func restoredClaimName(restore *restorev1alpha1.Restore) string {
 	return restore.Name + "-scratch"
 }
 
-// scratchClaimName is the PVC of one blueprint scratch volume.
+// scratchClaimName is the PVC of one check scratch volume.
 func scratchClaimName(restore *restorev1alpha1.Restore, volume string) string {
 	return restore.Name + "-scratch-" + dnsLabel(volume)
 }
@@ -102,9 +102,9 @@ func kopiurPhase(obj *unstructured.Unstructured) string {
 	return phase
 }
 
-// moverUID is the UID the mover writes the restored volume as. The blueprint annotation wins,
-// then the first main container's runAsUser, as in hack/blueprint-test/render.py. Nil means unset.
-func moverUID(bp *restorev1alpha1.RestoreBlueprint) (*int64, error) {
+// moverUID is the UID the mover writes the restored volume as. The check annotation wins,
+// then the first main container's runAsUser, as in hack/check-test/render.py. Nil means unset.
+func moverUID(bp *restorev1alpha1.RestoreCheck) (*int64, error) {
 	if raw := bp.Annotations[moverUIDAnnotation]; raw != "" {
 		var mapping map[string]int64
 
@@ -152,7 +152,7 @@ func restoredPVC(restore *restorev1alpha1.Restore, size resource.Quantity) *core
 	}
 }
 
-// scratchPVC is the per-attempt PVC of one blueprint scratch volume.
+// scratchPVC is the per-attempt PVC of one check scratch volume.
 func scratchPVC(restore *restorev1alpha1.Restore, sv restorev1alpha1.ScratchVolume) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{

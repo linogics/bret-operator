@@ -102,7 +102,7 @@ func TestVeleroPVCSizes(t *testing.T) {
 }
 
 func TestVeleroSourceSize(t *testing.T) {
-	blueprint := unstructuredObj("bret.linogics.io", "RestoreBlueprint", "bp", map[string]any{
+	check := unstructuredObj("bret.linogics.io", "RestoreCheck", "bp", map[string]any{
 		"spec": map[string]any{"restoredVolumes": []any{map[string]any{"name": testDataName, "sourcePVC": "b"}}},
 	})
 
@@ -114,8 +114,8 @@ func TestVeleroSourceSize(t *testing.T) {
 		want   string
 	}{
 		{"single pvc", map[string]string{testPVCKeyA: testSize5Gi}, 200, false, testSize5Gi},
-		{"blueprint picks", map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi}, 200, true, testSize10Gi},
-		{"ambiguous without blueprint", map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi}, 200, false, ""},
+		{"check picks", map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi}, 200, true, testSize10Gi},
+		{"ambiguous without check", map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi}, 200, false, ""},
 		{"no pvc in namespace", map[string]string{"other/a": testSize5Gi}, 200, false, ""},
 		{"download fails", nil, 500, false, ""},
 	}
@@ -142,7 +142,7 @@ func TestVeleroSourceSize(t *testing.T) {
 
 			objs := []client.Object{}
 			if tt.bp {
-				objs = append(objs, blueprint.DeepCopy())
+				objs = append(objs, check.DeepCopy())
 			}
 
 			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
@@ -154,7 +154,7 @@ func TestVeleroSourceSize(t *testing.T) {
 			go answerDownloadRequest(ctx, c, srv.URL)
 
 			restore := sizeTestRestore("velero")
-			restore.Spec.BlueprintRef.Name = "bp"
+			restore.Spec.RestoreCheckRef.Name = "bp"
 
 			got, err := r.veleroSourceSize(ctx, restore)
 			if err != nil {
@@ -220,7 +220,7 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 			restore.Spec.Provider = restorev1alpha1.ProviderVelero
 			restore.Spec.KeepOnFailure = tt.keep
 
-			c, r := fakeRestoreClient(t, restore, newTestBlueprint(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
+			c, r := fakeRestoreClient(t, restore, newTestCheck(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
 			key := client.ObjectKeyFromObject(restore)
 
 			go func() {
@@ -310,20 +310,20 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 	tests := []struct {
 		name   string
-		mutate func(*restorev1alpha1.RestoreBlueprint)
+		mutate func(*restorev1alpha1.RestoreCheck)
 		field  string
 	}{
-		{"service account", func(bp *restorev1alpha1.RestoreBlueprint) { bp.Spec.ServiceAccountName = "sa" }, "serviceAccountName"},
-		{"pull secrets", func(bp *restorev1alpha1.RestoreBlueprint) {
+		{"service account", func(bp *restorev1alpha1.RestoreCheck) { bp.Spec.ServiceAccountName = "sa" }, "serviceAccountName"},
+		{"pull secrets", func(bp *restorev1alpha1.RestoreCheck) {
 			bp.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: "s"}}
 		}, "imagePullSecrets"},
-		{"configmap volume", func(bp *restorev1alpha1.RestoreBlueprint) {
+		{"configmap volume", func(bp *restorev1alpha1.RestoreCheck) {
 			bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{}}}}
 		}, "volumes"},
-		{"secret volume", func(bp *restorev1alpha1.RestoreBlueprint) {
+		{"secret volume", func(bp *restorev1alpha1.RestoreCheck) {
 			bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{}}}}
 		}, "volumes"},
-		{"clean", func(*restorev1alpha1.RestoreBlueprint) {}, ""},
+		{"clean", func(*restorev1alpha1.RestoreCheck) {}, ""},
 	}
 
 	for _, tt := range tests {
@@ -339,7 +339,7 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 			restore := newTestRestore()
 			restore.Spec.Provider = restorev1alpha1.ProviderVelero
 
-			bp := newTestBlueprint()
+			bp := newTestCheck()
 			tt.mutate(bp)
 
 			c, r := fakeRestoreClient(t, restore, bp)
@@ -359,7 +359,7 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 
 			if tt.field == "" {
 				if err != nil || got.Status.Phase != restorev1alpha1.RestorePhaseRunning {
-					t.Fatalf("clean blueprint: phase %q, velero restore err %v", got.Status.Phase, err)
+					t.Fatalf("clean check: phase %q, velero restore err %v", got.Status.Phase, err)
 				}
 
 				return
@@ -371,17 +371,17 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 			}
 
 			if !errors.IsNotFound(err) {
-				t.Fatalf("velero restore created for rejected blueprint: %v", err)
+				t.Fatalf("velero restore created for rejected check: %v", err)
 			}
 		})
 	}
 }
 
 func TestVeleroRejectsHostPath(t *testing.T) {
-	bp := newTestBlueprint()
+	bp := newTestCheck()
 	bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/"}}}}
 
-	if err := validateVeleroBlueprint(bp); err == nil || !strings.Contains(err.Error(), "hostPath") {
+	if err := validateVeleroCheck(bp); err == nil || !strings.Contains(err.Error(), "hostPath") {
 		t.Fatalf("err = %v, want a hostPath rejection", err)
 	}
 }
@@ -389,28 +389,28 @@ func TestVeleroRejectsHostPath(t *testing.T) {
 func TestVeleroRejectsSecretAndConfigMapRefs(t *testing.T) {
 	tests := []struct {
 		name    string
-		mutate  func(*restorev1alpha1.RestoreBlueprint)
+		mutate  func(*restorev1alpha1.RestoreCheck)
 		wantErr bool
 	}{
-		{"secretKeyRef env", func(bp *restorev1alpha1.RestoreBlueprint) {
+		{"secretKeyRef env", func(bp *restorev1alpha1.RestoreCheck) {
 			bp.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "P", ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "s"}, Key: "k"},
 			}}}
 		}, true},
-		{"configMapRef envFrom", func(bp *restorev1alpha1.RestoreBlueprint) {
+		{"configMapRef envFrom", func(bp *restorev1alpha1.RestoreCheck) {
 			bp.Spec.Containers[0].EnvFrom = []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{}}}
 		}, true},
-		{"plain env", func(bp *restorev1alpha1.RestoreBlueprint) {
+		{"plain env", func(bp *restorev1alpha1.RestoreCheck) {
 			bp.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "P", Value: "v"}}
 		}, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bp := newTestBlueprint()
+			bp := newTestCheck()
 			tt.mutate(bp)
 
-			err := validateVeleroBlueprint(bp)
+			err := validateVeleroCheck(bp)
 			if tt.wantErr && (err == nil || !strings.Contains(err.Error(), "secret or configMap reference")) {
 				t.Fatalf("err = %v, want a secret or configMap rejection", err)
 			}

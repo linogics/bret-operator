@@ -1,7 +1,7 @@
 # Best practices
 
 Rules for backups and restore tests. Each rule names its source: **Spike** (verified on a
-kind cluster), **Design** (design doc section), or **Index** (`blueprints/INDEX.md`).
+kind cluster), **Design** (design doc section), or **Index** (`checks/INDEX.md`).
 
 ## Restore target
 
@@ -64,15 +64,15 @@ kind cluster), **Design** (design doc section), or **Index** (`blueprints/INDEX.
 - **Least-privilege RBAC.** Give the operator only the verbs and namespaces it needs. In
   namespaced mode, the one cross-namespace read is the provider's backup objects in the
   Velero namespace. Document it. (Design §8.)
-- **Only admins create `RestoreBlueprint` objects.** A blueprint runs arbitrary images in
+- **Only admins create `RestoreCheck` objects.** A check runs arbitrary images in
   the cluster with the restored data mounted. Treat it as trusted code. (Design §11.)
-- **Blueprint and test pods do not use the operator's ServiceAccount.** They use a
+- **Check and test pods do not use the operator's ServiceAccount.** They use a
   dedicated, empty ServiceAccount per namespace. (Design §11.)
 - **No secrets in CR status or Events.** (Design §11.)
 - **Object storage credentials are read by the provider tools, not the operator.** The
   operator reads only backup metadata. (Design §11.)
 - **Pin tool and image versions.** Velero, VolSync and Kopiur are pinned in tests. Use
-  pinned image tags in blueprints. Some blueprint tags are unverified. (Design §5, §12.2;
+  pinned image tags in checks. Some check tags are unverified. (Design §5, §12.2;
   Index.)
 - Kopiur is alpha. Its restore has open issue kopiur#233. Treat its results with care. (Design §5.)
 

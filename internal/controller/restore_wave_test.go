@@ -37,7 +37,7 @@ func (c *countingReader) Get(ctx context.Context, key client.ObjectKey, obj clie
 func TestSourceSizeIsResolvedOnce(t *testing.T) {
 	restore := newTestRestore()
 	restore.Spec.Target.Size = nil
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), kopiurSnapshotOfSize(2<<30))
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), kopiurSnapshotOfSize(2<<30))
 	counter := &countingReader{Reader: c}
 	r.APIReader = counter
 	key := client.ObjectKeyFromObject(restore)
@@ -55,7 +55,7 @@ func TestSourceSizeIsResolvedOnce(t *testing.T) {
 	}
 }
 
-func TestVolSyncMoverUIDFromBlueprint(t *testing.T) {
+func TestVolSyncMoverUIDFromCheck(t *testing.T) {
 	uid := int64(999)
 	obj := volsyncDestinationObject(volsyncTestRestore(), "repo", *quantityPtr(testSize1Gi), &uid)
 
@@ -65,7 +65,7 @@ func TestVolSyncMoverUIDFromBlueprint(t *testing.T) {
 	}
 
 	restore := volsyncTestRestore()
-	bp := newTestBlueprint()
+	bp := newTestCheck()
 	bp.Annotations = map[string]string{moverUIDAnnotation: `{"data": 70}`}
 	c, r := fakeRestoreClient(t, restore, bp, volsyncSource(), volsyncSecret())
 
@@ -85,7 +85,7 @@ func TestVolSyncRepositoryMissing(t *testing.T) {
 	restore := volsyncTestRestore()
 	src := volsyncSource()
 	unstructured.RemoveNestedField(src.Object, "spec", "restic")
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), src)
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), src)
 	key := client.ObjectKeyFromObject(restore)
 
 	reconcileRestore(t, r, key)
@@ -115,7 +115,7 @@ func TestVolSyncRepositoryMissing(t *testing.T) {
 
 func TestVolSyncSecretMissing(t *testing.T) {
 	restore := volsyncTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), volsyncSource())
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), volsyncSource())
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 
@@ -173,7 +173,7 @@ func TestVeleroCopiesPodSecurityLabels(t *testing.T) {
 	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace, Labels: map[string]string{
 		"pod-security.kubernetes.io/enforce": "restricted", "team": "a",
 	}}}
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), tenant)
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), tenant)
 	key := client.ObjectKeyFromObject(restore)
 
 	go func() {
@@ -237,7 +237,7 @@ func TestVeleroDeleteRunningRestoreCleansUp(t *testing.T) {
 	restore.Spec.KeepOnFailure = true
 
 	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}}
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), tenant)
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), tenant)
 	key := client.ObjectKeyFromObject(restore)
 
 	go func() {
@@ -305,7 +305,7 @@ func deleteWithBrokenReads(t *testing.T, provider restorev1alpha1.Provider, kind
 	restore := newTestRestore()
 	restore.Spec.Provider = provider
 
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
 	key := client.ObjectKeyFromObject(restore)
 
 	reconcileRestore(t, r, key)
@@ -343,7 +343,7 @@ func TestFinalizerIgnoresForbiddenVelero(t *testing.T) {
 
 func TestFinalizerSkipsDisabledProvider(t *testing.T) {
 	restore := newTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+	c, r := fakeRestoreClient(t, restore, newTestCheck())
 	r.EnabledProviders = map[restorev1alpha1.Provider]bool{restorev1alpha1.ProviderVolSync: true}
 	key := client.ObjectKeyFromObject(restore)
 
@@ -363,7 +363,7 @@ func TestFinalizerSkipsDisabledProvider(t *testing.T) {
 
 func TestPreUpgradeRestoreWithoutSizeFails(t *testing.T) {
 	restore := newTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+	c, r := fakeRestoreClient(t, restore, newTestCheck())
 	key := client.ObjectKeyFromObject(restore)
 
 	stored := getRestore(t, c, key)

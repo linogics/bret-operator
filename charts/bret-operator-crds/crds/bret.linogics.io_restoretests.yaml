@@ -71,17 +71,6 @@ spec:
                 x-kubernetes-validations:
                 - message: name or labels must be set
                   rule: has(self.name) || has(self.labels)
-              blueprintRef:
-                description: BlueprintRef names the check to run against each restored
-                  volume.
-                properties:
-                  name:
-                    description: Name is the name of the RestoreBlueprint in the same
-                      namespace.
-                    type: string
-                required:
-                - name
-                type: object
               keepOnFailure:
                 default: false
                 description: KeepOnFailure keeps the check pod and restore objects
@@ -103,6 +92,17 @@ spec:
                 - volsync
                 - kopiur
                 type: string
+              restoreCheckRef:
+                description: RestoreCheckRef names the check to run against each restored
+                  volume.
+                properties:
+                  name:
+                    description: Name is the name of the RestoreCheck in the same
+                      namespace.
+                    type: string
+                required:
+                - name
+                type: object
               restoreWindow:
                 default: 45m
                 description: RestoreWindow is the deadline for each attempt.
@@ -198,8 +198,8 @@ spec:
                 type: object
             required:
             - backupSelector
-            - blueprintRef
             - provider
+            - restoreCheckRef
             - restoreWindow
             - retries
             type: object

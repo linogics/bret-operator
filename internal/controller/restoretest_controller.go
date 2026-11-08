@@ -79,7 +79,7 @@ type completedBackup struct {
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restoretests/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restoretests/finalizers,verbs=update
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch
+// +kubebuilder:rbac:groups=bret.linogics.io,resources=restorechecks,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=kopiur.home-operations.com,resources=snapshots,verbs=get;list;watch
 
@@ -525,10 +525,10 @@ func (r *RestoreTestReconciler) createRestore(ctx context.Context, test *restore
 			Source: restorev1alpha1.RestoreSource{
 				BackupRef: restorev1alpha1.BackupRef{Name: backup, Namespace: test.Namespace},
 			},
-			Target:        test.Spec.Target,
-			BlueprintRef:  test.Spec.BlueprintRef,
-			RestoreWindow: test.Spec.RestoreWindow,
-			KeepOnFailure: test.Spec.KeepOnFailure,
+			Target:          test.Spec.Target,
+			RestoreCheckRef: test.Spec.RestoreCheckRef,
+			RestoreWindow:   test.Spec.RestoreWindow,
+			KeepOnFailure:   test.Spec.KeepOnFailure,
 		},
 	}
 

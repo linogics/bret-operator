@@ -10,7 +10,7 @@ Package v1alpha1 contains API Schema definitions for the restore v1alpha1 API gr
 
 ### Resource Types
 - [Restore](#restore)
-- [RestoreBlueprint](#restoreblueprint)
+- [RestoreCheck](#restorecheck)
 - [RestoreTest](#restoretest)
 
 
@@ -81,23 +81,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | Name is the name of one backup object. |  |  |
 | `labels` _object (keys:string, values:string)_ | Labels selects backup objects that carry all of these labels. |  |  |
-
-
-#### BlueprintRef
-
-
-
-BlueprintRef names the RestoreBlueprint used for the check.
-
-
-
-_Appears in:_
-- [RestoreSpec](#restorespec)
-- [RestoreTestSpec](#restoretestspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name is the name of the RestoreBlueprint in the same namespace. |  |  |
 
 
 #### HandledBackup
@@ -213,11 +196,11 @@ Restore is one restore run, manual or started by a RestoreTest.
 | `status` _[RestoreStatus](#restorestatus)_ | Status is the observed state of the restore. |  |  |
 
 
-#### RestoreBlueprint
+#### RestoreCheck
 
 
 
-RestoreBlueprint is the check run against a restored volume.
+RestoreCheck is the check run against a restored volume.
 
 
 
@@ -226,24 +209,41 @@ RestoreBlueprint is the check run against a restored volume.
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `bret.linogics.io/v1alpha1` | | |
-| `kind` _string_ | `RestoreBlueprint` | | |
+| `kind` _string_ | `RestoreCheck` | | |
 | `kind` _string_ | Kind is a string value representing the REST resource this object represents.<br />Servers may infer this from the endpoint the client submits requests to.<br />Cannot be updated.<br />In CamelCase.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds |  | Optional: \{\} <br /> |
 | `apiVersion` _string_ | APIVersion defines the versioned schema of this representation of an object.<br />Servers should convert recognized schemas to the latest internal value, and<br />may reject unrecognized values.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources |  | Optional: \{\} <br /> |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[RestoreBlueprintSpec](#restoreblueprintspec)_ | Spec is the desired check pod template. |  |  |
-| `status` _[RestoreBlueprintStatus](#restoreblueprintstatus)_ | Status is the observed state of the blueprint. |  |  |
+| `spec` _[RestoreCheckSpec](#restorecheckspec)_ | Spec is the desired check pod template. |  |  |
+| `status` _[RestoreCheckStatus](#restorecheckstatus)_ | Status is the observed state of the check. |  |  |
 
 
-#### RestoreBlueprintSpec
+#### RestoreCheckRef
 
 
 
-RestoreBlueprintSpec defines the desired check pod template.
+RestoreCheckRef names the RestoreCheck used for the check.
 
 
 
 _Appears in:_
-- [RestoreBlueprint](#restoreblueprint)
+- [RestoreSpec](#restorespec)
+- [RestoreTestSpec](#restoretestspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the name of the RestoreCheck in the same namespace. |  |  |
+
+
+#### RestoreCheckSpec
+
+
+
+RestoreCheckSpec defines the desired check pod template.
+
+
+
+_Appears in:_
+- [RestoreCheck](#restorecheck)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -263,20 +263,20 @@ _Appears in:_
 | `runtimeClassName` _string_ | RuntimeClassName is the runtime class of the check pod. |  |  |
 
 
-#### RestoreBlueprintStatus
+#### RestoreCheckStatus
 
 
 
-RestoreBlueprintStatus defines the observed state of RestoreBlueprint.
+RestoreCheckStatus defines the observed state of RestoreCheck.
 
 
 
 _Appears in:_
-- [RestoreBlueprint](#restoreblueprint)
+- [RestoreCheck](#restorecheck)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#condition-v1-meta) array_ | Conditions are the latest observations of the blueprint state. |  |  |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#condition-v1-meta) array_ | Conditions are the latest observations of the check state. |  |  |
 | `observedGeneration` _integer_ | ObservedGeneration is the generation last processed by the controller. |  |  |
 
 
@@ -333,7 +333,7 @@ _Appears in:_
 | `provider` _[Provider](#provider)_ | Provider is the backup tool that performs the restore. |  | Enum: [velero volsync kopiur] <br /> |
 | `source` _[RestoreSource](#restoresource)_ | Source is the backup to restore from. |  |  |
 | `target` _[RestoreTarget](#restoretarget)_ | Target is the scratch volume to restore into. |  |  |
-| `blueprintRef` _[BlueprintRef](#blueprintref)_ | BlueprintRef is the RestoreBlueprint that checks the restored data. |  |  |
+| `restoreCheckRef` _[RestoreCheckRef](#restorecheckref)_ | RestoreCheckRef is the RestoreCheck that checks the restored data. |  |  |
 | `restoreWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | RestoreWindow is the deadline for this attempt, covering the restore, image pulls and the check. | 45m |  |
 | `keepOnFailure` _boolean_ | KeepOnFailure keeps the check pod, the scratch volume and the native restore object when the attempt fails. | false |  |
 
@@ -416,7 +416,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `provider` _[Provider](#provider)_ | Provider is the backup tool that performs the restores. |  | Enum: [velero volsync kopiur] <br /> |
 | `backupSelector` _[BackupSelector](#backupselector)_ | BackupSelector chooses which backups the restores read from. |  |  |
-| `blueprintRef` _[BlueprintRef](#blueprintref)_ | BlueprintRef names the check to run against each restored volume. |  |  |
+| `restoreCheckRef` _[RestoreCheckRef](#restorecheckref)_ | RestoreCheckRef names the check to run against each restored volume. |  |  |
 | `target` _[RestoreTarget](#restoretarget)_ | Target is the scratch volume each run restores into, with the same meaning as Restore.spec.target. |  |  |
 | `triggers` _[Triggers](#triggers)_ | Triggers defines what starts a run. |  |  |
 | `restoreWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | RestoreWindow is the deadline for each attempt. | 45m |  |
@@ -458,7 +458,7 @@ RestoredVolume maps one restored PVC to a mount path in the check pod.
 
 
 _Appears in:_
-- [RestoreBlueprintSpec](#restoreblueprintspec)
+- [RestoreCheckSpec](#restorecheckspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -511,7 +511,7 @@ ScratchVolume is a PVC the operator creates for each attempt, for staging space 
 
 
 _Appears in:_
-- [RestoreBlueprintSpec](#restoreblueprintspec)
+- [RestoreCheckSpec](#restorecheckspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |

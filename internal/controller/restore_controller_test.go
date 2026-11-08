@@ -51,7 +51,7 @@ var _ = Describe("Restore Controller", func() {
 						Source:   restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: testBackupName}},
 						Target:   restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
 
-						BlueprintRef: restorev1alpha1.BlueprintRef{Name: "bp"},
+						RestoreCheckRef: restorev1alpha1.RestoreCheckRef{Name: "bp"},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -112,19 +112,19 @@ func newTestRestore() *restorev1alpha1.Restore {
 	return &restorev1alpha1.Restore{
 		ObjectMeta: metav1.ObjectMeta{Name: "r1", Namespace: testNamespace},
 		Spec: restorev1alpha1.RestoreSpec{
-			Provider:      restorev1alpha1.ProviderKopiur,
-			Source:        restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "b1"}},
-			Target:        restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
-			BlueprintRef:  restorev1alpha1.BlueprintRef{Name: testApp},
-			RestoreWindow: metav1.Duration{Duration: 45 * time.Minute},
+			Provider:        restorev1alpha1.ProviderKopiur,
+			Source:          restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "b1"}},
+			Target:          restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
+			RestoreCheckRef: restorev1alpha1.RestoreCheckRef{Name: testApp},
+			RestoreWindow:   metav1.Duration{Duration: 45 * time.Minute},
 		},
 	}
 }
 
-func newTestBlueprint() *restorev1alpha1.RestoreBlueprint {
-	return &restorev1alpha1.RestoreBlueprint{
+func newTestCheck() *restorev1alpha1.RestoreCheck {
+	return &restorev1alpha1.RestoreCheck{
 		ObjectMeta: metav1.ObjectMeta{Name: testApp, Namespace: testNamespace},
-		Spec: restorev1alpha1.RestoreBlueprintSpec{
+		Spec: restorev1alpha1.RestoreCheckSpec{
 			RestoreMount: testMountPath,
 			Containers:   []corev1.Container{{Name: testCheckName, Image: "postgres:17"}},
 		},
@@ -153,7 +153,7 @@ func getRestore(t *testing.T, c client.Client, key types.NamespacedName) *restor
 func TestRestorePhasesToSucceeded(t *testing.T) {
 	ctx := context.Background()
 	restore := newTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+	c, r := fakeRestoreClient(t, restore, newTestCheck())
 	key := client.ObjectKeyFromObject(restore)
 
 	reconcileRestore(t, r, key)
@@ -223,7 +223,7 @@ func TestRestorePhasesToSucceeded(t *testing.T) {
 func TestRestoreWindowCancels(t *testing.T) {
 	ctx := context.Background()
 	restore := newTestRestore()
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+	c, r := fakeRestoreClient(t, restore, newTestCheck())
 	key := client.ObjectKeyFromObject(restore)
 
 	started := metav1.NewTime(time.Now().Add(-2 * time.Hour))
@@ -301,7 +301,7 @@ func assertSizeFailure(t *testing.T, c client.Client, restore *restorev1alpha1.R
 func TestRestoreSizeUnknownFails(t *testing.T) {
 	restore := newTestRestore()
 	restore.Spec.Target.Size = nil
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+	c, r := fakeRestoreClient(t, restore, newTestCheck())
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 	assertSizeFailure(t, c, restore, restorev1alpha1.ReasonSizeUnknown)
@@ -310,7 +310,7 @@ func TestRestoreSizeUnknownFails(t *testing.T) {
 func TestRestoreSizeTooSmallFails(t *testing.T) {
 	restore := newTestRestore()
 	restore.Spec.Target.Size = quantityPtr("1Gi")
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), kopiurSnapshotOfSize(2<<30))
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), kopiurSnapshotOfSize(2<<30))
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 	assertSizeFailure(t, c, restore, restorev1alpha1.ReasonInsufficientCapacity)
@@ -320,7 +320,7 @@ func TestRestoreSizeAutoExpand(t *testing.T) {
 	restore := newTestRestore()
 	restore.Spec.Target.Size = nil
 	restore.Spec.Target.AutoExpand = &restorev1alpha1.AutoExpand{Percentage: 150} // 2Gi + 150%
-	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), kopiurSnapshotOfSize(2<<30))
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), kopiurSnapshotOfSize(2<<30))
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 
