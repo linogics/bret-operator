@@ -46,7 +46,8 @@ func (r *RestoreReconciler) ensure(ctx context.Context, restore *restorev1alpha1
 // cleanup deletes the objects of an attempt, or labels them as retained when they must be kept.
 // It is idempotent, so a failed run is retried on the next reconcile.
 func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha1.Restore) error {
-	keep := restore.Spec.KeepOnFailure && restore.Status.Phase != restorev1alpha1.RestorePhaseSucceeded
+	// A deleted Restore keeps nothing.
+	keep := restore.Spec.KeepOnFailure && restore.Status.Phase != restorev1alpha1.RestorePhaseSucceeded && restore.DeletionTimestamp.IsZero()
 
 	pvcs := &corev1.PersistentVolumeClaimList{}
 
@@ -61,7 +62,7 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
-		objs = append(objs, veleroStub(restore), veleroScratchNamespace(restore))
+		objs = append(objs, r.veleroStub(restore), veleroScratchNamespace(restore))
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVolSync {

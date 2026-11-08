@@ -114,7 +114,8 @@ Default `false`. When `true` and the last attempt failed, the operator keeps:
 
 The kept objects get the label `bret.linogics.io/retained: "true"`. They are not removed
 automatically, and v1 has no TTL (`retainedFor` is not implemented). Inspect them, then delete them
-by hand. Earlier failed attempts are always removed.
+by hand, or delete the `Restore`: its finalizer removes the kept objects. Earlier failed attempts
+are removed when the run settles.
 
 Turn it on for a check you are still debugging. Leave it off in a long-running schedule, or
 failed runs pile up volumes.

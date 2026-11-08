@@ -69,17 +69,20 @@ snapshot. A restore then works only while that snapshot exists. Off-cluster reco
 work. The spike confirmed this.
 
 Enable the provider in the chart with `providers.velero.enabled: true`. The Velero install
-namespace is `providers.velero.namespace`, default `velero`.
+namespace is `providers.velero.namespace`, default `velero`. The chart passes it to the operator
+as `VELERO_NAMESPACE`.
 
 ### What the operator drives
 
 The operator creates a `velero.io/v1` `Restore` in the Velero namespace. The PVC and PVs are
-restored into the scratch namespace `bret-scratch-<restore name>`, and the check pod runs in that
-namespace. The operator waits for `status.phase` to reach `Completed`, `PartiallyFailed` or
+restored into the scratch namespace `bret-scratch-<hash>` (hash of `<namespace>/<name>`), and the
+check pod runs in that namespace. The `Restore` has `includedNamespaces` set to the `Restore`
+namespace, so no other namespace of the backup is restored. The operator copies the
+`pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch namespace. The operator waits for `status.phase` to reach `Completed`, `PartiallyFailed` or
 `Failed`.
 
-Blueprints for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap or
-secret volumes. A blueprint that does fails with `ProviderUnsupported`.
+Blueprints for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap, secret
+or hostPath volumes. A blueprint that does fails with `ProviderUnsupported`.
 
 Restored workloads are a trap. Velero restores Deployments and StatefulSets as well, and they
 start and hold the restored RWO volume. Scale them to zero or delete them before the check
@@ -141,12 +144,16 @@ Enable the provider in the chart with `providers.volsync.enabled: true`.
 ### What the operator drives
 
 The operator creates a `ReplicationDestination` in the restore namespace with a restic mover. The
-repository Secret and the source PVC come from the backup's `ReplicationSource`, in the backup
+repository Secret name and the source PVC come from the backup's `ReplicationSource`, in the backup
 namespace: `backupRef.namespace`, or the `Restore` namespace when `backupRef.namespace` is not set.
+The Secret itself must exist in the `Restore` namespace. Without `spec.restic.repository` on the
+`ReplicationSource`, the `Restore` shows the reason `RepositoryMissing`.
 Done means `status.lastManualSync` equals the trigger value.
 
 Mover pods use a default non-database UID and cannot read a Postgres data directory
-(`permission denied`). Set the mover UID to match the application.
+(`permission denied`). The operator takes the mover UID from the blueprint (annotation
+`bret.linogics.io/mover-uid`, else the first container's `runAsUser`) and uses 65534 when the
+blueprint sets none.
 
 A VolSync cache volume made by an earlier mover UID causes `permission denied` after the UID
 changes. Delete the cache PVC and let VolSync create a new one.

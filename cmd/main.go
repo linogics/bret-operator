@@ -54,6 +54,24 @@ func csvEnv(name string) []string {
 	return out
 }
 
+// parseProviders reads the PROVIDERS env var. Unset serves every provider, as outside the chart.
+// Set but empty, or "none", serves none: the chart renders that when every provider is off.
+func parseProviders(raw string, set bool) map[restorev1alpha1.Provider]bool {
+	if !set {
+		return nil
+	}
+
+	enabled := map[restorev1alpha1.Provider]bool{}
+
+	for _, n := range strings.Split(raw, ",") {
+		if n = strings.TrimSpace(n); n != "" && n != "none" {
+			enabled[restorev1alpha1.Provider(n)] = true
+		}
+	}
+
+	return enabled
+}
+
 // nolint:gocyclo
 func main() {
 	var (
@@ -185,18 +203,11 @@ func main() {
 		})
 	}
 
-	// Empty PROVIDERS keeps every provider on, as outside the chart.
-	var enabledProviders map[restorev1alpha1.Provider]bool
+	enabledProviders := parseProviders(os.LookupEnv("PROVIDERS"))
+	veleroOn := enabledProviders == nil || enabledProviders[restorev1alpha1.ProviderVelero]
 
-	if names := csvEnv("PROVIDERS"); len(names) > 0 {
-		enabledProviders = map[restorev1alpha1.Provider]bool{}
-		for _, n := range names {
-			enabledProviders[restorev1alpha1.Provider(n)] = true
-		}
-	}
-
-	// Empty WATCH_NAMESPACES is cluster-wide. Otherwise only the bret objects are limited to those namespaces:
-	// pods, PVCs and namespaces of the checks stay cluster-wide because scratch namespaces are not watched.
+	// Empty WATCH_NAMESPACES is cluster-wide. Otherwise the cache is limited to those namespaces. With Velero on,
+	// only the bret objects are: the check pods and PVCs of the scratch namespaces stay cluster-wide.
 	var cacheOpts cache.Options
 
 	if watch := csvEnv("WATCH_NAMESPACES"); len(watch) > 0 {
@@ -205,11 +216,15 @@ func main() {
 			nsConfig[ns] = cache.Config{}
 		}
 
-		cacheOpts.ByObject = map[client.Object]cache.ByObject{}
-		for _, o := range []client.Object{
-			&restorev1alpha1.Restore{}, &restorev1alpha1.RestoreTest{}, &restorev1alpha1.RestoreBlueprint{},
-		} {
-			cacheOpts.ByObject[o] = cache.ByObject{Namespaces: nsConfig}
+		if veleroOn {
+			cacheOpts.ByObject = map[client.Object]cache.ByObject{}
+			for _, o := range []client.Object{
+				&restorev1alpha1.Restore{}, &restorev1alpha1.RestoreTest{}, &restorev1alpha1.RestoreBlueprint{},
+			} {
+				cacheOpts.ByObject[o] = cache.ByObject{Namespaces: nsConfig}
+			}
+		} else {
+			cacheOpts.DefaultNamespaces = nsConfig
 		}
 	}
 
@@ -245,6 +260,7 @@ func main() {
 		APIReader: mgr.GetAPIReader(),
 
 		EnabledProviders: enabledProviders,
+		VeleroNamespace:  os.Getenv("VELERO_NAMESPACE"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Restore")
 		os.Exit(1)

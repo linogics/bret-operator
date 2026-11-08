@@ -35,7 +35,7 @@ _Appears in:_
 
 
 
-AutoExpand derives the scratch size from the source size: clamp(source * percentage / 100, min, max).
+AutoExpand derives the scratch size from the source size: clamp(source * (100 + percentage) / 100, min, max).
 
 
 
@@ -44,7 +44,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `percentage` _integer_ | Percentage is the percent of the source size. |  |  |
+| `percentage` _integer_ | Percentage is the headroom added on top of the source size, in percent. |  |  |
 | `min` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Min is the lower bound of the derived size. |  |  |
 | `max` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Max is the upper bound of the derived size. |  |  |
 
@@ -98,6 +98,23 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `name` _string_ | Name is the name of the RestoreBlueprint in the same namespace. |  |  |
+
+
+#### HandledBackup
+
+
+
+HandledBackup identifies the backup an afterBackup trigger used last.
+
+
+
+_Appears in:_
+- [RestoreTestStatus](#restoreteststatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the backup name. |  |  |
+| `createdAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | CreatedAt is the time the backup completed. |  |  |
 
 
 #### LastRun
@@ -339,6 +356,7 @@ _Appears in:_
 | `startTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | StartTime is when the first attempt started. |  |  |
 | `deadline` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | Deadline is when the current attempt times out. |  |  |
 | `providerRef` _[ProviderRef](#providerref)_ | ProviderRef is the native object created by the provider. |  |  |
+| `resolvedSize` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | ResolvedSize is the scratch size resolved on the first reconcile. Later reconciles reuse it. |  |  |
 | `message` _string_ | Message is a human-readable detail about the current phase. |  |  |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#condition-v1-meta) array_ | Conditions are the latest observations of the restore state. |  |  |
 
@@ -446,6 +464,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | Name is the name of the restored volume entry. |  |  |
 | `mountPath` _string_ | MountPath is where the restored volume is mounted in every container. |  |  |
+| `sourcePVC` _string_ | SourcePVC is the name of the PVC in the backed-up namespace that this volume restores. |  | MinLength: 1 <br /> |
 
 
 #### Retries

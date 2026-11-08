@@ -319,7 +319,7 @@ func TestRestoreSizeTooSmallFails(t *testing.T) {
 func TestRestoreSizeAutoExpand(t *testing.T) {
 	restore := newTestRestore()
 	restore.Spec.Target.Size = nil
-	restore.Spec.Target.AutoExpand = &restorev1alpha1.AutoExpand{Percentage: 150}
+	restore.Spec.Target.AutoExpand = &restorev1alpha1.AutoExpand{Percentage: 150} // 2Gi + 150%
 	c, r := fakeRestoreClient(t, restore, newTestBlueprint(), kopiurSnapshotOfSize(2<<30))
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
@@ -330,7 +330,7 @@ func TestRestoreSizeAutoExpand(t *testing.T) {
 	}
 
 	got := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
-	if want := resource.MustParse("3Gi"); got.Cmp(want) != 0 {
-		t.Errorf("PVC size %s, want 3Gi", got.String())
+	if want := resource.MustParse("5Gi"); got.Cmp(want) != 0 {
+		t.Errorf("PVC size %s, want 5Gi", got.String())
 	}
 }

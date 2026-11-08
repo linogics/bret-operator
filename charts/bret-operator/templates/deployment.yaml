@@ -51,6 +51,8 @@ spec:
           env:
             - name: PROVIDERS
               value: {{ include "bret-operator.providers" . | quote }}
+            - name: VELERO_NAMESPACE
+              value: {{ .Values.providers.velero.namespace | quote }}
             - name: WATCH_NAMESPACES
               value: {{ join "," .Values.watchNamespaces | quote }}
             {{- with .Values.extraEnv }}

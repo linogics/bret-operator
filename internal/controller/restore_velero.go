@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,9 +30,10 @@ import (
 // +kubebuilder:rbac:groups=velero.io,resources=restores,verbs=get;list;watch;create;delete
 
 const (
-	veleroNamespace   = "velero"
-	veleroPVCPrefix   = "resources/persistentvolumeclaims/namespaces/"
-	veleroMaxPVCBytes = 1 << 20
+	defaultVeleroNamespace = "velero"
+	podSecurityPrefix      = "pod-security.kubernetes.io/"
+	veleroPVCPrefix        = "resources/persistentvolumeclaims/namespaces/"
+	veleroMaxPVCBytes      = 1 << 20
 )
 
 var (
@@ -44,15 +47,32 @@ var (
 	veleroHTTPTimeout  = 60 * time.Second
 )
 
-// veleroName names the Velero objects of an attempt. They live in the velero namespace, so the Restore namespace is part of the name.
-func veleroName(restore *restorev1alpha1.Restore) string {
-	return restore.Namespace + "-" + restore.Name
+// restoreHash is a short hash of namespace/name. It keeps the names of objects outside the Restore
+// namespace unique across namespaces and valid for any Restore name length.
+func restoreHash(restore *restorev1alpha1.Restore) string {
+	sum := sha256.Sum256([]byte(restore.Namespace + "/" + restore.Name))
+
+	return hex.EncodeToString(sum[:])[:12]
 }
 
-func veleroStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
+// veleroName names the Velero objects of an attempt.
+func veleroName(restore *restorev1alpha1.Restore) string {
+	return "bret-" + restoreHash(restore)
+}
+
+// veleroNS is the Velero install namespace.
+func (r *RestoreReconciler) veleroNS() string {
+	if r.VeleroNamespace == "" {
+		return defaultVeleroNamespace
+	}
+
+	return r.VeleroNamespace
+}
+
+func (r *RestoreReconciler) veleroStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{}
 	obj.SetGroupVersionKind(veleroRestoreGVK)
-	obj.SetNamespace(veleroNamespace)
+	obj.SetNamespace(r.veleroNS())
 	obj.SetName(veleroName(restore))
 
 	return obj
@@ -60,14 +80,15 @@ func veleroStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 
 // veleroRestoreObject restores only the PVCs and PVs of the backup into the scratch namespace.
 // No owner reference: the object lives in another namespace than the Restore.
-func veleroRestoreObject(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
-	obj := veleroStub(restore)
+func (r *RestoreReconciler) veleroRestoreObject(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
+	obj := r.veleroStub(restore)
 	obj.SetLabels(restoreLabels(restore))
 	obj.Object["spec"] = map[string]any{
-		"backupName":        restore.Spec.Source.BackupRef.Name,
-		"includedResources": []any{"persistentvolumeclaims", "persistentvolumes"},
-		"namespaceMapping":  map[string]any{restore.Namespace: "bret-scratch-" + restore.Name},
-		"restorePVs":        true,
+		"backupName":         restore.Spec.Source.BackupRef.Name,
+		"includedNamespaces": []any{restore.Namespace},
+		"includedResources":  []any{"persistentvolumeclaims", "persistentvolumes"},
+		"namespaceMapping":   map[string]any{restore.Namespace: veleroScratchName(restore)},
+		"restorePVs":         true,
 	}
 
 	return obj
@@ -84,16 +105,26 @@ func validateVeleroBlueprint(bp *restorev1alpha1.RestoreBlueprint) error {
 	}
 
 	for i := range bp.Spec.Volumes {
-		if v := bp.Spec.Volumes[i]; v.ConfigMap != nil || v.Secret != nil {
+		v := bp.Spec.Volumes[i]
+
+		if v.ConfigMap != nil || v.Secret != nil {
 			return fmt.Errorf("blueprint %s: volumes[%d] %q uses a configMap or secret, not supported with Velero", bp.Name, i, v.Name)
+		}
+
+		if v.HostPath != nil {
+			return fmt.Errorf("blueprint %s: volumes[%d] %q uses a hostPath, not supported with Velero", bp.Name, i, v.Name)
 		}
 	}
 
 	return nil
 }
 
+func veleroScratchName(restore *restorev1alpha1.Restore) string {
+	return "bret-scratch-" + restoreHash(restore)
+}
+
 func veleroScratchNamespace(restore *restorev1alpha1.Restore) *corev1.Namespace {
-	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "bret-scratch-" + restore.Name}}
+	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: veleroScratchName(restore)}}
 }
 
 // reconcileVelero creates the Velero Restore, then runs the check pod in the scratch namespace once Velero completes.
@@ -102,14 +133,14 @@ func (r *RestoreReconciler) reconcileVelero(
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreBlueprint,
 ) (ctrl.Result, error) {
-	cur := veleroStub(restore)
+	cur := r.veleroStub(restore)
 	phase := ""
 
 	err := r.getObject(ctx, cur)
 
 	switch {
 	case apierrors.IsNotFound(err):
-		cur = veleroRestoreObject(restore)
+		cur = r.veleroRestoreObject(restore)
 
 		if err := r.Create(ctx, cur); err != nil {
 			return ctrl.Result{}, err
@@ -152,6 +183,10 @@ func (r *RestoreReconciler) checkVelero(
 		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, client.IgnoreNotFound(err)
 	}
 
+	if err := r.copyPodSecurity(ctx, restore, ns); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	pvcs := &corev1.PersistentVolumeClaimList{}
 	if err := r.List(ctx, pvcs, client.InNamespace(ns.Name)); err != nil {
 		return ctrl.Result{}, err
@@ -176,6 +211,31 @@ func (r *RestoreReconciler) checkVelero(
 	}
 
 	return r.check(ctx, restore, bp, claim, ns.Name, claims)
+}
+
+// copyPodSecurity puts the pod-security labels of the Restore namespace on the scratch namespace, so the
+// check pod runs under the same admission rules as in the tenant namespace.
+func (r *RestoreReconciler) copyPodSecurity(ctx context.Context, restore *restorev1alpha1.Restore, scratch *corev1.Namespace) error {
+	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: restore.Namespace}}
+	if err := r.getObject(ctx, tenant); err != nil {
+		return err
+	}
+
+	base := scratch.DeepCopy()
+
+	for k, v := range tenant.Labels {
+		if !strings.HasPrefix(k, podSecurityPrefix) {
+			continue
+		}
+
+		if scratch.Labels == nil {
+			scratch.Labels = map[string]string{}
+		}
+
+		scratch.Labels[k] = v
+	}
+
+	return r.Patch(ctx, scratch, client.MergeFrom(base))
 }
 
 // restoredVeleroClaim is the PVC Velero restored. With several, the blueprint sourcePVC picks one.
@@ -242,7 +302,7 @@ func (r *RestoreReconciler) downloadURL(ctx context.Context, restore *restorev1a
 	req := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": downloadRequestGVK.GroupVersion().String(),
 		fieldKind:    downloadRequestGVK.Kind,
-		"metadata":   map[string]any{keyName: veleroName(restore) + "-size", keyNamespace: veleroNamespace},
+		"metadata":   map[string]any{keyName: veleroName(restore) + "-size", keyNamespace: r.veleroNS()},
 		"spec": map[string]any{"target": map[string]any{
 			fieldKind: "BackupContents", keyName: restore.Spec.Source.BackupRef.Name,
 		}},

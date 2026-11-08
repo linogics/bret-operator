@@ -57,11 +57,12 @@ const (
 	ReasonInsufficientCapacity = "InsufficientCapacity"
 )
 
-// AutoExpand derives the scratch size from the source size: clamp(source * percentage / 100, min, max).
+// AutoExpand derives the scratch size from the source size: clamp(source * (100 + percentage) / 100, min, max).
 // +kubebuilder:validation:XValidation:rule="self.percentage > 0",message="percentage must be greater than 0"
+// +kubebuilder:validation:XValidation:rule="self.percentage <= 1000",message="percentage must not be greater than 1000"
 // +kubebuilder:validation:XValidation:rule="!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max)) <= 0",message="min must not be greater than max"
 type AutoExpand struct {
-	// Percentage is the percent of the source size.
+	// Percentage is the headroom added on top of the source size, in percent.
 	Percentage int32 `json:"percentage"`
 	// Min is the lower bound of the derived size.
 	Min *resource.Quantity `json:"min,omitempty"`
@@ -119,6 +120,8 @@ type RestoreStatus struct {
 	Deadline *metav1.Time `json:"deadline,omitempty"`
 	// ProviderRef is the native object created by the provider.
 	ProviderRef *ProviderRef `json:"providerRef,omitempty"`
+	// ResolvedSize is the scratch size resolved on the first reconcile. Later reconciles reuse it.
+	ResolvedSize *resource.Quantity `json:"resolvedSize,omitempty"`
 	// Message is a human-readable detail about the current phase.
 	Message string `json:"message,omitempty"`
 	// Conditions are the latest observations of the restore state.

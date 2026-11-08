@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -16,8 +18,10 @@ import (
 
 // +kubebuilder:rbac:groups=volsync.backube,resources=replicationdestinations,verbs=get;list;watch;create;delete
 
-// volsyncMoverUID is the mover user of the restic restore. The default mover fails with a setgid error on the scratch volume.
+// volsyncMoverUID is the mover user of the restic restore when the blueprint sets none. The default mover fails with a setgid error on the scratch volume.
 const volsyncMoverUID = int64(65534)
+
+var errRepositoryMissing = errors.New(reasonRepositoryMissing)
 
 var replicationDestinationGVK = schema.GroupVersionKind{Group: "volsync.backube", Version: apiVersionAlpha1, Kind: "ReplicationDestination"}
 
@@ -35,7 +39,12 @@ func volsyncStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 }
 
 // volsyncDestinationObject restores the restic repository straight into the scratch PVC.
-func volsyncDestinationObject(restore *restorev1alpha1.Restore, repository string, size resource.Quantity) *unstructured.Unstructured {
+func volsyncDestinationObject(restore *restorev1alpha1.Restore, repository string, size resource.Quantity, uid *int64) *unstructured.Unstructured {
+	mover := volsyncMoverUID
+	if uid != nil {
+		mover = *uid
+	}
+
 	obj := volsyncStub(restore)
 	obj.SetLabels(restoreLabels(restore))
 	obj.Object["spec"] = map[string]any{
@@ -46,7 +55,7 @@ func volsyncDestinationObject(restore *restorev1alpha1.Restore, repository strin
 			"destinationPVC": restoredClaimName(restore),
 			"capacity":       size.String(),
 			"moverSecurityContext": map[string]any{
-				"runAsUser": volsyncMoverUID, "runAsGroup": volsyncMoverUID, "fsGroup": volsyncMoverUID,
+				"runAsUser": mover, "runAsGroup": mover, "fsGroup": mover,
 			},
 		},
 	}
@@ -54,7 +63,8 @@ func volsyncDestinationObject(restore *restorev1alpha1.Restore, repository strin
 	return obj
 }
 
-// volsyncRepository is the restic repository Secret of the backup's ReplicationSource. "" means the source is not there.
+// volsyncRepository is the restic repository Secret name of the backup's ReplicationSource, read in the backup namespace only.
+// The Secret itself must exist in the Restore namespace. "" means the source is not there.
 func (r *RestoreReconciler) volsyncRepository(ctx context.Context, restore *restorev1alpha1.Restore) (string, error) {
 	src := &unstructured.Unstructured{}
 	src.SetGroupVersionKind(replicationSourceGVK)
@@ -70,6 +80,9 @@ func (r *RestoreReconciler) volsyncRepository(ctx context.Context, restore *rest
 	}
 
 	repo, _, _ := unstructured.NestedString(src.Object, "spec", "restic", "repository")
+	if repo == "" {
+		return "", fmt.Errorf("%w: ReplicationSource %s/%s has no spec.restic.repository", errRepositoryMissing, src.GetNamespace(), src.GetName())
+	}
 
 	return repo, nil
 }
@@ -81,6 +94,7 @@ func (r *RestoreReconciler) reconcileVolSync(
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreBlueprint,
 	size resource.Quantity,
+	uid *int64,
 ) (ctrl.Result, error) {
 	rd := volsyncStub(restore)
 
@@ -89,6 +103,12 @@ func (r *RestoreReconciler) reconcileVolSync(
 	switch {
 	case apierrors.IsNotFound(err):
 		repo, err := r.volsyncRepository(ctx, restore)
+		if errors.Is(err, errRepositoryMissing) {
+			r.block(restore, reasonRepositoryMissing, err.Error())
+
+			return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
+		}
+
 		if err != nil || repo == "" {
 			return ctrl.Result{RequeueAfter: restoreRequeueAfter}, err
 		}
@@ -97,7 +117,7 @@ func (r *RestoreReconciler) reconcileVolSync(
 			return ctrl.Result{}, err
 		}
 
-		rd = volsyncDestinationObject(restore, repo, size)
+		rd = volsyncDestinationObject(restore, repo, size, uid)
 
 		if _, err := r.ensure(ctx, restore, rd); err != nil {
 			return ctrl.Result{}, err

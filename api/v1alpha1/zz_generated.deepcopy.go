@@ -423,6 +423,11 @@ func (in *RestoreStatus) DeepCopyInto(out *RestoreStatus) {
 		*out = new(ProviderRef)
 		**out = **in
 	}
+	if in.ResolvedSize != nil {
+		in, out := &in.ResolvedSize, &out.ResolvedSize
+		x := (*in).DeepCopy()
+		*out = &x
+	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]v1.Condition, len(*in))

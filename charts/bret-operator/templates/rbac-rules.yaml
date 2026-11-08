@@ -25,6 +25,7 @@ rules:
   - get
   - patch
 {{- end }}
+{{- if or (not .Values.watchNamespaces) $.Values.providers.velero.enabled }}
 - apiGroups:
   - ''
   resources:
@@ -36,8 +37,8 @@ rules:
   - get
   - list
   - patch
-  - update
   - watch
+{{- end }}
 {{- if not .Values.watchNamespaces }}
 - apiGroups:
   - bret.linogics.io
@@ -150,6 +151,20 @@ metadata:
   labels:
     {{- include "bret-operator.labels" $ | nindent 4 }}
 rules:
+{{- if not $.Values.providers.velero.enabled }}
+- apiGroups:
+  - ''
+  resources:
+  - persistentvolumeclaims
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - watch
+{{- end }}
 - apiGroups:
   - bret.linogics.io
   resources:

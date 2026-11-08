@@ -39,16 +39,28 @@ func TestResolveSize(t *testing.T) {
 			want:   testSize1Gi,
 		},
 		{
-			name:   "exact percentage",
+			name:   "headroom on top of the source",
 			target: restorev1alpha1.RestoreTarget{AutoExpand: &restorev1alpha1.AutoExpand{Percentage: 10, Min: quantityPtr(testSize1Gi)}},
 			source: quantityPtr(testSize10Gi),
-			want:   testSize1Gi,
+			want:   "11Gi",
+		},
+		{
+			name:   "default on a 20Gi source is 22Gi",
+			target: restorev1alpha1.RestoreTarget{},
+			source: quantityPtr("20Gi"),
+			want:   "22Gi",
+		},
+		{
+			name:    "max below the source is insufficient",
+			target:  restorev1alpha1.RestoreTarget{AutoExpand: &restorev1alpha1.AutoExpand{Percentage: 10, Max: quantityPtr(testSize5Gi)}},
+			source:  quantityPtr("100Gi"),
+			wantErr: ErrInsufficientCapacity,
 		},
 		{
 			name:   "max clamps",
-			target: restorev1alpha1.RestoreTarget{AutoExpand: &restorev1alpha1.AutoExpand{Percentage: 10, Max: quantityPtr(testSize5Gi)}},
-			source: quantityPtr("100Gi"),
-			want:   testSize5Gi,
+			target: restorev1alpha1.RestoreTarget{AutoExpand: &restorev1alpha1.AutoExpand{Percentage: 100, Max: quantityPtr("7Gi")}},
+			source: quantityPtr(testSize5Gi),
+			want:   "7Gi",
 		},
 		{
 			name: "fixed size idiom",

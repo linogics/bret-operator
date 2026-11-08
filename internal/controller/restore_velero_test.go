@@ -27,17 +27,19 @@ import (
 )
 
 func TestVeleroRestoreSpec(t *testing.T) {
-	obj := veleroRestoreObject(sizeTestRestore("velero"))
+	restore := sizeTestRestore("velero")
+	obj := (&RestoreReconciler{}).veleroRestoreObject(restore)
 
 	if obj.GetNamespace() != "velero" || obj.GetAPIVersion() != "velero.io/v1" || obj.GetKind() != "Restore" {
 		t.Fatalf("unexpected identity %s %s/%s", obj.GetAPIVersion(), obj.GetNamespace(), obj.GetKind())
 	}
 
 	want := map[string]any{
-		"backupName":        testBackupName,
-		"includedResources": []any{"persistentvolumeclaims", "persistentvolumes"},
-		"namespaceMapping":  map[string]any{"ns": "bret-scratch-r"},
-		"restorePVs":        true,
+		"backupName":         testBackupName,
+		"includedNamespaces": []any{"ns"},
+		"includedResources":  []any{"persistentvolumeclaims", "persistentvolumes"},
+		"namespaceMapping":   map[string]any{"ns": veleroScratchName(restore)},
+		"restorePVs":         true,
 	}
 
 	if got, _, _ := unstructured.NestedMap(obj.Object, "spec"); !reflect.DeepEqual(got, want) {
@@ -218,7 +220,7 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 			restore.Spec.Provider = restorev1alpha1.ProviderVelero
 			restore.Spec.KeepOnFailure = tt.keep
 
-			c, r := fakeRestoreClient(t, restore, newTestBlueprint())
+			c, r := fakeRestoreClient(t, restore, newTestBlueprint(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
 			key := client.ObjectKeyFromObject(restore)
 
 			go func() {
@@ -230,7 +232,7 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 			reconcileRestore(t, r, key) // Pending
 			reconcileRestore(t, r, key) // Velero Restore created
 
-			vr := veleroStub(restore)
+			vr := r.veleroStub(restore)
 			if err := c.Get(ctx, client.ObjectKeyFromObject(vr), vr); err != nil {
 				t.Fatalf("Velero restore not created: %v", err)
 			}
@@ -297,7 +299,7 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 				t.Fatalf("second cleanup: %v", err)
 			}
 
-			err = c.Get(ctx, client.ObjectKeyFromObject(vr), veleroStub(restore))
+			err = c.Get(ctx, client.ObjectKeyFromObject(vr), r.veleroStub(restore))
 			if tt.wantNS == errors.IsNotFound(err) {
 				t.Fatalf("velero restore presence wrong, keep=%v err=%v", tt.keep, err)
 			}
@@ -353,7 +355,7 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 			reconcileRestore(t, r, key)
 
 			got := getRestore(t, c, key)
-			err := c.Get(ctx, client.ObjectKeyFromObject(veleroStub(restore)), veleroStub(restore))
+			err := c.Get(ctx, client.ObjectKeyFromObject(r.veleroStub(restore)), r.veleroStub(restore))
 
 			if tt.field == "" {
 				if err != nil || got.Status.Phase != restorev1alpha1.RestorePhaseRunning {
@@ -372,5 +374,14 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 				t.Fatalf("velero restore created for rejected blueprint: %v", err)
 			}
 		})
+	}
+}
+
+func TestVeleroRejectsHostPath(t *testing.T) {
+	bp := newTestBlueprint()
+	bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/"}}}}
+
+	if err := validateVeleroBlueprint(bp); err == nil || !strings.Contains(err.Error(), "hostPath") {
+		t.Fatalf("err = %v, want a hostPath rejection", err)
 	}
 }

@@ -55,13 +55,21 @@ reason `ProviderUnsupported`.
 Velero and VolSync have these rules:
 
 - Velero: the restore runs in the Velero namespace (`providers.velero.namespace`, default
-  `velero`). The PVC and PVs are restored into the scratch namespace `bret-scratch-<restore name>`,
-  and the check pod runs there. A blueprint for Velero must not set `serviceAccountName`,
-  `imagePullSecrets`, or configMap/secret volumes. Such a blueprint fails with
-  `ProviderUnsupported`.
+  `velero`, passed to the operator as `VELERO_NAMESPACE`). Only the PVCs and PVs of the `Restore`
+  namespace are restored (`includedNamespaces`), into the scratch namespace
+  `bret-scratch-<hash>`. The hash is the first 12 hex characters of the SHA-256 of
+  `<namespace>/<name>`, so equal Restore names in two namespaces never share data. The operator
+  copies the `pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch
+  namespace before the check pod starts, so the pod runs under the same Pod Security rules. A
+  blueprint for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap, secret
+  or hostPath volumes. Such a blueprint fails with `ProviderUnsupported`. Velero restores at the
+  original size, so `target.size` and `autoExpand` only gate the run.
 - VolSync: the operator creates a `ReplicationDestination` with a restic mover. The repository
-  Secret and the source PVC come from the backup's `ReplicationSource`, in the backup namespace
-  (`backupRef.namespace`, or the `Restore` namespace when it is not set).
+  Secret name and the source PVC come from the backup's `ReplicationSource`, in the backup namespace
+  (`backupRef.namespace`, or the `Restore` namespace when it is not set). The Secret itself must
+  exist in the `Restore` namespace. A `ReplicationSource` without `spec.restic.repository` sets the
+  reason `RepositoryMissing`. The mover UID comes from the blueprint (annotation
+  `bret.linogics.io/mover-uid`, else the first container's `runAsUser`), and falls back to 65534.
 
 ## Volumes per restore
 
@@ -87,10 +95,13 @@ the application's own volume.
 - VolSync: the request of the source PVC.
 
 `target.autoExpand` derives the size from the source size:
-`clamp(source x percentage / 100, min, max)`. Its fields are `percentage` (above 0), and
-optional `min` and `max`, where `min` must not exceed `max`. When both `size` and `autoExpand`
-are omitted, the default is `percentage: 10` with `min: 1Gi`. For a fixed size, use
-`percentage: 100, min: X, max: X`.
+`clamp(source x (100 + percentage) / 100, min, max)`: the percentage is headroom on top of the
+source. A 20Gi source with the default gives 22Gi. Its fields are `percentage` (above 0, at most
+1000), and optional `min` and `max`, where `min` must not exceed `max`. When both `size` and
+`autoExpand` are omitted, the default is `percentage: 10` with `min: 1Gi`. A result below the
+source size fails with `InsufficientCapacity`. For a fixed size, set `target.size`, or use
+`percentage: 100, min: X, max: X` with X at least twice the source. The size is resolved once and
+stored in `status.resolvedSize`.
 
 Two failures are reported as reasons on the `Restore`:
 
@@ -143,10 +154,11 @@ With `keepOnFailure: true` and the last attempt failed, the operator keeps:
 - the scratch volume, so the restored data stays readable.
 
 Kept resources get the label `bret.linogics.io/retained: "true"`. The `RestoreTest` lists them in
-`status.retainedResources`. Kept resources are not deleted automatically. Delete them by hand, or
-delete the `Restore`. There is no TTL in v1 (`retainedFor` is not implemented).
+`status.retainedResources`. Kept resources of the last attempt are not deleted automatically.
+Delete the `Restore` to remove them: a finalizer deletes the check pod, the provider objects, the
+Velero scratch namespace and the PVCs. There is no TTL in v1 (`retainedFor` is not implemented).
 
-Earlier failed attempts are always cleaned up. Only the last attempt is kept.
+Earlier failed attempts are removed when the `RestoreTest` run settles. Only the last attempt is kept.
 
 ### overlapPolicy
 
@@ -180,6 +192,9 @@ Namespaces:
 - `watchNamespaces` in the chart values is a list. Empty means cluster-wide. When it is set, the
   controller cache and the namespaced `Role` and `RoleBinding` objects are limited to those
   namespaces. The Velero rights stay in `providers.velero.namespace`, even if it is not listed.
+  Pod and PVC rights are in the per-namespace `Role` objects, and the cache is limited to those
+  namespaces. With Velero on, they stay in the `ClusterRole`, because the scratch namespaces are
+  not watched.
 - A `RestoreTest` in a namespace that is not watched is ignored. The operator sets the
   condition `WatchedNamespace` to `False` on it (planned).
 - Pods and volumes always live in the namespace of the `Restore` or `RestoreTest`.

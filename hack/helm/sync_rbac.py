@@ -25,8 +25,11 @@ PROVIDER_GROUPS = {
 }
 
 
-def provider_rules(rules):
-    """Dump rules, wrapping every provider rule in its providers.<name> condition."""
+def provider_rules(rules, pod_cond=None):
+    """Dump rules, wrapping every provider rule in its providers.<name> condition.
+
+    The pods and PVC rule gets pod_cond: it is cluster-wide only with Velero on or no watched namespaces.
+    """
     out = []
     for rule in rules:
         text = yaml.safe_dump([rule], sort_keys=False)
@@ -34,7 +37,9 @@ def provider_rules(rules):
         # Namespace rights exist only for the Velero scratch namespace.
         if rule["resources"] == ["namespaces"]:
             name = "velero"
-        if name:
+        if "pods" in rule["resources"]:
+            text = f"{{{{- if {pod_cond} }}}}\n{text}{{{{- end }}}}\n"
+        elif name:
             text = f"{{{{- if $.Values.providers.{name}.enabled }}}}\n{text}{{{{- end }}}}\n"
         out.append(text)
     return "".join(out)
@@ -65,10 +70,15 @@ metadata:
     {{- include "bret-operator.labels" . | nindent 4 }}
 """
     )
-    # Core rules (pods, PVCs, namespaces, events) stay cluster-wide: scratch namespaces are not watched.
+    # Namespaces and events stay cluster-wide. Pods and PVCs are cluster-wide only with Velero on,
+    # because its scratch namespaces are not watched; otherwise they move to the per-namespace Roles.
     core = [r for r in manager if r["apiGroups"] == [""]]
+    pods = [r for r in core if "pods" in r["resources"]]
     rest = [r for r in manager if r["apiGroups"] != [""]]
-    parts.append("rules:\n" + provider_rules(core))
+    parts.append(
+        "rules:\n"
+        + provider_rules(core, "or (not .Values.watchNamespaces) $.Values.providers.velero.enabled")
+    )
     parts.append("{{- if not .Values.watchNamespaces }}\n" + provider_rules(rest) + "{{- end }}\n")
     parts.append(
         """{{- range .Values.watchNamespaces }}
@@ -82,6 +92,7 @@ metadata:
     {{- include "bret-operator.labels" $ | nindent 4 }}
 rules:
 """
+        + provider_rules(pods, "not $.Values.providers.velero.enabled")
         + provider_rules([r for r in rest if r["apiGroups"] != ["velero.io"]])
         + """{{- end }}
 {{- if and $.Values.watchNamespaces $.Values.providers.velero.enabled }}

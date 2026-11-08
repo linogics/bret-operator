@@ -166,6 +166,11 @@ func (r *RestoreTestReconciler) settle(
 		return r.retry(ctx, test, restore, attempt)
 	}
 
+	// The run is over, so the objects kept by its earlier attempts are no longer needed.
+	if err := r.deleteEarlierAttempts(ctx, test, restore); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	now := r.now()
 	result := restorev1alpha1.RunResultFailed
 	status := metav1.ConditionFalse
@@ -193,6 +198,31 @@ func (r *RestoreTestReconciler) settle(
 	setTestReady(test, status, string(result), restore.Status.Message)
 
 	return ctrl.Result{}, nil
+}
+
+// deleteEarlierAttempts deletes the other Restores of the run. Their finalizer removes the retained objects.
+func (r *RestoreTestReconciler) deleteEarlierAttempts(
+	ctx context.Context,
+	test *restorev1alpha1.RestoreTest,
+	last *restorev1alpha1.Restore,
+) error {
+	list := &restorev1alpha1.RestoreList{}
+
+	err := r.List(ctx, list, client.InNamespace(test.Namespace),
+		client.MatchingLabels{testLabel: test.Name, runLabel: last.Labels[runLabel]})
+	if err != nil {
+		return err
+	}
+
+	for i := range list.Items {
+		if list.Items[i].Name != last.Name {
+			if err := client.IgnoreNotFound(r.Delete(ctx, &list.Items[i])); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // retry waits for the backoff after a failed attempt, then creates the next attempt of the same run.

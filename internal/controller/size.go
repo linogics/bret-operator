@@ -11,8 +11,8 @@ import (
 var (
 	// ErrSizeUnknown means the source size is unknown and target.size is not set.
 	ErrSizeUnknown = errors.New(restorev1alpha1.ReasonSizeUnknown + ": target.size is required when the source size is unknown")
-	// ErrInsufficientCapacity means target.size is smaller than the source size.
-	ErrInsufficientCapacity = errors.New(restorev1alpha1.ReasonInsufficientCapacity + ": target.size is smaller than the source size")
+	// ErrInsufficientCapacity means the scratch size is smaller than the source size.
+	ErrInsufficientCapacity = errors.New(restorev1alpha1.ReasonInsufficientCapacity + ": the scratch size is smaller than the source size")
 )
 
 // resolveSize returns the scratch size of a Restore. source is nil when the source size is unknown.
@@ -39,15 +39,20 @@ func resolveSize(target restorev1alpha1.RestoreTarget, source *resource.Quantity
 		expand = &restorev1alpha1.AutoExpand{Percentage: 10, Min: &minSize}
 	}
 
-	size := resource.NewQuantity(source.Value()*int64(expand.Percentage)/100, resource.BinarySI)
+	// shortcut: int64 bytes overflow above about 8 PB at 1000 percent, no PVC gets that big.
+	size := *resource.NewQuantity(source.Value()*(100+int64(expand.Percentage))/100, resource.BinarySI)
 
 	if expand.Min != nil && size.Cmp(*expand.Min) < 0 {
-		return *expand.Min, nil
+		size = *expand.Min
 	}
 
 	if expand.Max != nil && size.Cmp(*expand.Max) > 0 {
-		return *expand.Max, nil
+		size = *expand.Max
 	}
 
-	return *size, nil
+	if size.Cmp(*source) < 0 {
+		return resource.Quantity{}, ErrInsufficientCapacity
+	}
+
+	return size, nil
 }

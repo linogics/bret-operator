@@ -35,7 +35,7 @@ func volsyncSource() *unstructured.Unstructured {
 
 func TestVolSyncRestoreSpec(t *testing.T) {
 	restore := volsyncTestRestore()
-	obj := volsyncDestinationObject(restore, "repo-secret", resource.MustParse("3Gi"))
+	obj := volsyncDestinationObject(restore, "repo-secret", resource.MustParse("3Gi"), nil)
 
 	if obj.GetNamespace() != testNamespace || obj.GetAPIVersion() != "volsync.backube/v1alpha1" || obj.GetKind() != "ReplicationDestination" {
 		t.Fatalf("unexpected identity %s %s/%s", obj.GetAPIVersion(), obj.GetNamespace(), obj.GetKind())

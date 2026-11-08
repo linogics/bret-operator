@@ -146,7 +146,8 @@ spec:
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                       percentage:
-                        description: Percentage is the percent of the source size.
+                        description: Percentage is the headroom added on top of the
+                          source size, in percent.
                         format: int32
                         type: integer
                     required:
@@ -155,6 +156,8 @@ spec:
                     x-kubernetes-validations:
                     - message: percentage must be greater than 0
                       rule: self.percentage > 0
+                    - message: percentage must not be greater than 1000
+                      rule: self.percentage <= 1000
                     - message: min must not be greater than max
                       rule: '!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max))
                         <= 0'

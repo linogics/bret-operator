@@ -52,10 +52,10 @@ control-plane: controller-manager
 {{- end }}
 
 {{/*
-Comma list of the enabled providers.
+Comma list of the enabled providers, or none when every provider is off.
 */}}
 {{- define "bret-operator.providers" -}}
 {{- $p := list -}}
 {{- range $name, $on := .Values.providers }}{{ if $on.enabled }}{{ $p = append $p $name }}{{ end }}{{ end -}}
-{{- join "," (sortAlpha $p) -}}
+{{- if $p }}{{ join "," (sortAlpha $p) }}{{ else }}none{{ end -}}
 {{- end }}

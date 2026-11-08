@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
@@ -39,7 +40,12 @@ const (
 	reasonProviderUnsupported  = "ProviderUnsupported"
 	reasonBlueprintNotFound    = "BlueprintNotFound"
 	reasonBlueprintUnsupported = "BlueprintUnsupported"
+	reasonRepositoryMissing    = "RepositoryMissing"
 )
+
+// cleanupFinalizer makes the Restore remove its provider objects, scratch namespace and PVCs on deletion.
+// Owner references cannot reach the objects outside the Restore namespace.
+const cleanupFinalizer = "bret.linogics.io/cleanup"
 
 // RestoreReconciler reconciles a Restore object: one attempt that restores with Kopiur and runs the check.
 type RestoreReconciler struct {
@@ -50,13 +56,15 @@ type RestoreReconciler struct {
 	APIReader client.Reader
 	// EnabledProviders limits the providers this reconciler serves. Nil serves all of them.
 	EnabledProviders map[restorev1alpha1.Provider]bool
+	// VeleroNamespace is the Velero install namespace. Empty means "velero".
+	VeleroNamespace string
 }
 
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores/finalizers,verbs=update
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restoreblueprints,verbs=get;list;watch
-// +kubebuilder:rbac:groups=core,resources=pods;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods;persistentvolumeclaims,verbs=get;list;watch;create;patch;delete
 // +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;patch;delete
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=kopiur.home-operations.com,resources=restores,verbs=get;list;watch;create;update;patch;delete
@@ -67,6 +75,16 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	restore := &restorev1alpha1.Restore{}
 	if err := r.Get(ctx, req.NamespacedName, restore); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if !restore.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, r.finalize(ctx, restore)
+	}
+
+	if controllerutil.AddFinalizer(restore, cleanupFinalizer) {
+		if err := r.Update(ctx, restore); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	var (
@@ -91,6 +109,21 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	return result, err
+}
+
+// finalize removes everything the attempt created, then releases the Restore.
+func (r *RestoreReconciler) finalize(ctx context.Context, restore *restorev1alpha1.Restore) error {
+	if !controllerutil.ContainsFinalizer(restore, cleanupFinalizer) {
+		return nil
+	}
+
+	if err := r.cleanup(ctx, restore); err != nil {
+		return err
+	}
+
+	controllerutil.RemoveFinalizer(restore, cleanupFinalizer)
+
+	return client.IgnoreNotFound(r.Update(ctx, restore))
 }
 
 // advance runs one step of the attempt and reports how the reconciler should be requeued.
@@ -169,13 +202,12 @@ func (r *RestoreReconciler) progress(
 	bp *restorev1alpha1.RestoreBlueprint,
 	uid *int64,
 ) (ctrl.Result, error) {
-	source, err := r.sourceSize(ctx, restore)
+	size, err := r.scratchSize(ctx, restore)
 	if err != nil {
-		return ctrl.Result{}, err
-	}
+		if !errors.Is(err, ErrSizeUnknown) && !errors.Is(err, ErrInsufficientCapacity) {
+			return ctrl.Result{}, err
+		}
 
-	size, err := resolveSize(restore.Spec.Target, source)
-	if err != nil {
 		// Terminal for this attempt: nothing is created and nothing is requeued.
 		reason := restorev1alpha1.ReasonSizeUnknown
 		if errors.Is(err, ErrInsufficientCapacity) {
@@ -194,7 +226,7 @@ func (r *RestoreReconciler) progress(
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVolSync {
-		return r.reconcileVolSync(ctx, restore, bp, size)
+		return r.reconcileVolSync(ctx, restore, bp, size, uid)
 	}
 
 	claims, err := r.ensureClaims(ctx, restore, bp, size)
@@ -230,6 +262,32 @@ func (r *RestoreReconciler) progress(
 	default:
 		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
 	}
+}
+
+// scratchSize resolves the scratch size once and stores it in the status. Later reconciles reuse it, so the
+// source is read once. A Restore that already has a provider object needs no size: its objects exist.
+func (r *RestoreReconciler) scratchSize(ctx context.Context, restore *restorev1alpha1.Restore) (resource.Quantity, error) {
+	if restore.Status.ResolvedSize != nil {
+		return *restore.Status.ResolvedSize, nil
+	}
+
+	if restore.Status.ProviderRef != nil {
+		return resource.Quantity{}, nil
+	}
+
+	source, err := r.sourceSize(ctx, restore)
+	if err != nil {
+		return resource.Quantity{}, err
+	}
+
+	size, err := resolveSize(restore.Spec.Target, source)
+	if err != nil {
+		return resource.Quantity{}, err
+	}
+
+	restore.Status.ResolvedSize = &size
+
+	return size, nil
 }
 
 // ensureClaims creates the restored PVC and the blueprint scratch PVCs. It returns the scratch claims by volume name.

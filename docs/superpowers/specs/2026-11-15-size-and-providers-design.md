@@ -50,15 +50,16 @@ If `target.size` is set and is smaller than the source size, the Restore fails w
 
 ```yaml
 autoExpand:
-  percentage: 10   # % of source size, must be > 0
+  percentage: 10   # headroom on top of the source size in %, must be > 0 and <= 1000
   min: 1Gi         # lower bound
   max: 5Gi         # upper bound, optional
 ```
 
-Rule: `size = clamp(sourceSize × percentage / 100, min, max)`.
+Rule: `size = clamp(sourceSize × (100 + percentage) / 100, min, max)`. The percentage is headroom on top of the source. If the clamped size is below the source size, the Restore fails with `InsufficientCapacity`.
 
 - `min` must not be greater than `max` (CEL).
-- Fixed size idiom: `percentage: 100, min: 5Gi, max: 5Gi`.
+- `percentage` must not be greater than 1000 (CEL).
+- Fixed size idiom: set `target.size`.
 - Default when `target.size` and `autoExpand` are both omitted: `percentage: 10, min: 1Gi`.
 
 Caveat: a live PVC (VolSync) shows its size now, not at backup time. If the app resized it after the backup, the derived size can be wrong. The docs say so.
@@ -100,8 +101,9 @@ Replace leaves the old Restore for garbage collection. Documented.
 
 ### Velero in v1
 
-- `Restore` for the PVC and PV subset: `includedResources: [persistentvolumeclaims, persistentvolumes]`, `namespaceMapping: {<source ns>: bret-scratch-<restore>}`, `restorePVs: true`.
-- Velero creates the target namespace. The operator needs no namespace RBAC.
+- `Restore` for the PVC and PV subset: `includedResources: [persistentvolumeclaims, persistentvolumes]`, `includedNamespaces: [<restore ns>]`, `namespaceMapping: {<restore ns>: bret-scratch-<hash of ns/name>}`, `restorePVs: true`.
+- Velero creates the target namespace. The operator patches the pod-security labels of the Restore namespace onto it before the check pod runs, and deletes it on cleanup. Blueprints with hostPath volumes are rejected.
+- The Velero namespace is passed to the operator as `VELERO_NAMESPACE`.
 - Open risk, for a spike before merge: PV name clashes with live PVs.
 
 ## Approaches considered
