@@ -74,7 +74,7 @@ spec:
               keepOnFailure:
                 default: false
                 description: KeepOnFailure keeps the check pod and restore objects
-                  when the final attempt fails.
+                  after the final attempt fails.
                 type: boolean
               overlapPolicy:
                 default: Skip
@@ -124,8 +124,8 @@ spec:
                     type: integer
                 type: object
               target:
-                description: Target is the scratch volume each run restores into,
-                  with the same meaning as Restore.spec.target.
+                description: Target is the scratch volume that each run restores into.
+                  It has the same meaning as Restore.spec.target.
                 properties:
                   autoExpand:
                     description: AutoExpand derives the size from the source size
@@ -146,8 +146,8 @@ spec:
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                       percentage:
-                        description: Percentage is the headroom added on top of the
-                          source size, in percent.
+                        description: Percentage is the headroom added to the source
+                          size, in percent.
                         format: int32
                         type: integer
                     required:
@@ -165,8 +165,8 @@ spec:
                     anyOf:
                     - type: integer
                     - type: string
-                    description: Size is the capacity of the scratch volume. When
-                      unset, it is derived from the source size.
+                    description: Size is the capacity of the scratch volume. The source
+                      size sets it when unset.
                     pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                     x-kubernetes-int-or-string: true
                   storageClassName:
@@ -267,12 +267,12 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               currentRestore:
-                description: CurrentRestore is the Restore of the run in progress,
-                  empty when no run is in progress.
+                description: CurrentRestore is the Restore of the run in progress.
+                  It is empty when no run is in progress.
                 type: string
               lastHandled:
-                description: LastHandled is the newest backup an afterBackup trigger
-                  used. Only newer backups trigger a run.
+                description: LastHandled is the newest backup that an afterBackup
+                  trigger used. Only newer backups start a run.
                 properties:
                   createdAt:
                     description: CreatedAt is the time the backup completed.
@@ -314,12 +314,12 @@ spec:
                 format: date-time
                 type: string
               pendingRun:
-                description: PendingRun is the backup of the run queued behind the
-                  run in progress (overlap policy Queue).
+                description: PendingRun is the backup of the queued run, which waits
+                  for the run in progress. It applies to overlap policy Queue.
                 type: string
               retainedResources:
-                description: RetainedResources lists objects kept after a failed run
-                  for debugging.
+                description: RetainedResources lists objects kept after a failed run.
+                  They help debugging.
                 items:
                   type: string
                 type: array

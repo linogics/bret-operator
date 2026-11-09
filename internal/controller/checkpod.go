@@ -19,7 +19,7 @@ const (
 
 var nonDNSLabelChars = regexp.MustCompile(`[^a-z0-9-]`)
 
-// dnsLabel mirrors dns() in hack/check-test/render.py, so names match the rendered test pods.
+// dnsLabel mirrors dns() in hack/check-test/render.py. Names then match the rendered test pods.
 func dnsLabel(s string) string {
 	s = nonDNSLabelChars.ReplaceAllString(strings.ToLower(s), "-")
 	s = strings.Trim(s, "-")
@@ -40,7 +40,7 @@ func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
 	return nil
 }
 
-// validateRestoredVolumes rejects checks with more than one restored volume: providers restore one PVC.
+// validateRestoredVolumes rejects checks with more than one restored volume. Providers restore one PVC.
 func validateRestoredVolumes(bp *restorev1alpha1.RestoreCheck) error {
 	if len(bp.Spec.RestoredVolumes) > 1 {
 		return fmt.Errorf("check %s: only one restoredVolumes entry is supported, got %d", bp.Name, len(bp.Spec.RestoredVolumes))
@@ -54,8 +54,8 @@ func checkPodName(restore *restorev1alpha1.Restore) string {
 	return restore.Name + "-check"
 }
 
-// buildCheckPod renders the check pod for one attempt, the same way hack/check-test/render.py does.
-// restoredClaim is mounted at restoreMount; scratchClaims maps scratch volume names to their PVC names.
+// buildCheckPod renders the check pod for one attempt. It works the same way as hack/check-test/render.py.
+// restoredClaim is mounted at restoreMount. scratchClaims maps scratch volume names to their PVC names.
 func buildCheckPod(
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreCheck,
@@ -120,7 +120,7 @@ func buildCheckPod(
 	}, nil
 }
 
-// withMounts returns copies of containers with mounts appended, leaving the check untouched.
+// withMounts returns copies of containers with appended mounts. It leaves the check untouched.
 func withMounts(containers []corev1.Container, mounts []corev1.VolumeMount) []corev1.Container {
 	out := make([]corev1.Container, 0, len(containers))
 

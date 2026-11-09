@@ -17,7 +17,7 @@ type RestoredVolume struct {
 	SourcePVC string `json:"sourcePVC"`
 }
 
-// ScratchVolume is a PVC the operator creates for each attempt, for staging space the check needs.
+// ScratchVolume is a PVC that the operator creates for each attempt. It provides staging space for the check.
 type ScratchVolume struct {
 	// Name is the name of the scratch volume.
 	// +kubebuilder:validation:MinLength=1
@@ -39,15 +39,15 @@ type RestoreCheckSpec struct {
 	RestoredVolumes []RestoredVolume `json:"restoredVolumes,omitempty"`
 	// InitContainers run before the check containers.
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
-	// Containers run the check; exit code 0 means pass.
+	// Containers run the check. Exit code 0 means pass.
 	// +kubebuilder:validation:MinItems=1
 	Containers []corev1.Container `json:"containers"`
-	// ScratchVolumes are PVCs created per attempt for staging space, deleted after the attempt.
+	// ScratchVolumes are PVCs created for each attempt. They provide staging space and are deleted after the attempt.
 	ScratchVolumes []ScratchVolume `json:"scratchVolumes,omitempty"`
-	// Volumes are extra volumes for the check pod, such as ConfigMaps or Secrets.
+	// Volumes are extra volumes for the check pod. For example, ConfigMaps or Secrets.
 	Volumes []corev1.Volume `json:"volumes,omitempty"`
 
-	// SecurityContext is the pod-level security context, for example fsGroup or runAsUser for all containers.
+	// SecurityContext is the pod-level security context. For example, fsGroup or runAsUser applies to all containers.
 	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
 	// ServiceAccountName is the service account the check pod runs as.
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`

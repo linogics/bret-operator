@@ -22,7 +22,7 @@ const (
 	keyNamespace         = "namespace"
 )
 
-// kopiurRestoreGVK is the Kopiur Restore kind. It is used as unstructured, so Kopiur is not a Go dependency.
+// kopiurRestoreGVK is the Kopiur Restore kind. It is used as unstructured. Kopiur is not a Go dependency.
 var kopiurRestoreGVK = schema.GroupVersionKind{Group: kopiurGroup, Version: apiVersionAlpha1, Kind: "Restore"}
 
 // kopiurName is the name of the Kopiur Restore of one attempt.
@@ -30,7 +30,7 @@ func kopiurName(restore *restorev1alpha1.Restore) string {
 	return restore.Name + "-kopiur"
 }
 
-// backupNamespace is the namespace of the backup object: backupRef.namespace, else the Restore's.
+// backupNamespace is the namespace of the backup object. It is backupRef.namespace, or else the Restore namespace.
 func backupNamespace(restore *restorev1alpha1.Restore) string {
 	if ns := restore.Spec.Source.BackupRef.Namespace; ns != "" {
 		return ns
@@ -49,7 +49,7 @@ func scratchClaimName(restore *restorev1alpha1.Restore, volume string) string {
 	return restore.Name + "-scratch-" + dnsLabel(volume)
 }
 
-// restoreLabels labels every object an attempt creates, so cleanup can find them.
+// restoreLabels labels every object that an attempt creates. Cleanup uses them to find the objects.
 func restoreLabels(restore *restorev1alpha1.Restore) map[string]string {
 	return map[string]string{restoreLabel: restore.Name}
 }
@@ -64,7 +64,7 @@ func kopiurStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 	return obj
 }
 
-// kopiurRestoreObject returns the desired Kopiur Restore of one attempt. uid, when set, is the mover UID.
+// kopiurRestoreObject returns the desired Kopiur Restore of one attempt. uid is the mover UID when set.
 func kopiurRestoreObject(restore *restorev1alpha1.Restore, uid *int64) *unstructured.Unstructured {
 	backup := restore.Spec.Source.BackupRef
 
@@ -102,8 +102,9 @@ func kopiurPhase(obj *unstructured.Unstructured) string {
 	return phase
 }
 
-// moverUID is the UID the mover writes the restored volume as. The check annotation wins,
-// then the first main container's runAsUser, as in hack/check-test/render.py. Nil means unset.
+// moverUID is the UID that the mover writes the restored volume as.
+// The check annotation wins. Then the runAsUser of the first main container applies, as in hack/check-test/render.py.
+// Nil means unset.
 func moverUID(bp *restorev1alpha1.RestoreCheck) (*int64, error) {
 	if raw := bp.Annotations[moverUIDAnnotation]; raw != "" {
 		var mapping map[string]int64

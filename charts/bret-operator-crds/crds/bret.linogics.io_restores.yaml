@@ -32,7 +32,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Restore is one restore run, manual or started by a RestoreTest.
+        description: Restore is one restore run. It is manual or started by a RestoreTest.
         properties:
           apiVersion:
             description: |-
@@ -56,8 +56,8 @@ spec:
             properties:
               keepOnFailure:
                 default: false
-                description: KeepOnFailure keeps the check pod, the scratch volume
-                  and the native restore object when the attempt fails.
+                description: KeepOnFailure keeps the check pod, scratch volume and
+                  native restore object after a failed attempt.
                 type: boolean
               provider:
                 description: Provider is the backup tool that performs the restore.
@@ -79,7 +79,7 @@ spec:
                 type: object
               restoreWindow:
                 default: 45m
-                description: RestoreWindow is the deadline for this attempt, covering
+                description: RestoreWindow is the deadline for this attempt. It covers
                   the restore, image pulls and the check.
                 type: string
               source:
@@ -122,8 +122,8 @@ spec:
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                       percentage:
-                        description: Percentage is the headroom added on top of the
-                          source size, in percent.
+                        description: Percentage is the headroom added to the source
+                          size, in percent.
                         format: int32
                         type: integer
                     required:
@@ -141,8 +141,8 @@ spec:
                     anyOf:
                     - type: integer
                     - type: string
-                    description: Size is the capacity of the scratch volume. When
-                      unset, it is derived from the source size.
+                    description: Size is the capacity of the scratch volume. The source
+                      size sets it when unset.
                     pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                     x-kubernetes-int-or-string: true
                   storageClassName:

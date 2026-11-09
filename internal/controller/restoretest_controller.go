@@ -32,7 +32,7 @@ const (
 	testLabel        = "bret.linogics.io/test"
 	runLabel         = "bret.linogics.io/run"
 	attemptLabel     = "bret.linogics.io/attempt"
-	// snapshotPollInterval is how often afterBackup looks for new snapshots, since snapshots are not watched.
+	// snapshotPollInterval is how often afterBackup looks for new snapshots. Snapshots are not watched.
 	snapshotPollInterval   = time.Minute
 	snapshotPhaseSucceeded = "Succeeded"
 )
@@ -49,7 +49,7 @@ const (
 // snapshotGVK is the Kopiur Snapshot kind. It is used as unstructured, so Kopiur is not a Go dependency.
 var snapshotGVK = schema.GroupVersionKind{Group: kopiurGroup, Version: apiVersionAlpha1, Kind: "Snapshot"}
 
-// RestoreTestReconciler reconciles a RestoreTest object: it starts Restore objects on its triggers and retries failed attempts.
+// RestoreTestReconciler reconciles a RestoreTest object. It starts Restore objects on its triggers and retries failed attempts.
 type RestoreTestReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
@@ -107,7 +107,7 @@ func (r *RestoreTestReconciler) advance(ctx context.Context, test *restorev1alph
 		return ctrl.Result{}, nil
 	}
 
-	// Tests read Kopiur snapshots, so they need the kopiur provider and its rights.
+	// Tests read Kopiur snapshots. They need the kopiur provider and its rights.
 	if r.EnabledProviders != nil && !r.EnabledProviders[restorev1alpha1.ProviderKopiur] {
 		r.blockTest(test, reasonProviderUnsupported, "provider kopiur is disabled")
 
@@ -281,7 +281,7 @@ func (r *RestoreTestReconciler) runTriggers(ctx context.Context, test *restorev1
 		return ctrl.Result{}, err
 	}
 
-	// Another trigger may be due, so check again right away.
+	// Another trigger may be due. Check again right away.
 	return ctrl.Result{Requeue: true}, nil //nolint:staticcheck // immediate requeue; RequeueAfter has no zero-delay form
 }
 
@@ -346,7 +346,7 @@ func (r *RestoreTestReconciler) nextTrigger(ctx context.Context, test *restorev1
 }
 
 // isNewerThanWatermark reports whether b is strictly newer than the last handled backup.
-// Equal times are ordered by name, the same order completedBackups sorts by.
+// Equal times are ordered by name. completedBackups sorts the same way.
 func isNewerThanWatermark(b completedBackup, wm *restorev1alpha1.HandledBackup) bool {
 	if wm == nil {
 		return true
@@ -359,8 +359,8 @@ func isNewerThanWatermark(b completedBackup, wm *restorev1alpha1.HandledBackup) 
 	return b.name > wm.Name
 }
 
-// afterBackupTrigger returns the oldest completed backup whose delay has passed and that no run handled yet.
-// Otherwise it returns how long until the next such backup is due.
+// afterBackupTrigger returns the oldest completed backup whose delay has passed and that no run handled.
+// Otherwise, it returns how long until the next such backup is due.
 func (r *RestoreTestReconciler) afterBackupTrigger(
 	ctx context.Context,
 	test *restorev1alpha1.RestoreTest,
@@ -378,7 +378,7 @@ func (r *RestoreTestReconciler) afterBackupTrigger(
 		if !isNewerThanWatermark(b, test.Status.LastHandled) {
 			continue
 		}
-		// Backups that finished before this test existed are not new. Testing them all at once would be a surprise.
+		// Backups that finished before this test existed are not new. Testing them all at once would surprise the user.
 		if b.completed.Before(test.CreationTimestamp.Time) {
 			continue
 		}
@@ -426,7 +426,7 @@ func (r *RestoreTestReconciler) handle(ctx context.Context, test *restorev1alpha
 	}
 }
 
-// queue keeps one pending run behind the run in progress. A trigger that finds a pending run is skipped.
+// queue keeps one pending run. The pending run waits behind the run in progress. A trigger that finds a pending run is skipped.
 func (r *RestoreTestReconciler) queue(ctx context.Context, test *restorev1alpha1.RestoreTest, trig *trigger) (bool, error) {
 	if test.Status.PendingRun != "" {
 		r.Recorder.Event(test, corev1.EventTypeNormal, reasonRunSkipped, "run "+trig.source+" skipped, a run is already pending")
@@ -508,7 +508,7 @@ func (r *RestoreTestReconciler) start(ctx context.Context, test *restorev1alpha1
 }
 
 // createRestore creates the Restore of one attempt and makes it the run in progress.
-// An attempt that already exists, from an earlier reconcile that did not store its status, is accepted.
+// An existing attempt is accepted. It can come from an earlier reconcile that did not store its status.
 func (r *RestoreTestReconciler) createRestore(ctx context.Context, test *restorev1alpha1.RestoreTest, run, backup string, attempt int) error {
 	restore := &restorev1alpha1.Restore{
 		ObjectMeta: metav1.ObjectMeta{
@@ -561,8 +561,9 @@ func (r *RestoreTestReconciler) requireTarget(test *restorev1alpha1.RestoreTest)
 	return false
 }
 
-// resolveBackup returns preferred when set. Otherwise it returns the backup name from the selector,
-// or the newest Succeeded backup that matches it. An empty result means no backup matches.
+// resolveBackup returns preferred when set. Otherwise, it returns the backup name from the selector.
+// If the selector has no name, it returns the newest Succeeded backup that matches it.
+// An empty result means no backup matches.
 func (r *RestoreTestReconciler) resolveBackup(ctx context.Context, test *restorev1alpha1.RestoreTest, preferred string) (string, error) {
 	if preferred != "" {
 		return preferred, nil
@@ -726,7 +727,7 @@ func (r *RestoreTestReconciler) now() time.Time {
 	return time.Now()
 }
 
-// reader reads Kopiur Snapshots through the API reader when one is set, so no informer is started for them.
+// reader reads Kopiur Snapshots through the API reader when one is set. It starts no informer for them.
 func (r *RestoreTestReconciler) reader() client.Reader {
 	if r.APIReader != nil {
 		return r.APIReader

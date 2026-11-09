@@ -955,7 +955,7 @@ spec:
                     type: object
                 type: object
               containers:
-                description: Containers run the check; exit code 0 means pass.
+                description: Containers run the check. Exit code 0 means pass.
                 items:
                   description: A single application container that you want to run
                     within a pod.
@@ -3876,11 +3876,11 @@ spec:
                 description: RuntimeClassName is the runtime class of the check pod.
                 type: string
               scratchVolumes:
-                description: ScratchVolumes are PVCs created per attempt for staging
-                  space, deleted after the attempt.
+                description: ScratchVolumes are PVCs created for each attempt. They
+                  provide staging space and are deleted after the attempt.
                 items:
-                  description: ScratchVolume is a PVC the operator creates for each
-                    attempt, for staging space the check needs.
+                  description: ScratchVolume is a PVC that the operator creates for
+                    each attempt. It provides staging space for the check.
                   properties:
                     mountPath:
                       description: MountPath is where the scratch volume is mounted
@@ -3909,8 +3909,8 @@ spec:
                   type: object
                 type: array
               securityContext:
-                description: SecurityContext is the pod-level security context, for
-                  example fsGroup or runAsUser for all containers.
+                description: SecurityContext is the pod-level security context. For
+                  example, fsGroup or runAsUser applies to all containers.
                 properties:
                   appArmorProfile:
                     description: |-
@@ -4185,7 +4185,7 @@ spec:
                   type: object
                 type: array
               volumes:
-                description: Volumes are extra volumes for the check pod, such as
+                description: Volumes are extra volumes for the check pod. For example,
                   ConfigMaps or Secrets.
                 items:
                   description: Volume represents a named volume in a pod that may

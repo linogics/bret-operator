@@ -47,8 +47,8 @@ var (
 	veleroHTTPTimeout  = 60 * time.Second
 )
 
-// restoreHash is a short hash of namespace/name. It keeps the names of objects outside the Restore
-// namespace unique across namespaces and valid for any Restore name length.
+// restoreHash is a short hash of namespace/name. The hash keeps the names of objects outside the Restore
+// namespace unique. It also keeps them valid for any Restore name length.
 func restoreHash(restore *restorev1alpha1.Restore) string {
 	sum := sha256.Sum256([]byte(restore.Namespace + "/" + restore.Name))
 
@@ -79,7 +79,7 @@ func (r *RestoreReconciler) veleroStub(restore *restorev1alpha1.Restore) *unstru
 }
 
 // veleroRestoreObject restores only the PVCs and PVs of the backup into the scratch namespace.
-// No owner reference: the object lives in another namespace than the Restore.
+// It sets no owner reference. The object lives in another namespace than the Restore.
 func (r *RestoreReconciler) veleroRestoreObject(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 	obj := r.veleroStub(restore)
 	obj.SetLabels(restoreLabels(restore))
@@ -94,8 +94,8 @@ func (r *RestoreReconciler) veleroRestoreObject(restore *restorev1alpha1.Restore
 	return obj
 }
 
-// validateVeleroCheck rejects checks that point at objects of the Restore namespace,
-// because the Velero check pod runs in the scratch namespace.
+// validateVeleroCheck rejects checks that point at objects of the Restore namespace.
+// The Velero check pod runs in the scratch namespace.
 func validateVeleroCheck(bp *restorev1alpha1.RestoreCheck) error {
 	switch {
 	case bp.Spec.ServiceAccountName != "":
@@ -152,7 +152,7 @@ func veleroScratchNamespace(restore *restorev1alpha1.Restore) *corev1.Namespace 
 	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: veleroScratchName(restore)}}
 }
 
-// reconcileVelero creates the Velero Restore, then runs the check pod in the scratch namespace once Velero completes.
+// reconcileVelero creates the Velero Restore. It runs the check pod in the scratch namespace once Velero completes.
 func (r *RestoreReconciler) reconcileVelero(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
@@ -238,8 +238,8 @@ func (r *RestoreReconciler) checkVelero(
 	return r.check(ctx, restore, bp, claim, ns.Name, claims)
 }
 
-// copyPodSecurity puts the pod-security labels of the Restore namespace on the scratch namespace, so the
-// check pod runs under the same admission rules as in the tenant namespace.
+// copyPodSecurity puts the pod-security labels of the Restore namespace on the scratch namespace.
+// The check pod then runs under the same admission rules as in the tenant namespace.
 func (r *RestoreReconciler) copyPodSecurity(ctx context.Context, restore *restorev1alpha1.Restore, scratch *corev1.Namespace) error {
 	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: restore.Namespace}}
 	if err := r.getObject(ctx, tenant); err != nil {
@@ -263,8 +263,8 @@ func (r *RestoreReconciler) copyPodSecurity(ctx context.Context, restore *restor
 	return r.Patch(ctx, scratch, client.MergeFrom(base))
 }
 
-// restoredVeleroClaim is the PVC Velero restored. With several, the check sourcePVC picks one.
-// Scratch claims of the operator carry the restore label and are skipped. "" means not there yet.
+// restoredVeleroClaim is the PVC that Velero restored. With several PVCs, the check sourcePVC picks one.
+// Scratch claims of the operator carry the restore label and are skipped. An empty string means not there yet.
 func (r *RestoreReconciler) restoredVeleroClaim(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
@@ -292,8 +292,8 @@ func (r *RestoreReconciler) restoredVeleroClaim(
 	return ""
 }
 
-// veleroSourceSize reads the PVC size from the backup contents. Failures to read the contents give nil,
-// so the caller falls back to target.size. A DownloadRequest that is never answered is an error.
+// veleroSourceSize reads the PVC size from the backup contents. If the contents cannot be read, it returns nil.
+// The caller then falls back to target.size. A DownloadRequest that is never answered is an error.
 func (r *RestoreReconciler) veleroSourceSize(ctx context.Context, restore *restorev1alpha1.Restore) (*resource.Quantity, error) {
 	url, err := r.downloadURL(ctx, restore)
 	if err != nil {
@@ -365,8 +365,8 @@ func (r *RestoreReconciler) downloadURL(ctx context.Context, restore *restorev1a
 	}
 }
 
-// checkSourcePVC is restoredVolumes[0].sourcePVC of the Restore's check, or "".
-// It is read unstructured, so it does not depend on the typed field.
+// checkSourcePVC returns restoredVolumes[0].sourcePVC of the Restore's check, or an empty string.
+// It reads the check unstructured, so it does not depend on the typed field.
 func (r *RestoreReconciler) checkSourcePVC(ctx context.Context, restore *restorev1alpha1.Restore) string {
 	if restore.Spec.RestoreCheckRef.Name == "" {
 		return ""

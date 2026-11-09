@@ -49,20 +49,21 @@ type RestoreSource struct {
 	BackupRef BackupRef `json:"backupRef"`
 }
 
-// Condition reasons for a Restore whose scratch size cannot be resolved.
+// Condition reasons for a Restore that cannot resolve its scratch size.
 const (
-	// ReasonSizeUnknown means the source size is unknown and target.size is not set.
+	// ReasonSizeUnknown means the source size is unknown. target.size is not set.
 	ReasonSizeUnknown = "SizeUnknown"
 	// ReasonInsufficientCapacity means target.size is smaller than the source size.
 	ReasonInsufficientCapacity = "InsufficientCapacity"
 )
 
-// AutoExpand derives the scratch size from the source size: clamp(source * (100 + percentage) / 100, min, max).
+// AutoExpand derives the scratch size from the source size.
+// The formula is: clamp(source * (100 + percentage) / 100, min, max).
 // +kubebuilder:validation:XValidation:rule="self.percentage > 0",message="percentage must be greater than 0"
 // +kubebuilder:validation:XValidation:rule="self.percentage <= 1000",message="percentage must not be greater than 1000"
 // +kubebuilder:validation:XValidation:rule="!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max)) <= 0",message="min must not be greater than max"
 type AutoExpand struct {
-	// Percentage is the headroom added on top of the source size, in percent.
+	// Percentage is the headroom added to the source size, in percent.
 	Percentage int32 `json:"percentage"`
 	// Min is the lower bound of the derived size.
 	Min *resource.Quantity `json:"min,omitempty"`
@@ -74,7 +75,7 @@ type AutoExpand struct {
 type RestoreTarget struct {
 	// StorageClassName is the storage class of the scratch volume.
 	StorageClassName string `json:"storageClassName,omitempty"`
-	// Size is the capacity of the scratch volume. When unset, it is derived from the source size.
+	// Size is the capacity of the scratch volume. The source size sets it when unset.
 	Size *resource.Quantity `json:"size,omitempty"`
 	// AutoExpand derives the size from the source size when Size is unset.
 	AutoExpand *AutoExpand `json:"autoExpand,omitempty"`
@@ -90,10 +91,10 @@ type RestoreSpec struct {
 	Target RestoreTarget `json:"target"`
 	// RestoreCheckRef is the RestoreCheck that checks the restored data.
 	RestoreCheckRef RestoreCheckRef `json:"restoreCheckRef"`
-	// RestoreWindow is the deadline for this attempt, covering the restore, image pulls and the check.
+	// RestoreWindow is the deadline for this attempt. It covers the restore, image pulls and the check.
 	// +kubebuilder:default="45m"
 	RestoreWindow metav1.Duration `json:"restoreWindow,omitempty"`
-	// KeepOnFailure keeps the check pod, the scratch volume and the native restore object when the attempt fails.
+	// KeepOnFailure keeps the check pod, scratch volume and native restore object after a failed attempt.
 	// +kubebuilder:default=false
 	KeepOnFailure bool `json:"keepOnFailure,omitempty"`
 }
@@ -138,7 +139,7 @@ type RestoreStatus struct {
 // +kubebuilder:printcolumn:name="Attempt",type=integer,JSONPath=`.status.attempt`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// Restore is one restore run, manual or started by a RestoreTest.
+// Restore is one restore run. It is manual or started by a RestoreTest.
 type Restore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

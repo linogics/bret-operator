@@ -81,7 +81,7 @@ type RestoreTestSpec struct {
 	BackupSelector BackupSelector `json:"backupSelector"`
 	// RestoreCheckRef names the check to run against each restored volume.
 	RestoreCheckRef RestoreCheckRef `json:"restoreCheckRef"`
-	// Target is the scratch volume each run restores into, with the same meaning as Restore.spec.target.
+	// Target is the scratch volume that each run restores into. It has the same meaning as Restore.spec.target.
 	Target RestoreTarget `json:"target,omitempty"`
 	// Triggers defines what starts a run.
 	Triggers *Triggers `json:"triggers,omitempty"`
@@ -91,7 +91,7 @@ type RestoreTestSpec struct {
 	// Retries defines how failed attempts are retried.
 	// +kubebuilder:default={}
 	Retries Retries `json:"retries"`
-	// KeepOnFailure keeps the check pod and restore objects when the final attempt fails.
+	// KeepOnFailure keeps the check pod and restore objects after the final attempt fails.
 	// +kubebuilder:default=false
 	KeepOnFailure bool `json:"keepOnFailure,omitempty"`
 	// OverlapPolicy decides what happens when a trigger fires during a run.
@@ -123,15 +123,15 @@ type RestoreTestStatus struct {
 	LastRun *LastRun `json:"lastRun,omitempty"`
 	// NextRun is when the next cron run is scheduled.
 	NextRun *metav1.Time `json:"nextRun,omitempty"`
-	// LastHandled is the newest backup an afterBackup trigger used. Only newer backups trigger a run.
+	// LastHandled is the newest backup that an afterBackup trigger used. Only newer backups start a run.
 	LastHandled *HandledBackup `json:"lastHandled,omitempty"`
-	// RetainedResources lists objects kept after a failed run for debugging.
+	// RetainedResources lists objects kept after a failed run. They help debugging.
 	RetainedResources []string `json:"retainedResources,omitempty"`
-	// CurrentRestore is the Restore of the run in progress, empty when no run is in progress.
+	// CurrentRestore is the Restore of the run in progress. It is empty when no run is in progress.
 	CurrentRestore string `json:"currentRestore,omitempty"`
 	// RetryAt is when the next attempt of the run in progress is created.
 	RetryAt *metav1.Time `json:"retryAt,omitempty"`
-	// PendingRun is the backup of the run queued behind the run in progress (overlap policy Queue).
+	// PendingRun is the backup of the queued run, which waits for the run in progress. It applies to overlap policy Queue.
 	PendingRun string `json:"pendingRun,omitempty"`
 	// LastRunNowValue is the last value of the run-now annotation that started a run.
 	LastRunNowValue string `json:"lastRunNowValue,omitempty"`

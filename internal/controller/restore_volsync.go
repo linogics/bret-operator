@@ -19,7 +19,8 @@ import (
 // +kubebuilder:rbac:groups=volsync.backube,resources=replicationdestinations,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 
-// volsyncMoverUID is the mover user of the restic restore when the check sets none. The default mover fails with a setgid error on the scratch volume.
+// volsyncMoverUID is the mover user of the restic restore when the check sets none.
+// The default mover fails with a setgid error on the scratch volume.
 const volsyncMoverUID = int64(65534)
 
 var errRepositoryMissing = errors.New(reasonRepositoryMissing)
@@ -64,8 +65,9 @@ func volsyncDestinationObject(restore *restorev1alpha1.Restore, repository strin
 	return obj
 }
 
-// volsyncRepository is the restic repository Secret name of the backup's ReplicationSource, read in the backup namespace only.
-// The Secret itself must exist in the Restore namespace. "" means the source is not there.
+// volsyncRepository is the restic repository Secret name of the backup's ReplicationSource.
+// It is read in the backup namespace only. The Secret must exist in the Restore namespace.
+// An empty string means the source is not there.
 func (r *RestoreReconciler) volsyncRepository(ctx context.Context, restore *restorev1alpha1.Restore) (string, error) {
 	src := &unstructured.Unstructured{}
 	src.SetGroupVersionKind(replicationSourceGVK)
@@ -97,8 +99,8 @@ func (r *RestoreReconciler) volsyncRepository(ctx context.Context, restore *rest
 	return repo, nil
 }
 
-// reconcileVolSync creates the ReplicationDestination that fills the scratch PVC, then runs the check
-// once VolSync reports status.latestImage.
+// reconcileVolSync creates the ReplicationDestination that fills the scratch PVC.
+// It runs the check once VolSync reports status.latestImage.
 func (r *RestoreReconciler) reconcileVolSync(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,

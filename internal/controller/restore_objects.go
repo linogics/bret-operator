@@ -45,7 +45,7 @@ func (r *RestoreReconciler) ensure(ctx context.Context, restore *restorev1alpha1
 }
 
 // cleanup deletes the objects of an attempt, or labels them as retained when they must be kept.
-// It is idempotent, so a failed run is retried on the next reconcile.
+// It is idempotent. A failed run is retried on the next reconcile.
 func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha1.Restore) error {
 	// A deleted Restore keeps nothing.
 	keep := restore.Spec.KeepOnFailure && restore.Status.Phase != restorev1alpha1.RestorePhaseSucceeded && restore.DeletionTimestamp.IsZero()
@@ -61,7 +61,7 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: checkPodName(restore), Namespace: restore.Namespace}},
 	}
 
-	// Objects of a disabled provider are not read: the operator has no rights for them.
+	// Objects of a disabled provider are not read. The operator has no rights for them.
 	if r.providerEnabled(restorev1alpha1.ProviderKopiur) {
 		objs = append(objs, kopiurStub(restore))
 	}
@@ -111,8 +111,9 @@ func (r *RestoreReconciler) cleanupObject(ctx context.Context, obj client.Object
 	return ignoreUncleanable(r.Patch(ctx, obj, client.MergeFrom(base)))
 }
 
-// ignoreUncleanable drops the errors of objects that cannot exist or cannot be reached: a missing object,
-// a CRD that is not installed, or no RBAC for it. Returning them would keep the finalizer forever.
+// ignoreUncleanable drops the errors of objects that cannot exist or cannot be reached.
+// Such errors cover a missing object, a CRD that is not installed, or no RBAC for it.
+// Returning them would keep the finalizer forever.
 func ignoreUncleanable(err error) error {
 	if apierrors.IsNotFound(err) || apierrors.IsForbidden(err) || meta.IsNoMatchError(err) {
 		return nil
@@ -121,8 +122,8 @@ func ignoreUncleanable(err error) error {
 	return err
 }
 
-// getObject reads obj through the API reader when one is set. Provider objects use it, so no
-// informer is started for them.
+// getObject reads obj through the API reader when one is set. Provider objects use it.
+// No informer is started for them.
 func (r *RestoreReconciler) getObject(ctx context.Context, obj client.Object) error {
 	if r.APIReader != nil {
 		return r.APIReader.Get(ctx, client.ObjectKeyFromObject(obj), obj)

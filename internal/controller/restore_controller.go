@@ -47,12 +47,12 @@ const (
 // Owner references cannot reach the objects outside the Restore namespace.
 const cleanupFinalizer = "bret.linogics.io/cleanup"
 
-// RestoreReconciler reconciles a Restore object: one attempt that restores with Kopiur and runs the check.
+// RestoreReconciler reconciles a Restore object. One attempt restores with Kopiur and runs the check.
 type RestoreReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	// APIReader reads provider objects without starting an informer for them. Nil falls back to the client.
+	// APIReader reads provider objects. It starts no informer for them. Nil falls back to the client.
 	APIReader client.Reader
 	// EnabledProviders limits the providers this reconciler serves. Nil serves all of them.
 	EnabledProviders map[restorev1alpha1.Provider]bool
@@ -70,7 +70,7 @@ type RestoreReconciler struct {
 // +kubebuilder:rbac:groups=kopiur.home-operations.com,resources=restores,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile runs one step of the Restore state machine and stores the status it produced.
-// Terminal restores only get their objects cleaned up.
+// Terminal restores only have their objects cleaned up.
 func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	restore := &restorev1alpha1.Restore{}
 	if err := r.Get(ctx, req.NamespacedName, restore); err != nil {
@@ -264,8 +264,8 @@ func (r *RestoreReconciler) progress(
 	}
 }
 
-// scratchSize resolves the scratch size once and stores it in the status. Later reconciles reuse it, so the
-// source is read once.
+// scratchSize resolves the scratch size once and stores it in the status.
+// Later reconciles reuse it, so the source is read once.
 func (r *RestoreReconciler) scratchSize(ctx context.Context, restore *restorev1alpha1.Restore) (resource.Quantity, error) {
 	if restore.Status.ResolvedSize != nil {
 		return *restore.Status.ResolvedSize, nil
