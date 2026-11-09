@@ -54,14 +54,14 @@ check harness expects an S3-compatible endpoint named `versitygw.storage.svc.clu
 with buckets `kopiur`, `velero` and `volsync`. The spike used Versity Gateway with the posix
 backend for this.
 
-Install the operator's CRDs and run the manager against the cluster:
+Install the operator's CRDs, and run the manager against the cluster:
 
 ```bash
 make install          # CRDs only
 make run              # manager on your machine, using your kubeconfig
 ```
 
-Delete the cluster when done:
+Delete the cluster when you finish:
 
 ```bash
 kind delete cluster --name bret-spike
@@ -97,7 +97,7 @@ Check tests do not run in CI. They need a cluster and several gigabytes of image
 
 ## Conventions
 
-- Conventional commits, short subject, no co-author trailers.
-- Code and comments in English.
-- Shell scripts: tabs, `[[ ]]`, no `set -e`, quoted expansions.
-- Keep generated files in git, and keep them in sync with CI (`make docs-check`, `make helm-sync`).
+- Use conventional commits. Keep the subject short. Do not add co-author trailers.
+- Write code and comments in English.
+- Shell scripts: use tabs, `[[ ]]`, no `set -e`, and quoted expansions.
+- Keep generated files in git. Keep them in sync with CI (`make docs-check`, `make helm-sync`).

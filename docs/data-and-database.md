@@ -28,18 +28,18 @@ Symptoms seen in the apps:
 
 1. **Restore the whole app group from one backup point.**
    - A Velero namespace backup is one point. Restoring it gives one consistent set.
-   - VolSync and Kopiur work per PVC. Group the PVCs of one app with a shared trigger time,
-     or accept skew and check it.
+   - VolSync and Kopiur work per PVC. Group the PVCs of one app with a shared trigger time.
+     Or accept the skew, and check it.
    - The group key that ties several restores together is **design delta, proposed**.
-     Not specified yet.
+     It is not specified yet.
 2. **Use `restoredVolumes` for multi-PVC apps.** Each volume is its own PVC, restored from
    the same point. Mount each one at its original path. (Design delta, proposed.)
 3. **Quiesce the database, or rely on crash recovery.** Pick one:
    - **Crash-consistent copy, WAL recovery on boot.** The spike did this with Postgres 17.
      The copy of a live database was recovered on boot, and the SQL check passed. This is
      not proof under heavy write load.
-   - **Pre-backup flush hook.** Flush or checkpoint the DB before the snapshot. Not
-     covered by the spike. **Unverified** as a pattern in this project.
+   - **Pre-backup flush hook.** Flush or checkpoint the DB before the snapshot. The spike
+     does not cover this. **Unverified** as a pattern in this project.
    - For SQLite-in-volume apps (gitea, grafana, home-assistant, vaultwarden, uptime-kuma):
      take the backup with the app stopped, or with a consistent snapshot. The
      `INDEX.md` says the sqlite file itself is the main risk.
@@ -53,14 +53,14 @@ Symptoms seen in the apps:
 Files plus Postgres, two PVCs.
 
 - Volumes: `html` at `/var/www/html`, `pgdata` at `/var/lib/postgresql/data`.
-- Files: `/var/www/html/data`. The rows that say which files exist and their sizes:
+- Files: `/var/www/html/data`. The rows that say which files exist and their sizes are in
   `oc_filecache` in Postgres.
 - Restore: both PVCs in one attempt, from one backup selector.
 - Repair if drift happens: `occ files:scan` can fix listings but may drop or duplicate
   entries. (Index.)
 - Check (`checks/nextcloud.yaml`): `occ status` shows installed, `occ integrity:check-core`
   passes, and the canary `oc_filecache.size` equals the file size on disk.
-- Check uses a native sidecar for Postgres (design delta). The check rewrites
+- The check uses a native sidecar for Postgres (design delta). The check rewrites
   `dbhost` to `127.0.0.1` in `config.php`.
 - Open issue: `pdo_pgsql` in the image is assumed, not verified.
 
@@ -71,7 +71,7 @@ Files plus MariaDB, two PVCs.
 - Volumes: `html` at `/var/www/html`, `mysql` at `/var/lib/mysql`.
 - DB rows (`wp_posts`) reference uploads in `wp-content/uploads`.
 - Restore: both volumes in one attempt.
-- Check: MariaDB ping, and the canary post's content equals the sha256 of the uploaded
+- Check: MariaDB ping. The canary post's content equals the sha256 of the uploaded
   canary file.
 - Not checked: front-end render, plugin-generated tables. (Index.)
 

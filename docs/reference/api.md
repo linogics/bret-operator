@@ -35,7 +35,8 @@ _Appears in:_
 
 
 
-AutoExpand derives the scratch size from the source size: clamp(source * (100 + percentage) / 100, min, max).
+AutoExpand derives the scratch size from the source size.
+The formula is: clamp(source * (100 + percentage) / 100, min, max).
 
 
 
@@ -44,7 +45,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `percentage` _integer_ | Percentage is the headroom added on top of the source size, in percent. |  |  |
+| `percentage` _integer_ | Percentage is the headroom added to the source size, in percent. |  |  |
 | `min` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Min is the lower bound of the derived size. |  |  |
 | `max` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Max is the upper bound of the derived size. |  |  |
 
@@ -179,7 +180,7 @@ _Appears in:_
 
 
 
-Restore is one restore run, manual or started by a RestoreTest.
+Restore is one restore run. It is manual or started by a RestoreTest.
 
 
 
@@ -250,10 +251,10 @@ _Appears in:_
 | `restoreMount` _string_ | RestoreMount is the mount path of the single restored volume in every container. |  |  |
 | `restoredVolumes` _[RestoredVolume](#restoredvolume) array_ | RestoredVolumes lists several restored volumes, each with its own mount path. |  |  |
 | `initContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#container-v1-core) array_ | InitContainers run before the check containers. |  |  |
-| `containers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#container-v1-core) array_ | Containers run the check; exit code 0 means pass. |  | MinItems: 1 <br /> |
-| `scratchVolumes` _[ScratchVolume](#scratchvolume) array_ | ScratchVolumes are PVCs created per attempt for staging space, deleted after the attempt. |  |  |
-| `volumes` _[Volume](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#volume-v1-core) array_ | Volumes are extra volumes for the check pod, such as ConfigMaps or Secrets. |  |  |
-| `securityContext` _[PodSecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#podsecuritycontext-v1-core)_ | SecurityContext is the pod-level security context, for example fsGroup or runAsUser for all containers. |  |  |
+| `containers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#container-v1-core) array_ | Containers run the check. Exit code 0 means pass. |  | MinItems: 1 <br /> |
+| `scratchVolumes` _[ScratchVolume](#scratchvolume) array_ | ScratchVolumes are PVCs created for each attempt. They provide staging space and are deleted after the attempt. |  |  |
+| `volumes` _[Volume](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#volume-v1-core) array_ | Volumes are extra volumes for the check pod. For example, ConfigMaps or Secrets. |  |  |
+| `securityContext` _[PodSecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#podsecuritycontext-v1-core)_ | SecurityContext is the pod-level security context. For example, fsGroup or runAsUser applies to all containers. |  |  |
 | `serviceAccountName` _string_ | ServiceAccountName is the service account the check pod runs as. |  |  |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#localobjectreference-v1-core) array_ | ImagePullSecrets are secrets used to pull the check images from private registries. |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ | NodeSelector constrains the check pod to nodes with these labels. |  |  |
@@ -334,8 +335,8 @@ _Appears in:_
 | `source` _[RestoreSource](#restoresource)_ | Source is the backup to restore from. |  |  |
 | `target` _[RestoreTarget](#restoretarget)_ | Target is the scratch volume to restore into. |  |  |
 | `restoreCheckRef` _[RestoreCheckRef](#restorecheckref)_ | RestoreCheckRef is the RestoreCheck that checks the restored data. |  |  |
-| `restoreWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | RestoreWindow is the deadline for this attempt, covering the restore, image pulls and the check. | 45m |  |
-| `keepOnFailure` _boolean_ | KeepOnFailure keeps the check pod, the scratch volume and the native restore object when the attempt fails. | false |  |
+| `restoreWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | RestoreWindow is the deadline for this attempt. It covers the restore, image pulls and the check. | 45m |  |
+| `keepOnFailure` _boolean_ | KeepOnFailure keeps the check pod, scratch volume and native restore object after a failed attempt. | false |  |
 
 
 #### RestoreStatus
@@ -376,7 +377,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `storageClassName` _string_ | StorageClassName is the storage class of the scratch volume. |  |  |
-| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. When unset, it is derived from the source size. |  |  |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. The source size sets it when unset. |  |  |
 | `autoExpand` _[AutoExpand](#autoexpand)_ | AutoExpand derives the size from the source size when Size is unset. |  |  |
 
 
@@ -417,11 +418,11 @@ _Appears in:_
 | `provider` _[Provider](#provider)_ | Provider is the backup tool that performs the restores. |  | Enum: [velero volsync kopiur] <br /> |
 | `backupSelector` _[BackupSelector](#backupselector)_ | BackupSelector chooses which backups the restores read from. |  |  |
 | `restoreCheckRef` _[RestoreCheckRef](#restorecheckref)_ | RestoreCheckRef names the check to run against each restored volume. |  |  |
-| `target` _[RestoreTarget](#restoretarget)_ | Target is the scratch volume each run restores into, with the same meaning as Restore.spec.target. |  |  |
+| `target` _[RestoreTarget](#restoretarget)_ | Target is the scratch volume that each run restores into. It has the same meaning as Restore.spec.target. |  |  |
 | `triggers` _[Triggers](#triggers)_ | Triggers defines what starts a run. |  |  |
 | `restoreWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | RestoreWindow is the deadline for each attempt. | 45m |  |
 | `retries` _[Retries](#retries)_ | Retries defines how failed attempts are retried. | \{  \} |  |
-| `keepOnFailure` _boolean_ | KeepOnFailure keeps the check pod and restore objects when the final attempt fails. | false |  |
+| `keepOnFailure` _boolean_ | KeepOnFailure keeps the check pod and restore objects after the final attempt fails. | false |  |
 | `overlapPolicy` _[OverlapPolicy](#overlappolicy)_ | OverlapPolicy decides what happens when a trigger fires during a run. | Skip | Enum: [Skip Queue Replace] <br /> |
 
 
@@ -440,11 +441,11 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `lastRun` _[LastRun](#lastrun)_ | LastRun is the outcome of the most recent run. |  |  |
 | `nextRun` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | NextRun is when the next cron run is scheduled. |  |  |
-| `lastHandled` _[HandledBackup](#handledbackup)_ | LastHandled is the newest backup an afterBackup trigger used. Only newer backups trigger a run. |  |  |
-| `retainedResources` _string array_ | RetainedResources lists objects kept after a failed run for debugging. |  |  |
-| `currentRestore` _string_ | CurrentRestore is the Restore of the run in progress, empty when no run is in progress. |  |  |
+| `lastHandled` _[HandledBackup](#handledbackup)_ | LastHandled is the newest backup that an afterBackup trigger used. Only newer backups start a run. |  |  |
+| `retainedResources` _string array_ | RetainedResources lists objects kept after a failed run. They help debugging. |  |  |
+| `currentRestore` _string_ | CurrentRestore is the Restore of the run in progress. It is empty when no run is in progress. |  |  |
 | `retryAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | RetryAt is when the next attempt of the run in progress is created. |  |  |
-| `pendingRun` _string_ | PendingRun is the backup of the run queued behind the run in progress (overlap policy Queue). |  |  |
+| `pendingRun` _string_ | PendingRun is the backup of the queued run, which waits for the run in progress. It applies to overlap policy Queue. |  |  |
 | `lastRunNowValue` _string_ | LastRunNowValue is the last value of the run-now annotation that started a run. |  |  |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#condition-v1-meta) array_ | Conditions are the latest observations of the test state. |  |  |
 
@@ -506,7 +507,7 @@ _Appears in:_
 
 
 
-ScratchVolume is a PVC the operator creates for each attempt, for staging space the check needs.
+ScratchVolume is a PVC that the operator creates for each attempt. It provides staging space for the check.
 
 
 

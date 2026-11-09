@@ -1,6 +1,6 @@
 # Installation
 
-This page installs the bret-operator CRDs and the manager. Install a backup tool first, see
+This page installs the bret-operator CRDs and the manager. Install a backup tool first. See
 [backup-providers.md](backup-providers.md). The operator does not run restores until its
 controllers exist (see the status table in [README.md](README.md)).
 
@@ -36,7 +36,7 @@ helm install bret-operator ./charts/bret-operator \
   --create-namespace
 ```
 
-Check it:
+Check the installation:
 
 ```bash
 kubectl -n bret-operator-system get deploy,pods
@@ -85,7 +85,7 @@ helm upgrade --install bret-operator oci://ghcr.io/linogics/charts/bret-operator
 
 ### Metrics scraping
 
-With `metrics.secure: true` the endpoint on port 8443 needs a bearer token. The token's
+With `metrics.secure: true`, the endpoint on port 8443 needs a bearer token. The token's
 service account needs `get` on the `/metrics` non-resource URL. Example:
 
 ```yaml
@@ -121,8 +121,8 @@ Plain manifests do not upgrade cleanly across versions. Prefer the Helm chart fo
 ## Upgrading
 
 The CRDs ship in the `bret-operator-crds` chart, which the `bret-operator` chart depends on. Helm
-installs CRDs once and does not update them on upgrade. A new release can change the CRD schema,
-so apply the CRDs yourself before you upgrade the chart:
+installs CRDs once and does not update them on upgrade. A new release can change the CRD schema.
+So apply the CRDs yourself before you upgrade the chart:
 
 ```bash
 kubectl apply --server-side -f https://github.com/linogics/bret-operator/releases/download/v0.1.0/install.yaml
@@ -159,4 +159,4 @@ Deleting a CRD deletes every object of that kind. Back up the objects first if y
 | Leader election Role | `bret-operator-leader-election` | `bret-operator-system` |
 | ClusterRole | `bret-operator-manager`, `bret-operator-metrics-auth` | cluster |
 
-Names change with the release name. The Helm names above assume `helm install bret-operator`.
+The names change with the release name. The Helm names above assume `helm install bret-operator`.

@@ -7,8 +7,8 @@ not read logs.
 - Exit code 0 from every check container: the check passes.
 - Any other exit code: the attempt fails.
 
-Any image and any language work: bash, Python, a Go binary, `psql`, `php occ`, `mysqlcheck`,
-anything that exits with a code. The check runs in its own image, not in the application image.
+You may use any image and any language: bash, Python, a Go binary, `psql`, `php occ`, `mysqlcheck`,
+or anything else that exits with a code. The check runs in its own image, not in the application image.
 
 Start with [examples/restorecheck-minimal.yaml](../examples/restorecheck-minimal.yaml).
 It is the smallest check that works, and it is tested.
@@ -48,8 +48,8 @@ Set exactly one of `restoreMount` and `restoredVolumes`. The API rejects both or
 - Pod `Succeeded`: pass. Pod `Failed`: fail. The operator reads the pod phase.
 - An init container that exits non-zero fails the attempt before the checks run.
 - A check that hangs is stopped by `restoreWindow` (see [restoretest-guide.md](restoretest-guide.md)).
-- Test each check with a broken input. Make the expected value wrong once and confirm exit 1.
-  The spike did this and the check failed as it should.
+- Test each check with a broken input. Make the expected value wrong once, and confirm exit 1.
+  The spike did this, and the check failed as it should.
 
 ## One volume: restoreMount
 
@@ -77,7 +77,7 @@ the key `html` is named `r-html`. The operator's name mapping is planned with th
 
 ## Scratch volumes
 
-Some checks need space the restore does not give them. Examples: unpacking a dump, or a
+Some checks need space that the restore does not give them. Examples: unpacking a dump, or a
 database that writes temporary files outside the restored data.
 
 ```yaml
@@ -91,16 +91,16 @@ spec:
 
 Rules (design §7.1):
 
-- The operator creates one PVC per scratch volume per attempt, owned by the `Restore`.
-- Scratch PVCs are deleted with the attempt. With `keepOnFailure` they are kept.
+- The operator creates one PVC per scratch volume per attempt. The `Restore` owns the PVC.
+- The operator deletes scratch PVCs with the attempt. With `keepOnFailure`, it keeps them.
 - `size` is required. Set it to what the check needs, not what the source had.
 - The restored volume's default size is the source volume's capacity. A restore into a volume
   that is too small fails early with `InsufficientCapacity` (planned).
 
 ## Native sidecars
 
-A check often needs a database server running next to it, for example Keycloak or Nextcloud
-checking against Postgres. Use a native sidecar: an init container with `restartPolicy: Always`.
+A check often needs a database server that runs next to it. For example, Keycloak or Nextcloud
+check against Postgres. Use a native sidecar: an init container with `restartPolicy: Always`.
 It starts before the checks and keeps running while they run. Kubernetes 1.29 or newer is
 required.
 
@@ -118,11 +118,11 @@ spec:
 ```
 
 Design §7.1 describes `initContainers` as run-to-completion. Native sidecars are an extension
-the checks use. The design needs a decision before the controller ships.
+that the checks use. The design needs a decision before the controller ships.
 
 ## Canary convention
 
-A check that only starts the app proves little. The canary proves the data is readable and
+A check that only starts the app proves little. The canary proves that the data is readable and
 unchanged.
 
 1. Before the backup, the seed writes a canary: a row, file, document or object, with a
@@ -137,41 +137,41 @@ select count(*) from bret_canary
 where id = 1 and encode(sha256(payload::bytea), 'hex') = sha256;
 ```
 
-Name the canary in the header comment of your check. The seed for it goes in
+Name the canary in the header comment of your check. Put the seed for it in
 `hack/check-test/seeds/`.
 
 ## Secrets
 
-Credentials the check needs (database password, admin token, encryption key) come from a
-Secret in the `RestoreTest`'s namespace. Reference it with `env[].valueFrom.secretKeyRef`.
+The check needs some credentials. For example: a database password, an admin token, or an encryption key.
+Take them from a Secret in the `RestoreTest`'s namespace. Reference it with `env[].valueFrom.secretKeyRef`.
 
 Values must match the source. An encryption key or admin password that differs makes the check
-fail for a reason unrelated to the backup. Keep one Secret per application, and make the backup
+fail for a reason unrelated to the backup. Keep one Secret per application. Make the backup
 and the check read the same one.
 
 ## Pod security
 
-Set `securityContext.runAsUser` on each container to the UID the image runs as. Check the image
-with `docker run --rm <image> id` or the image's documentation.
+Set `securityContext.runAsUser` on each container to the UID that the image runs as. Check the image
+with `docker run --rm <image> id`, or read the image's documentation.
 
 Two rules from the spike:
 
-- **No `fsGroup` on a database data directory.** `fsGroup` changes the mode to `2770`. Postgres
+- **Do not set `fsGroup` on a database data directory.** `fsGroup` changes the mode to `2770`. Postgres
   refuses to start on that mode. Set `fsGroup` only on application writers that need it.
 - **Postgres family: set mode `0700` in an init container.** The checks in `checks/`
-  run a `pgdata-perms` init container as UID 999. It checks `PG_VERSION` exists and runs
+  run a `pgdata-perms` init container as UID 999. It checks that `PG_VERSION` exists, and runs
   `chmod 0700 "$PGDATA"`. Your data must live in `<mount>/pgdata`, which is the `PGDATA` in the
   check.
 
 The backup side needs the same UID. See [backup-providers.md](backup-providers.md) for the
-mover security context on each tool.
+mover security context of each tool.
 
 ## Images and tags
 
-- Pin a tag, not `latest`.
-- The check image should match the app's major version. A database restored into a different
+- Pin a tag. Do not use `latest`.
+- The check image should match the major version of the app. A database restored into a different
   major version may not start.
-- Confirm the tag exists before you use it. `hack/check-test` pulls the image as part of
+- Confirm that the tag exists before you use it. `hack/check-test` pulls the image as part of
   its run.
 
 ## Testing a check
@@ -183,7 +183,7 @@ Read [testing-checks.md](testing-checks.md). Short version:
 hack/check-test/check.sh examples/restorecheck-minimal.yaml restore-test check-minimal data=my-restored-pvc
 
 # Or run the whole round trip: seed, back up with Kopiur, restore, check
-hack/check-test/roundtrip.sh minimal examples/seeds/minimal.yaml examples/restorecheck-minimal.yaml
+hack/check-test/roundtrip.sh minimal hack/check-test/seeds/minimal.yaml examples/restorecheck-minimal.yaml
 ```
 
 ## Catalog

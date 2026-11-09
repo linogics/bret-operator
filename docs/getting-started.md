@@ -18,8 +18,8 @@ You need:
 - `kubectl`, `helm` 3.14 or newer, and `python3` with PyYAML (for the harness).
 - One backup tool installed, with at least one backup. Pick one in
   [backup-providers.md](backup-providers.md): Velero, VolSync or Kopiur.
-- An application with data to back up. This tutorial uses a small example volume, so you can
-  follow it end to end. Replace it with your own app afterwards.
+- An application with data to back up. This tutorial uses a small example volume, so you
+  follow it from start to end. Replace it with your own app afterwards.
 
 Create a namespace for the example. Every object below goes into it:
 
@@ -36,7 +36,7 @@ helm install bret-operator oci://ghcr.io/linogics/charts/bret-operator \
   --create-namespace
 ```
 
-Check it:
+Check the installation:
 
 ```bash
 kubectl -n bret-operator-system get deploy
@@ -45,13 +45,13 @@ kubectl get crd restores.bret.linogics.io restoretests.bret.linogics.io restorec
 
 The deployment should show `1/1` ready. The three CRDs should be listed.
 
-For a checkout of this repository, run `make helm-sync` first, then install from
+For a checkout of this repository, run `make helm-sync` first. Then install from
 `./charts/bret-operator`. More in [installation.md](installation.md).
 
 ## Step 2: Make a backup
 
 Use the setup in [backup-providers.md](backup-providers.md) for your tool. The example below
-assumes you already have a PVC named `orders-db-data` in namespace `data` and a backup of it
+assumes that you already have a PVC named `orders-db-data` in namespace `data`, and a backup of it
 under the name `orders-db-1`.
 
 Check that the backup exists:
@@ -62,7 +62,7 @@ Check that the backup exists:
 
 ## Step 3: Restore into a scratch volume and run the check by hand
 
-This step does not use the operator. It shows what the operator will do for you.
+This step does not use the operator. It shows what the operator does for you.
 
 ### 3a. Restore the backup into a scratch PVC
 
@@ -102,7 +102,7 @@ If it says `VERDICT: FAIL`, read the logs printed above it. Common causes are in
 
 ### 3d. Prove the check can fail
 
-Change the check so it expects the wrong value, run it again, and confirm `VERDICT: FAIL`. A
+Change the check so that it expects the wrong value. Run it again, and confirm `VERDICT: FAIL`. A
 check that always passes is not a check. Undo the change afterwards.
 
 ## Step 4: Register the check with the operator
@@ -119,7 +119,7 @@ cluster admins should create checks, because a check runs a pod with your chosen
 
 ## Step 5: Create a restore test with a schedule
 
-Copy [examples/restoretest.yaml](../examples/restoretest.yaml), then set `provider`, the backup
+Copy [examples/restoretest.yaml](../examples/restoretest.yaml). Then set `provider`, the backup
 label selector and `restoreCheckRef` to your values:
 
 ```bash
@@ -134,7 +134,7 @@ kubectl -n data get restoretests
 # orders-db-nightly    volsync    Succeeded   2026-11-15T03:17:00Z   2d
 ```
 
-Provider `volsync` needs the VolSync provider enabled in the chart. See
+The `volsync` provider needs the VolSync provider enabled in the chart. See
 [backup-providers.md](backup-providers.md).
 
 ## Step 6: Run a test on demand
@@ -155,7 +155,7 @@ kubectl -n data annotate restoretest orders-db-nightly \
   [installation.md](installation.md#metrics-scraping)). Metric names are not final.
 
 If a run failed and `keepOnFailure` is `true`, the failed pod, its PVC and the restore object stay
-in the namespace. Read the pod logs first, then delete them.
+in the namespace. Read the pod logs first. Then delete them.
 
 ## Clean up
 
@@ -166,8 +166,8 @@ kubectl delete namespace restore-test --ignore-not-found
 helm uninstall bret-operator -n bret-operator-system
 ```
 
-Keep the CRDs if you plan to come back. See [installation.md](installation.md#uninstalling) for
-removing them.
+Keep the CRDs if you plan to return. See [installation.md](installation.md#uninstalling) for
+how to remove them.
 
 ## Next steps
 

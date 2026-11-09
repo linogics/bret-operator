@@ -1,9 +1,9 @@
 # bret-operator documentation
 
-bret-operator tests your backups. It restores a backup into a scratch volume, runs a check
-against the restored data in a throwaway pod, and records the result on the custom resource,
+bret-operator tests your backups. It restores a backup into a scratch volume. It runs a check
+against the restored data in a throwaway pod. Then it records the result on the custom resource,
 as Kubernetes Events and as Prometheus metrics. The operator does not move backup data. It
-drives the restore object of Velero, VolSync or Kopiur, then runs your check.
+drives the restore object of Velero, VolSync or Kopiur. Then it runs your check.
 
 ## Current status
 
@@ -23,7 +23,7 @@ Read this first.
 | `RestoreCheck` check files in `checks/` | Drafts. Being tested by hand with the harness in [testing-checks.md](testing-checks.md). Each app's result is in [checks/INDEX.md](../checks/INDEX.md). |
 | Check check by hand (`hack/check-test/`) | Works. Restores a backup with Kopiur and runs a check against it. |
 
-Not in v1: `retainedFor` (a TTL for kept resources). Kept resources are removed by hand. Anything
+Not in v1: `retainedFor` (a TTL for kept resources). Remove kept resources by hand. Anything
 still marked **planned** in these docs is not in the code yet. The design is in
 [superpowers/specs/2026-11-14-bret-operator-restore-test-design.md](superpowers/specs/2026-11-14-bret-operator-restore-test-design.md).
 
@@ -44,7 +44,7 @@ still marked **planned** in these docs is not in the code yet. The design is in
 | [reference/api.md](reference/api.md) | Generated field reference for all three kinds. Do not edit by hand. |
 | [checks/INDEX.md](../checks/INDEX.md) | Catalog of app checks, their volumes, checks and test status. |
 | [best-practices.md](best-practices.md) | Rules for backups and restore tests. |
-| [data-and-database.md](data-and-database.md) | Apps that have files and a database. Keeping them in one restore point. |
+| [data-and-database.md](data-and-database.md) | Apps that have files and a database. Keep them in one restore point. |
 | [troubleshooting.md](troubleshooting.md) | Known errors and their fixes, from the kind spike. |
 | [spike-findings.md](spike-findings.md) | Verified facts, versions and pitfalls from the kind spike. |
 
@@ -53,4 +53,4 @@ still marked **planned** in these docs is not in the code yet. The design is in
 | Document | Content |
 |---|---|
 | [development.md](development.md) | Build, test, lint, generate docs, and the local kind setup. |
-| [releasing.md](releasing.md) | How a release is cut and what it publishes. |
+| [releasing.md](releasing.md) | How to cut a release and what it publishes. |

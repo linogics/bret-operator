@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Each entry gives the exact text you will see, the cause, and the fix. Errors come from the
+Each entry gives the exact text you see, the cause, and the fix. Errors come from the
 spike on kind with Kubernetes 1.37, Velero 1.18.4, VolSync 0.17.0, Kopiur 0.10.21 and
 PostgreSQL 17.12. See [spike-findings.md](spike-findings.md).
 
@@ -17,7 +17,7 @@ PostgreSQL 17.12. See [spike-findings.md](spike-findings.md).
 ### Restore warning `ConfigMap:kube-root-ca.crt already exists`
 
 - **Cause:** every namespace already has this ConfigMap.
-- **Fix:** none needed. It is harmless.
+- **Fix:** none needed. The warning is harmless.
 
 ### Restored Deployment holds the volume, check pod stays Pending
 
@@ -94,7 +94,7 @@ PostgreSQL 17.12. See [spike-findings.md](spike-findings.md).
 
 - **Symptom:** `network ... overlaps` on an IPv6 range.
 - **Cause:** an existing host bridge uses the same range.
-- **Fix:** create the `kind` network yourself on a free range before creating the cluster.
+- **Fix:** create the `kind` network yourself on a free range before you create the cluster.
 
 ## Operator
 

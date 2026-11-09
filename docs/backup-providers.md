@@ -1,6 +1,6 @@
 # Backup providers
 
-bret-operator restores with a backup tool you already run. This page shows the setup that
+bret-operator restores with a backup tool that you already run. This page shows the setup that
 the kind spike verified. Each provider needs a backup that the tool can restore, and a
 `RestoreCheck` that checks the result.
 
@@ -13,7 +13,7 @@ Use one bucket or prefix per tool. Do not share a repository between tools.
 ## Before any provider: CSI snapshots
 
 All three providers below capture volumes with CSI snapshots (`copyMethod: Snapshot`). Check
-that your cluster can take them:
+that your cluster supports them:
 
 ```bash
 kubectl get volumesnapshotclass
@@ -24,7 +24,7 @@ You need one `VolumeSnapshotClass` that uses your CSI driver. Note its name. The
 it `csi-snapclass`. Each backup tool also needs a `StorageClass` that the driver supports.
 
 The spike used `csi-driver-host-path` v1.19.0 with external-snapshotter v8.7.0. For production,
-use the snapshot controller and driver your storage vendor documents.
+use the snapshot controller and driver that your storage vendor documents.
 
 ## Velero
 
@@ -75,20 +75,20 @@ as `VELERO_NAMESPACE`.
 ### What the operator drives
 
 The operator creates a `velero.io/v1` `Restore` in the Velero namespace. The PVC and PVs are
-restored into the scratch namespace `bret-scratch-<hash>` (hash of `<namespace>/<name>`), and the
-check pod runs in that namespace. The `Restore` has `includedNamespaces` set to the `Restore`
-namespace, so no other namespace of the backup is restored. The operator copies the
-`pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch namespace. The operator waits for `status.phase` to reach `Completed`, `PartiallyFailed` or
-`Failed`.
+restored into the scratch namespace `bret-scratch-<hash>` (hash of `<namespace>/<name>`). The check
+pod runs in that namespace. The `Restore` sets `includedNamespaces` to the `Restore`
+namespace, so Velero restores no other namespace of the backup. The operator copies the
+`pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch namespace. The
+operator waits for `status.phase` to reach `Completed`, `PartiallyFailed` or `Failed`.
 
 Checks for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap, secret
 or hostPath volumes. A check that does fails with `ProviderUnsupported`.
 
-Restored workloads are a trap. Velero restores Deployments and StatefulSets as well, and they
-start and hold the restored RWO volume. Scale them to zero or delete them before the check
+Restored workloads are a trap. Velero restores Deployments and StatefulSets as well. They
+start and hold the restored RWO volume. Scale them to zero, or delete them, before the check
 pod runs. The spike hit this.
 
-A harmless warning appears in restores: `ConfigMap:kube-root-ca.crt already exists`.
+The restore log shows a harmless warning: `ConfigMap:kube-root-ca.crt already exists`.
 
 ## VolSync
 
@@ -136,8 +136,8 @@ spec:
       daily: 7
 ```
 
-For a database, set the mover's UID to the database's UID with `moverSecurityContext`
-(Postgres 17 uses 999). See [data-and-database.md](data-and-database.md).
+For a database, set the mover's UID to the database's UID with `moverSecurityContext`.
+Postgres 17 uses 999. See [data-and-database.md](data-and-database.md).
 
 Enable the provider in the chart with `providers.volsync.enabled: true`.
 
@@ -145,23 +145,23 @@ Enable the provider in the chart with `providers.volsync.enabled: true`.
 
 The operator creates a `ReplicationDestination` in the restore namespace with a restic mover. The
 repository Secret name and the source PVC come from the backup's `ReplicationSource`, in the backup
-namespace: `backupRef.namespace`, or the `Restore` namespace when `backupRef.namespace` is not set.
+namespace. The operator uses `backupRef.namespace`. If that is not set, it uses the `Restore` namespace.
 The Secret itself must exist in the `Restore` namespace. Without `spec.restic.repository` on the
 `ReplicationSource`, the `Restore` shows the reason `RepositoryMissing`.
-Done means `status.lastManualSync` equals the trigger value.
+The restore is done when `status.lastManualSync` equals the trigger value.
 
-Mover pods use a default non-database UID and cannot read a Postgres data directory
+Mover pods use a default non-database UID. They cannot read a Postgres data directory
 (`permission denied`). The operator takes the mover UID from the check (annotation
-`bret.linogics.io/mover-uid`, else the first container's `runAsUser`) and uses 65534 when the
-check sets none.
+`bret.linogics.io/mover-uid`, else the first container's `runAsUser`). It uses 65534 when the
+check sets neither.
 
 A VolSync cache volume made by an earlier mover UID causes `permission denied` after the UID
-changes. Delete the cache PVC and let VolSync create a new one.
+changes. Delete the cache PVC. VolSync then creates a new one.
 
 ## Kopiur (alpha)
 
 Verified with Kopiur 0.10.21. Kopiur is alpha. Its restore-related issue `kopiur#233` was not
-hit in the spike, but it is open.
+hit in the spike, but it is still open.
 
 Enable the provider in the chart with `providers.kopiur.enabled`. It is on by default.
 
@@ -248,7 +248,7 @@ Wait until `status.phase` is `Succeeded`.
 ### Restore
 
 A Kopiur restore runs in a namespace. Copy the repository credentials Secret into that
-namespace first. Kopiur did not find the Secret in another namespace and failed with
+namespace first. Kopiur did not find the Secret in another namespace, and it failed with
 `MissingCredentialsSecret`.
 
 ```yaml
@@ -292,8 +292,8 @@ spec:
 
 Use your own `StorageClass` for the PVC. The spike used `csi-hostpath-sc`.
 
-Done means the `Restore` has `status.phase: Completed`, and its condition `Ready` has reason
-`RestoreSucceeded`. Kopiur says `Completed`, not `Succeeded`. Do not mix them up with the
+The restore is done when the `Restore` has `status.phase: Completed`, and its condition `Ready` has reason
+`RestoreSucceeded`. Kopiur says `Completed`, not `Succeeded`. Do not confuse these words with the
 operator's phases.
 
 ## Which provider to choose

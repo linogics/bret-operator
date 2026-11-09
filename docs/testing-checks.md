@@ -17,7 +17,7 @@ controllers, so you can test today.
 
 ## Prerequisites
 
-- A Kubernetes cluster you can change. Do not run the harness against production.
+- A Kubernetes cluster that you can change. Do not run the harness against production.
 - `kubectl`, `python3` with PyYAML.
 - Kopiur installed, and an S3-compatible endpoint for its repository. The harness uses the
   endpoint and credentials written in `roundtrip.sh`. Change them for your environment.
@@ -37,7 +37,7 @@ hack/check-test/check.sh checks/postgres.yaml bpt-postgres check-postgres data=r
 Arguments:
 
 1. the check file,
-2. the namespace the pod runs in (created if missing),
+2. the namespace the pod runs in (the script creates it if it is missing),
 3. the pod name,
 4. one `KEY=PVC` pair per restored volume.
 
@@ -55,7 +55,7 @@ Environment variables:
 | `TIMEOUT` | `900` | Seconds to wait for the pod to finish. |
 | `KEEP` | unset | Set to `1` to keep the pod after the run. |
 
-Output ends with `VERDICT: PASS` or `VERDICT: FAIL`. The script exits 0 on pass.
+The output ends with `VERDICT: PASS` or `VERDICT: FAIL`. The script exits 0 on pass.
 
 ## Run the full round trip for one app
 
@@ -104,13 +104,13 @@ Start from `seeds/postgres.yaml` or `seeds/minimal.yaml`.
 
 ## Negative test
 
-A check that can never fail proves nothing. After a pass, break the expected value (for example
-change the canary payload's hash in the seed) and run the round trip again. The check must
+A check that can never fail proves nothing. After a pass, break the expected value. For example,
+change the canary payload's hash in the seed. Then run the round trip again. The check must
 report `VERDICT: FAIL`. The spike did this with a wrong expected count.
 
 ## Reading a failure
 
-`check.sh` prints the exit code of every init and check container, then the last 40 log lines
+`check.sh` prints the exit code of every init and check container. Then it prints the last 40 log lines
 of each. Common cases:
 
 | Symptom | Likely cause |
@@ -123,7 +123,7 @@ of each. Common cases:
 
 ## Images
 
-`roundtrip.sh` and `check.sh` pull images from the registry. Check the tag exists before you
+`roundtrip.sh` and `check.sh` pull images from the registry. Check that the tag exists before you
 rely on a check:
 
 ```bash

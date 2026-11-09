@@ -5,8 +5,8 @@ Verified on a kind cluster. These facts drive the rules in
 
 ## Scope of the evidence
 
-- Verified: one Postgres 17 live database, its PVC backed up three ways, and each backup
-  restored into a scratch PVC. Each restored copy booted cleanly and passed a SQL check
+- Verified: one Postgres 17 live database. Its PVC was backed up three ways. Each backup
+  was restored into a scratch PVC. Each restored copy booted cleanly and passed a SQL check
   (row count and a marker row).
 - Not verified: heavy write load. Crash-consistent backup under load is not proven.
 
@@ -57,7 +57,7 @@ Verified on a kind cluster. These facts drive the rules in
 1. Off-cluster backups need data movement. Without it, the restore depends on the
    in-cluster snapshot.
 2. Mover UID must match the DB UID (999 for Postgres 17).
-3. No `fsGroup` on a database data directory.
+3. Do not set `fsGroup` on a database data directory.
 4. Restored workloads hold RWO PVCs. Scale them to 0 before the check.
 5. Recreate VolSync cache PVCs when the mover UID changes.
 6. Kopiur cross-namespace restores need the repo credentials Secret copied.
