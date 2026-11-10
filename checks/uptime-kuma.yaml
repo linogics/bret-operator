@@ -1,6 +1,6 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Restore check for uptime-kuma 1.23 with SQLite (/app/data/kuma.db). One PVC.
-# Canary contract: monitor named bret-canary exists in kuma.db, seeded before the backup.
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# RestoreCheck for uptime-kuma 1.23 with SQLite (/app/data/kuma.db). One PVC.
+# Canary contract: a monitor named bret-canary exists in kuma.db. Seed it before the backup.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:
@@ -11,7 +11,7 @@ spec:
 
   initContainers:
   # The restored mount root comes back owned by root. Uptime Kuma runs as node (1000) and writes
-  # its DB journal there, so an init container with no securityContext (root) fixes it.
+  # its DB journal there. An init container with no securityContext runs as root. It fixes the owner.
     - name: data-perms
       image: busybox:1.37
       command:

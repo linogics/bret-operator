@@ -1,8 +1,8 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Restore check for vaultwarden 1.32. SQLite in /data (db.sqlite3, attachments, icons).
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# RestoreCheck for vaultwarden 1.32. SQLite in /data (db.sqlite3, attachments, icons).
 # One PVC.
-# Canary contract: user bret-canary@example.invalid exists in the users table,
-# seeded before the backup.
+# Canary contract: user bret-canary@example.invalid exists in the users table.
+# Seed the canary user before the backup.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:
@@ -13,7 +13,7 @@ spec:
 
   initContainers:
   # The restored mount root comes back owned by root. Vaultwarden runs as nobody (65534) and
-  # writes its DB and keys there, so an init container with no securityContext (root) fixes it.
+  # writes its DB and keys there. An init container with no securityContext runs as root. It fixes the owner.
     - name: data-perms
       image: busybox:1.37
       command:

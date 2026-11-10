@@ -1,9 +1,9 @@
-# Shell one-liners in block scalars are the content, not prose.
+# Shell one-liners in block scalars are content, not prose.
 # yamllint disable rule:line-length
-# Round trip PASS and negative check FAIL on kind (2026-11-14), mysql 8.4.13.
-# Restore check for mysql 8.4. Database-only, one PVC.
-# Canary contract: table bret.canary(id int primary key, payload text, sha256 char(64)),
-# row id=1 with sha256 = sha2(payload, 256), seeded before the backup.
+# Round trip PASS. Negative check FAIL on kind (2026-11-14), mysql 8.4.13.
+# RestoreCheck for mysql 8.4. Database only. One PVC.
+# Canary contract: table bret.canary(id int primary key, payload text, sha256 char(64)).
+# Row id=1 holds sha256 = sha2(payload, 256). Seed it before the backup.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:

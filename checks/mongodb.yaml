@@ -1,7 +1,7 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Restore check for mongodb 7.0. Database-only (WiredTiger files), one PVC.
-# mongosh is in the image (checked with nerdctl run on mongo:7.0).
-# Canary contract: db "app", collection bret_canary, doc {_id: "canary", payload, sha256}.
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# RestoreCheck for mongodb 7.0. Database only (WiredTiger files). One PVC.
+# The image contains mongosh. This was checked with nerdctl run on mongo:7.0.
+# Canary contract: db "app", collection bret_canary. Doc: {_id: "canary", payload, sha256}.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:

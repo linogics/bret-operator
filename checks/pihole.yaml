@@ -1,8 +1,8 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
+# TESTED: round trip PASS. Negative test FAIL, as expected.
 # DESIGN DELTA: restoredVolumes (not in design §7.1)
 # Two volumes: /etc/pihole (gravity.db, setupVars, custom.list) and /etc/dnsmasq.d.
-# Canary contract: adlist https://bret-canary.invalid/list.txt in gravity.db, and the line
-# "10.0.0.53 bret-canary.test" in /etc/pihole/custom.list, seeded before the backup.
+# Canary contract: the adlist https://bret-canary.invalid/list.txt is in gravity.db.
+# The line "10.0.0.53 bret-canary.test" is in /etc/pihole/custom.list. Seed both before the backup.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:

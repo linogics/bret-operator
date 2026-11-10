@@ -1,11 +1,11 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Postgres data dir: PGDATA is <mount>/pgdata (same layout as the spike source).
-# pgdata-perms init sets 0700, Postgres refuses 2770 after restore (spike).
-# Restore check for keycloak 26.0. Database-only: state lives in an external PostgreSQL,
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# Postgres data dir: PGDATA is <mount>/pgdata. The layout matches the spike source.
+# The pgdata-perms init container sets 0700. Postgres refuses 2770 after a restore (spike).
+# RestoreCheck for keycloak 26.0. Database only. The state lives in an external PostgreSQL,
 # restored to /var/lib/postgresql/data.
-# Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+), gated by
-# startupProbe. Not in design §7.1 (see INDEX.md).
-# Canary contract: realm bret-canary in the restored DB. Secret keycloak-db holds KC_DB_PASSWORD.
+# Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+).
+# The startupProbe gates it. This is not in design §7.1. See INDEX.md.
+# Canary contract: realm bret-canary exists in the restored DB. Secret keycloak-db holds KC_DB_PASSWORD.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:

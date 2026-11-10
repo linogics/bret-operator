@@ -1,7 +1,7 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Restore check for elasticsearch 8.15. Files-only (Lucene segments under path.data).
-# Canary contract: index bret-canary, doc _id "canary" with {"payload": "...", "sha256": "..."},
-# seeded before the backup. cluster.name and node.name must equal the source values.
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# RestoreCheck for elasticsearch 8.15. Files only: Lucene segments under path.data.
+# Canary contract: index bret-canary. Doc _id "canary" holds {"payload": "...", "sha256": "..."}.
+# Seed the canary before the backup. cluster.name and node.name must equal the source values.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:
@@ -23,9 +23,9 @@ spec:
         - name: xpack.security.enabled
           value: "false"
         - name: cluster.name
-          value: bret-source-cluster # must match the source cluster
+          value: bret-source-cluster # Must match the source cluster.
         - name: node.name
-          value: es-0              # must match the source node
+          value: es-0              # Must match the source node.
         - name: ES_JAVA_OPTS
           value: "-Xms512m -Xmx512m"
       command:

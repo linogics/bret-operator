@@ -1,5 +1,5 @@
-# RestoreTest: test the newest orders-db backup every night, and after each new backup.
-# Check: examples/restorecheck-minimal.yaml (or your own).
+# RestoreTest: test the newest orders-db backup every night. Test it again after each new backup.
+# Check: examples/restorecheck-minimal.yaml. Or use your own check.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
@@ -13,15 +13,15 @@ spec:
   restoreCheckRef:
     name: minimal
   target:
-    size: 20Gi                  # required in v1: scratch volume size for each run
+    size: 20Gi                  # Required in v1. Scratch volume size for each run.
   triggers:
     cron: "17 3 * * *"          # 03:17 UTC every day
     afterBackup:
-      delay: 30m                # also 30 minutes after each new backup completes
-    manual: true                # run on demand with the run-now annotation
-  restoreWindow: 45m            # per attempt: restore, image pulls and check
+      delay: 30m                # Also run 30 minutes after each new backup completes.
+    manual: true                # Run on demand with the run-now annotation.
+  restoreWindow: 45m            # Per attempt: restore, image pulls, and check.
   retries:
-    count: 2                    # up to 3 attempts in total
-    backoff: 10m                # wait between attempts
-  keepOnFailure: true           # keep the pod, PVC and restore after the last failed attempt
-  overlapPolicy: Skip           # a trigger during a run is dropped (default)
+    count: 2                    # Up to 3 attempts in total.
+    backoff: 10m                # Wait between attempts.
+  keepOnFailure: true           # Keep the pod, PVC, and restore after the last failed attempt.
+  overlapPolicy: Skip           # A trigger during a run is dropped. This is the default.

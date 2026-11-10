@@ -1,8 +1,8 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Restore check for home-assistant 2024.9. SQLite recorder DB plus .storage files in /config.
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# RestoreCheck for home-assistant 2024.9. SQLite recorder DB and .storage files in /config.
 # One PVC.
-# Canary contract: /config/bret-canary/canary.txt and canary.sha256 (sha256sum format),
-# seeded before the backup.
+# Canary contract: /config/bret-canary/canary.txt and canary.sha256 (sha256sum format).
+# Seed the canary before the backup.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:
@@ -13,8 +13,8 @@ spec:
 
   initContainers:
   # The restored mount root comes back owned by root. Home Assistant (uid 1000) creates its
-  # DB, WAL and .storage files there, so an init container with no securityContext (root)
-  # gives the root to uid 1000.
+  # DB, WAL and .storage files there. An init container with no securityContext runs as root.
+  # It gives the root to uid 1000.
     - name: config-perms
       image: busybox:1.37
       command:

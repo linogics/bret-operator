@@ -1,7 +1,7 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Restore check for gitea 1.22 with SQLite (default). One PVC mounted at /data.
-# Mount path equals the image's default data path, so absolute paths in app.ini still resolve.
-# Canary contract: public repo bret/canary with canary.txt and canary.sha256 (sha256sum format).
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# RestoreCheck for gitea 1.22 with SQLite (default). One PVC, mounted at /data.
+# The mount path equals the image default data path. Absolute paths in app.ini still resolve.
+# Canary contract: public repo bret/canary. It holds canary.txt and canary.sha256 (sha256sum format).
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:

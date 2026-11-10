@@ -1,12 +1,12 @@
-# NOT RUNNABLE BY THE OPERATOR IN V1: two restoredVolumes entries. Providers restore one PVC, so
-# the operator rejects this check with ProviderUnsupported. Works with hack/check-test.
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Postgres data dir: PGDATA is <mount>/pgdata (same layout as the spike source).
-# pgdata-perms init sets 0700, Postgres refuses 2770 after restore (spike).
+# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. Providers restore one PVC,
+# so the operator rejects this check with ProviderUnsupported. It works with hack/check-test.
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# Postgres data dir: PGDATA is <mount>/pgdata. The layout matches the spike source.
+# The pgdata-perms init container sets 0700. Postgres refuses 2770 after a restore (spike).
 # DESIGN DELTA: restoredVolumes (not in design §7.1)
-# Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+), gated by
-# startupProbe. Keeps running during the checks. Not in design §7.1 (see INDEX.md).
-# Secret nextcloud-db holds POSTGRES_PASSWORD for the source database.
+# Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+).
+# The startupProbe gates it. It keeps running during the checks. This is not in design §7.1. See INDEX.md.
+# Secret nextcloud-db holds POSTGRES_PASSWORD. It is the password of the source database.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:
@@ -24,9 +24,9 @@ spec:
       sourcePVC: pgdata
 
   initContainers:
-  # The restored mount roots come back owned by root. Nextcloud (uid 33) needs its html root
-  # and the Postgres sidecar (uid 999) needs the pgdata root. Init containers with no
-  # securityContext run as root and give the roots to those UIDs.
+  # The restored mount roots come back owned by root. Nextcloud (uid 33) needs its html root.
+  # The Postgres sidecar (uid 999) needs the pgdata root. An init container with no securityContext
+  # runs as root. It gives the roots to those UIDs.
     - name: html-perms
       image: busybox:1.37
       command:

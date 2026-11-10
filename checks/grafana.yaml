@@ -1,7 +1,7 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Restore check for grafana 11.2 with SQLite (default). One PVC.
-# Canary contract: dashboard with uid and title "bret-canary", seeded before the backup.
-# Secret grafana-admin holds GF_SECURITY_ADMIN_PASSWORD matching the source instance.
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# RestoreCheck for grafana 11.2 with SQLite (default). One PVC.
+# Canary contract: dashboard with uid and title "bret-canary". Seed it before the backup.
+# Secret grafana-admin holds GF_SECURITY_ADMIN_PASSWORD. It must match the source instance.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:
@@ -11,8 +11,8 @@ spec:
   restoreMount: /var/lib/grafana
 
   initContainers:
-  # The restored mount root comes back owned by root. Grafana must create its own directories
-  # there, so an init container with no securityContext (root) gives the root to uid 472.
+  # The restored mount root comes back owned by root. Grafana must create its own directories there.
+  # An init container with no securityContext runs as root. It gives the root to uid 472.
     - name: data-perms
       image: busybox:1.37
       command:

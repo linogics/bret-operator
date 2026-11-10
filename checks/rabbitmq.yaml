@@ -1,9 +1,9 @@
-# TESTED: round trip PASS, negative test FAIL as expected.
-# Restore check for rabbitmq 3.13 (management image). Files-only: mnesia dir, message store.
-# Canary contract: queue bret.canary holding BRET_CANARY_MESSAGES messages,
-# seeded before the backup.
-# Node name: the test runs as rabbit@localhost, a harness workaround. A real check must
-# run with the source node name (RABBITMQ_NODENAME), or mnesia will not load.
+# TESTED: round trip PASS. Negative test FAIL, as expected.
+# RestoreCheck for rabbitmq 3.13 (management image). Files only: mnesia dir and message store.
+# Canary contract: queue bret.canary holds BRET_CANARY_MESSAGES messages.
+# Seed the canary before the backup.
+# Node name: the test runs as rabbit@localhost. This is a harness workaround.
+# A real check must run with the source node name (RABBITMQ_NODENAME). Otherwise, mnesia will not load.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:
@@ -21,7 +21,7 @@ spec:
         runAsUser: 999
       env:
         - name: RABBITMQ_NODENAME
-      # Must equal the source node; mnesia is tied to it.
+      # Must equal the source node. mnesia is tied to it.
           value: rabbit@localhost
         - name: BRET_CANARY_MESSAGES
           value: "1"
