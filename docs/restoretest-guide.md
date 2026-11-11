@@ -4,8 +4,8 @@ A `RestoreTest` says what to restore, when, how often to retry, and what to keep
 explains each field with an example. The complete field list is in
 [reference/api.md](reference/api.md).
 
-**Status:** implemented. The controller runs the schedule, the after-backup and manual triggers,
-the overlap policy and the retries. It has not yet run end to end on a cluster.
+**Status:** the controller implements the schedule, the after-backup and manual triggers, the
+overlap policy and the retries. An end-to-end run on a live cluster is not yet verified.
 
 ## A complete example
 
@@ -113,8 +113,7 @@ Default `false`. When `true` and the last attempt failed, the operator keeps:
 - the scratch volume, so the restored data stays readable.
 
 The kept objects get the label `bret.linogics.io/retained: "true"`. The operator does not remove them
-automatically, and v1 has no TTL (`retainedFor` is not implemented). Inspect them, then delete them
-by hand. Or delete the `Restore`. Its finalizer removes the kept objects. Earlier failed attempts
+automatically. v1 has no TTL. Inspect them, then delete them by hand. Or delete the `Restore`. Its finalizer removes the kept objects. Earlier failed attempts
 are removed when the run settles.
 
 Turn it on for a check that you still debug. Leave it off in a long-running schedule. Otherwise,
@@ -139,11 +138,11 @@ Use `Replace` only when the newest backup must win.
 |---|---|
 | `status.lastRun.time` | When the last run ended. |
 | `status.lastRun.result` | `Succeeded` or `Failed`. |
-| `status.lastRun.reason` | Why, for example `ImagePull`, `PVCPending`, `CheckFailed`. |
+| `status.lastRun.reason` | Free text. It copies the message of the `Restore` that ended the run. |
 | `status.nextRun` | Next cron tick. |
 | `status.lastHandled` | Name and time of the newest backup that `afterBackup` ran for. |
 | `status.retainedResources` | Names of kept objects when `keepOnFailure` kept a failed run. |
-| `status.conditions` | Standard conditions. `WatchedNamespace` in namespaced mode (planned). |
+| `status.conditions` | Standard conditions. The `Ready` reason is the run result (`Succeeded` or `Failed`), `Running`, or a blocking reason such as `TargetMissing` or `BackupNotFound`. |
 
 Read it with:
 

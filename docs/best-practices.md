@@ -1,84 +1,78 @@
 # Best practices
 
-Rules for backups and restore tests. Each rule names its source: **Spike** (verified on a
-kind cluster), **Design** (design doc section), or **Index** (`checks/INDEX.md`).
+Rules for backups and restore tests.
 
 ## Restore target
 
-- **Use a scratch PVC only. Never restore over live data.** (Design §4, §6.4.)
-- A restore test must not write to a PVC that the application uses. (Design §4.)
-- Restored data is sensitive. The operator deletes scratch PVCs on success. With `keepOnFailure`,
-  it keeps them, so the data stays. This is a trade-off. (Design §11.)
+- Restore into a scratch PVC only. Never restore over live data.
+- A restore test must not write to a PVC that the application uses.
+- Restored data is sensitive. The operator deletes scratch PVCs when an attempt ends. With
+  `keepOnFailure: true`, it keeps them after the final failed attempt so you can debug.
 
 ## Backups
 
-- **Back up off-cluster. Velero CSI backups need data movement.** A Velero CSI backup
-  without `--snapshot-move-data` does not put volume data off-cluster. The restore worked
-  in the spike only because the snapshot still existed in the cluster. For off-cluster recovery,
-  enable data movement. (Spike.)
-- **Crash-consistent backups of a live database are useful but not proof.** The spike
-  backed up a live Postgres 17 database and restored it. WAL recovery ran on boot, and the
-  SQL check passed. This was not tested under heavy write load. (Spike.)
-- Seed a canary before the backup. The check depends on it. (Index.)
+- Back up off-cluster. A Velero CSI backup needs `--snapshot-move-data`. Without it, the volume
+  data stays in the cluster as a snapshot, and a restore works only while that snapshot exists.
+- A crash-consistent backup of a live database is useful, but it is not proof of recovery. The
+  tested Postgres 17 backup recovered on boot and passed the SQL check. The load was light. Test
+  under heavy write load before you rely on it.
+- Seed the canary before the backup. The check depends on it. See [checks.md](checks.md#canary-convention).
 
 ## Restore tests
 
-- **Run restore tests on a schedule and after each backup.** Use `cron` and `afterBackup`
-  triggers. (Design §7.4.)
-- **Test that the check can fail.** Set the expected value wrong. The spike did this, and
-  the check exited 1. A check that cannot fail proves nothing. (Spike.)
-- **Never pass a test without running the check.** (Design §4.)
-- **Every test has a deadline.** Set `restoreWindow`. (Design §4, §7.3.)
-- **Keep failures for debugging.** Use `keepOnFailure: true`. Only the last attempt is kept.
-  (Design §7.5.)
-- **Keep retries small.** Use `retries.count` of 1 or 2, with a backoff. The operator cleans up
-  earlier failed attempts, so retries do not pile up. (Design §7.1, §7.5.)
-- **Do not delete evidence silently.** Failed tests keep their resources until a user
-  deletes them. (Design §4.)
-- **Write an Event for every retry and cancel, with a reason.** (Design §10.)
-- **Alert on the metric `bret_restore_last_success_timestamp_seconds`.** Use it for
-  "backup not tested in N days". (Design §9.)
+- Run restore tests on a schedule and after each backup. Use `triggers.cron` and
+  `triggers.afterBackup`.
+- Test that the check can fail. Set the expected value wrong and confirm exit code 1. A check
+  that cannot fail proves nothing.
+- Never report a pass without running the check.
+- Set `restoreWindow` on every test. It is the deadline for each attempt.
+- Keep failures for debugging with `keepOnFailure: true`. Only the last failed attempt is kept.
+- Keep retries small. Use `retries.count` of 1 or 2, with a backoff. The operator deletes earlier
+  failed attempts, so retries do not pile up.
+- Do not delete evidence silently. Kept objects stay until someone deletes them, or deletes the
+  `Restore`.
+- Watch Events for skipped and replaced runs, and for canceled attempts.
+- Alert on the metric `bret_restoretest_last_success_timestamp_seconds`. Use it for
+  "backup not tested in N days".
 
 ## Restore mechanics
 
-- **Mover pods need the database UID.** VolSync and Kopiur mover pods default to a non-DB
+- **Mover pods need the database UID.** VolSync and Kopiur mover pods default to a non-database
   UID. They cannot read a Postgres data directory and fail with `permission denied`. Set the
-  mover security context to the DB UID. For `postgres:17`, that UID is **999**. (Spike.)
+  mover security context to the database UID. For `postgres:17`, that UID is **999**.
 - **Do not set `fsGroup` on database data directories.** `fsGroup` changes the data directory to
   `2770`. Postgres then refuses to start:
   `Permissions should be u=rwx (0700) or u=rwx,g=rx (0750)`.
-  Either set no `fsGroup`, or run `chmod 0700` on the data dir in an init step. (Spike.)
-- **Use one restored workload per RWO PVC.** RWO PVCs mount once. A Velero restore starts
-  any restored Deployment automatically, and that Deployment holds the PVC. Scale restored workloads to 0,
-  or delete them, before the check pod runs. (Spike.)
-- **Recreate the VolSync cache PVC when the mover UID changes.** A cache PVC made by an
-  older mover UID causes `permission denied`. (Spike.)
-- **Copy the repo credentials Secret into the namespace of a Kopiur Restore.** A Kopiur
-  `Restore` in another namespace needs the Secret there. (Spike.)
+  Either set no `fsGroup`, or run `chmod 0700` on the data directory in an init container.
+- **Use one restored workload per RWO PVC.** RWO PVCs mount once. A Velero restore starts any
+  restored Deployment automatically, and that Deployment holds the PVC. Scale restored workloads
+  to 0, or delete them, before the check pod runs.
+- **Recreate the VolSync cache PVC when the mover UID changes.** A cache PVC made by an older
+  mover UID causes `permission denied`.
+- **Copy the repository credentials Secret into the namespace of a Kopiur `Restore`.** The
+  `Restore` does not read it from another namespace.
 - **Expect Kopiur phase `Completed`, not `Succeeded`.** The Kopiur `Restore` condition `Ready`
-  has reason `RestoreSucceeded`. (Spike.)
-- **Ignore the Velero warning `ConfigMap:kube-root-ca.crt already exists`. It is harmless.** (Spike.)
+  has reason `RestoreSucceeded`.
+- **Ignore the Velero warning `ConfigMap:kube-root-ca.crt already exists`.** It is harmless.
 
 ## Security
 
-- **Use least-privilege RBAC.** Give the operator only the verbs and namespaces it needs. In
-  namespaced mode, the one cross-namespace read is the provider's backup objects in the
-  Velero namespace. Document it. (Design §8.)
-- **Only admins create `RestoreCheck` objects.** A check runs arbitrary images in
-  the cluster with the restored data mounted. Treat it as trusted code. (Design §11.)
-- **Check and test pods do not use the operator's ServiceAccount.** They use a
-  dedicated, empty ServiceAccount per namespace. (Design §11.)
-- **Do not put secrets in CR status or Events.** (Design §11.)
-- **The provider tools read object storage credentials, not the operator.** The
-  operator reads only backup metadata. (Design §11.)
-- **Pin tool and image versions.** Velero, VolSync and Kopiur are pinned in tests. Use
-  pinned image tags in checks. Some check tags are unverified. (Design §5, §12.2;
-  Index.)
-- Kopiur is alpha. Its restore has open issue kopiur#233. Treat its results with care. (Design §5.)
+- Use least-privilege RBAC. Give the operator only the verbs and namespaces it needs. In
+  namespaced mode, the one cross-namespace read is the provider's backup objects in the Velero
+  namespace.
+- Only admins create `RestoreCheck` objects. A check runs arbitrary images in the cluster with
+  the restored data mounted. Treat it as trusted code.
+- Check pods run as the `serviceAccountName` set in the `RestoreCheck`, or as the namespace
+  default when it is unset. Give that account no RBAC rights.
+- Do not put secrets in CR status or Events.
+- The provider tools read object storage credentials, not the operator. The operator reads
+  backup metadata only.
+- Pin tool and image versions. Use pinned image tags in checks. Check tags marked unverified in
+  [checks/INDEX.md](../checks/INDEX.md) need a test run before use.
+- Kopiur is alpha. Upstream issue `kopiur#233` affects restores. Review its results with care.
 
 ## Data apps
 
-- Restore all parts of one app from **one backup point**. Files and the database
-  must come from the same point. See [data-and-database.md](data-and-database.md).
+- Restore all parts of one app from **one backup point**. Files and the database must come from
+  the same point. See [data-and-database.md](data-and-database.md).
 - Check that the parts point at each other. A DB row must point to a file that exists.
-  (Index.)

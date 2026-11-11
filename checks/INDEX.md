@@ -23,19 +23,20 @@ Images were checked against public registries where noted. A `TAG UNVERIFIED` ma
 ## Conventions
 
 - **restoreMount vs restoredVolumes.** Single-PVC apps must use `restoreMount`. Apps with two or more
-  PVCs must use `restoredVolumes` (DESIGN DELTA). Each restored volume is a separate PVC. All volumes
-  are restored from the same backup point.
+  PVCs must use `restoredVolumes`. Each restored volume is a separate PVC. All volumes are restored
+  from the same backup point. In v1 the operator accepts one `restoredVolumes` entry, so these checks
+  run with `hack/check-test` only.
 - **Mount path = original mount path.** Restored volumes must mount at the path that the app used in
   production. For example: `/var/lib/postgresql/data` or `/data`. Absolute paths in the app config then
-  still resolve. The design §7.1 example uses `/restore`. This is not required.
+  still resolve. The example uses `/restore`. This is not required.
 - **Canary contract.** Every data app must have a canary. The seeding job writes the canary before the
   backup. A canary is a row, file, doc or object. It holds a payload and its sha256. The check
   recomputes the hash on the restored data. This proves that the data is readable, not only present.
   The canary names are in each YAML header.
-- **Native sidecars (not in design §7.1).** DB servers that an app needs at check time run as
-  `initContainers` with `restartPolicy: Always` and a `startupProbe`. These native sidecars keep running
-  while the `containers` checks run. They require k8s 1.29+. Design §7.1 says that initContainers run
-  before the checks and exit. This is a different use of the field. The design should decide it.
+- **Native sidecars.** DB servers that an app needs at check time run as `initContainers` with
+  `restartPolicy: Always` and a `startupProbe`. They keep running while the `containers` checks run.
+  They require k8s 1.29+. A plain init container runs before the checks and exits; a native sidecar
+  does not.
 - **Secrets.** Checks read credentials from Secrets. Each YAML names its Secrets (`*-db`,
   `grafana-admin`, `n8n-secrets`). The operator or user must provision them with the source values.
   Encryption keys and admin passwords must match the source. If they do not match, the check fails for

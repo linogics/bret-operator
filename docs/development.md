@@ -37,22 +37,20 @@ Commit the regenerated files with your change.
 
 ## Local cluster
 
-The spike ran on kind with the nerdctl provider. kind uses nerdctl when it is on the path and
-containerd is running.
+kind uses the nerdctl provider when nerdctl is on the path and containerd is running.
 
 ```bash
 export KIND_EXPERIMENTAL_PROVIDER=nerdctl
-kind create cluster --name bret-spike --image kindest/node:v1.37.0
+kind create cluster --name bret-dev --image kindest/node:v1.37.0
 ```
 
-Install the CSI hostpath driver for snapshots. The spike used csi-driver-host-path v1.19.0 with
+Install the CSI hostpath driver for snapshots. Tested with csi-driver-host-path v1.19.0 and
 external-snapshotter v8.7.0. Create a `VolumeSnapshotClass` named `csi-hostpath-snapclass` and a
 `StorageClass` named `csi-hostpath-sc`.
 
 Install the backup tools you test with. See [backup-providers.md](backup-providers.md). The
 check harness expects an S3-compatible endpoint named `versitygw.storage.svc.cluster.local:7070`
-with buckets `kopiur`, `velero` and `volsync`. The spike used Versity Gateway with the posix
-backend for this.
+with buckets `kopiur`, `velero` and `volsync`. Versity Gateway with the posix backend works for this.
 
 Install the operator's CRDs, and run the manager against the cluster:
 
@@ -64,7 +62,7 @@ make run              # manager on your machine, using your kubeconfig
 Delete the cluster when you finish:
 
 ```bash
-kind delete cluster --name bret-spike
+kind delete cluster --name bret-dev
 ```
 
 ## Check tests
@@ -83,7 +81,7 @@ Check tests do not run in CI. They need a cluster and several gigabytes of image
 | Path | Contents |
 |---|---|
 | `api/v1alpha1/` | API types. The source for CRDs and the reference. |
-| `internal/controller/` | Reconcilers. Empty scaffolds at this stage. |
+| `internal/controller/` | Reconcilers for Restore, RestoreCheck and RestoreTest. |
 | `cmd/main.go` | Manager entry point and flags. |
 | `config/` | Kustomize bases: CRDs, RBAC, manager, metrics. |
 | `charts/bret-operator/` | Helm chart. RBAC is copied from `config/`. Depends on `charts/bret-operator-crds/`, which holds the CRDs. |
@@ -93,7 +91,6 @@ Check tests do not run in CI. They need a cluster and several gigabytes of image
 | `hack/check-test/` | Check harness and per-app seeds. |
 | `hack/helm/sync_rbac.py` | Copies RBAC rules into the chart. |
 | `docs/` | This documentation. `docs/reference/api.md` is generated. |
-| `docs/superpowers/specs/` | Design document. |
 
 ## Conventions
 

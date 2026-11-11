@@ -1,13 +1,13 @@
 # Releasing
 
 A release is a git tag. Pushing a tag that matches `v*.*.*` runs `.github/workflows/release.yml`.
-The workflow publishes three artifacts. All three have the same version.
+The workflow publishes three kinds of artifact. All of them have the same version.
 
 | Artifact | Where |
 |---|---|
 | Container image, linux amd64 and arm64 | `ghcr.io/linogics/bret-operator:<version>` |
-| Helm chart | `oci://ghcr.io/linogics/charts/bret-operator:<version>` |
-| Plain manifests `install.yaml` and the chart `.tgz` | GitHub release `v<version>` |
+| Helm charts `bret-operator` and `bret-operator-crds` | `oci://ghcr.io/linogics/charts/<chart>:<version>` |
+| Plain manifests `install.yaml` and both chart `.tgz` files | GitHub release `v<version>` |
 
 ## Before you tag
 
@@ -30,7 +30,7 @@ git push origin v0.1.0
 ```
 
 The version in the tag is used for the image tag, the chart version, the chart `appVersion`
-and the GitHub release name. The chart's `Chart.yaml` keeps its own `0.1.0` in git. The release
+and the GitHub release title. The charts' `Chart.yaml` keeps its own `0.1.0` in git. The release
 job overrides it at package time.
 
 ## What the workflow does
@@ -38,10 +38,11 @@ job overrides it at package time.
 1. Runs `make test`. A failing test stops the release.
 2. Builds and pushes the multi-architecture image with the tag and the source labels.
 3. Runs `make build-installer` with that image. This produces `dist/install.yaml`.
-4. Runs `make helm-package VERSION=<version>`. This lints the chart and writes
-   `dist/bret-operator-<version>.tgz`.
-5. Pushes the chart to the OCI registry.
-6. Creates the GitHub release with `install.yaml` and the chart attached, and generated notes.
+4. Runs `make helm-package VERSION=<version>`. This lints both charts and writes
+   `dist/bret-operator-<version>.tgz` and `dist/bret-operator-crds-<version>.tgz`.
+5. Pushes both charts to the OCI registry. The CRD chart is pushed first.
+6. Creates the GitHub release with `install.yaml` and both chart `.tgz` files attached, and
+   generated notes.
 
 ## Check the release
 

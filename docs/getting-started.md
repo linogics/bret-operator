@@ -51,14 +51,15 @@ For a checkout of this repository, run `make helm-sync` first. Then install from
 ## Step 2: Make a backup
 
 Use the setup in [backup-providers.md](backup-providers.md) for your tool. The example below
-assumes that you already have a PVC named `orders-db-data` in namespace `data`, and a backup of it
-under the name `orders-db-1`.
+assumes that you already have a PVC named `orders-db-data` in namespace `data`, and a backup of it.
+The volume must hold the canary that `hack/check-test/seeds/minimal.yaml` writes. The seed
+runs before the backup.
 
 Check that the backup exists:
 
 - Velero: `velero backup get`
 - VolSync: `kubectl -n data get replicationsource`
-- Kopiur: `kubectl -n data get snapshot orders-db-1` (phase `Succeeded`)
+- Kopiur: `kubectl -n data get snapshot orders-db-data-1` (phase `Succeeded`)
 
 ## Step 3: Restore into a scratch volume and run the check by hand
 
@@ -67,8 +68,8 @@ This step does not use the operator. It shows what the operator does for you.
 ### 3a. Restore the backup into a scratch PVC
 
 With Kopiur, the restore is the `Restore` and `PersistentVolumeClaim` pair from
-[backup-providers.md](backup-providers.md#restore). Name the PVC `r-data`. The check expects
-that name.
+[backup-providers.md](backup-providers.md#restore). Name the PVC `orders-db-restored`. You pass
+that name to the check script in step 3c.
 
 Wait until the `Restore` shows `Completed` and the PVC shows `Bound`:
 
@@ -134,7 +135,7 @@ kubectl -n data get restoretests
 # orders-db-nightly    volsync    Succeeded   2026-11-15T03:17:00Z   2d
 ```
 
-The `volsync` provider needs the VolSync provider enabled in the chart. See
+The `volsync` provider needs `providers.volsync.enabled: true` in the chart. See
 [backup-providers.md](backup-providers.md).
 
 ## Step 6: Run a test on demand
@@ -152,7 +153,7 @@ kubectl -n data annotate restoretest orders-db-nightly \
   with `result`, `time` and `reason`.
 - Events: `kubectl -n data get events --field-selector involvedObject.kind=RestoreTest`
 - Metrics: the operator exposes Prometheus metrics on port 8443 (see
-  [installation.md](installation.md#metrics-scraping)). Metric names are not final.
+  [installation.md](installation.md#metrics-scraping)). Metric names may change before v1.
 
 If a run failed and `keepOnFailure` is `true`, the failed pod, its PVC and the restore object stay
 in the namespace. Read the pod logs first. Then delete them.

@@ -12,7 +12,7 @@ controllers, so you can test today.
 |---|---|
 | `render.py` | Turns a `RestoreCheck` into a check pod, the way the operator is meant to. Mounts restored volumes at their paths, creates scratch PVCs. |
 | `check.sh` | Runs one check pod against restored PVCs you name. Prints each container's exit code and the last logs. Exit 0 means pass. |
-| `roundtrip.sh` | Full test for one app: seed a source volume, back it up with Kopiur, restore it into scratch PVCs, run the check. |
+| `roundtrip.sh` | Full test for one app: seed a source volume, back it up with Kopiur, restore it into `r-<volume>` PVCs, run the check. |
 | `seeds/<app>.yaml` | The seed for one app: source PVCs and a `seed` pod that writes the data and the canary. |
 
 ## Prerequisites
@@ -23,7 +23,7 @@ controllers, so you can test today.
   endpoint and credentials written in `roundtrip.sh`. Change them for your environment.
 - A `VolumeSnapshotClass` named `csi-hostpath-snapclass` and a `StorageClass` named
   `csi-hostpath-sc`. Change the names in `roundtrip.sh` and the seeds if yours differ.
-- The spike cluster used kind on nerdctl, csi-driver-host-path and Versity Gateway. See
+- The test cluster setup is described in
   [development.md](development.md) for the local setup.
 
 ## Run one check against existing PVCs
@@ -72,7 +72,8 @@ This runs these steps in namespace `bpt-postgres`:
 4. Run the check against the `r-<volume>` PVCs.
 5. Delete the namespace, unless `KEEP=1`.
 
-The exit code of `roundtrip.sh` is the exit code of the check.
+When every step succeeds, the exit code of `roundtrip.sh` is the exit code of the check. A
+failed step before the check exits with 1.
 
 The mover UID for the restore and the source snapshot comes from the check's first
 `runAsUser`. That is why every check must set `runAsUser` on its containers.
@@ -106,7 +107,7 @@ Start from `seeds/postgres.yaml` or `seeds/minimal.yaml`.
 
 A check that can never fail proves nothing. After a pass, break the expected value. For example,
 change the canary payload's hash in the seed. Then run the round trip again. The check must
-report `VERDICT: FAIL`. The spike did this with a wrong expected count.
+report `VERDICT: FAIL`.
 
 ## Reading a failure
 
@@ -123,8 +124,8 @@ of each. Common cases:
 
 ## Images
 
-`roundtrip.sh` and `check.sh` pull images from the registry. Check that the tag exists before you
-rely on a check:
+The seed, check and mover pods pull their images from the registry. The scripts do not pull them.
+Check that the tag exists before you rely on a check:
 
 ```bash
 docker manifest inspect postgres:17.12 >/dev/null && echo ok

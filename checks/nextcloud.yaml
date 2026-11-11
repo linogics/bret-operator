@@ -1,11 +1,10 @@
-# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. Providers restore one PVC,
-# so the operator rejects this check with ProviderUnsupported. It works with hack/check-test.
+# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. The operator
+# accepts one entry, so it rejects this check with ProviderUnsupported. It runs with hack/check-test.
 # TESTED: round trip PASS. Negative test FAIL, as expected.
-# Postgres data dir: PGDATA is <mount>/pgdata. The layout matches the spike source.
-# The pgdata-perms init container sets 0700. Postgres refuses 2770 after a restore (spike).
-# DESIGN DELTA: restoredVolumes (not in design §7.1)
+# Postgres data dir: PGDATA is <mount>/pgdata. 
+# The pgdata-perms init container sets 0700. Postgres refuses 2770 after a restore.
 # Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+).
-# The startupProbe gates it. It keeps running during the checks. This is not in design §7.1. See INDEX.md.
+# The startupProbe gates it. It keeps running during the checks.
 # Secret nextcloud-db holds POSTGRES_PASSWORD. It is the password of the source database.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck

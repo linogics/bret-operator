@@ -1,8 +1,7 @@
 # Troubleshooting
 
-Each entry gives the exact text you see, the cause, and the fix. Errors come from the
-spike on kind with Kubernetes 1.37, Velero 1.18.4, VolSync 0.17.0, Kopiur 0.10.21 and
-PostgreSQL 17.12. See [spike-findings.md](spike-findings.md).
+Each entry gives the exact text you see, the cause, and the fix. Errors were seen on kind with
+Kubernetes 1.37, Velero 1.18.4, VolSync 0.17.0, Kopiur 0.10.21 and PostgreSQL 17.12.
 
 ## Backups and restores
 
@@ -81,21 +80,6 @@ PostgreSQL 17.12. See [spike-findings.md](spike-findings.md).
 - **Fix:** run `create extension if not exists amcheck` in each database before `pg_amcheck`. The
   scratch copy is the right place for this. Do not change the source.
 
-## Development and cluster setup
-
-### `kind` with podman fails: `permission denied` on `/dev/.incus-mounts`
-
-- **Cause:** the kind node mounts host paths that a rootless podman setup on this host cannot
-  reach.
-- **Fix:** use the nerdctl provider. kind picks it when `nerdctl` is on the path with containerd.
-  See [development.md](development.md).
-
-### nerdctl network create fails with an overlapping subnet
-
-- **Symptom:** `network ... overlaps` on an IPv6 range.
-- **Cause:** an existing host bridge uses the same range.
-- **Fix:** create the `kind` network yourself on a free range before you create the cluster.
-
 ## Operator
 
 ### `kubectl apply` of a `RestoreCheck` is rejected: `exactly one of restoreMount or restoredVolumes must be set`
@@ -105,6 +89,7 @@ PostgreSQL 17.12. See [spike-findings.md](spike-findings.md).
 
 ### Nothing happens after a `RestoreTest` is created
 
-- **Cause:** the controllers are not implemented yet. See the status table in
-  [README.md](README.md).
+- **Cause:** the provider's live checks are still in progress. The `RestoreTest` controller runs
+  for the Kopiur provider. Velero and VolSync are implemented but not fully verified. See the
+  status table in [docs/README.md](README.md).
 - **Fix:** run the check by hand with [testing-checks.md](testing-checks.md).

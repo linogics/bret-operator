@@ -13,7 +13,18 @@ controllers exist (see the status table in [README.md](README.md)).
 | CSI driver with snapshot support | any | `copyMethod: Snapshot` needs a `VolumeSnapshotClass`. |
 | Backup tool | Velero 1.18, VolSync 0.17, or Kopiur 0.10 (alpha) | The operator drives its restore objects. |
 
-Verified versions are listed in [spike-findings.md](spike-findings.md).
+## Verified versions
+
+| Component | Version |
+|---|---|
+| Velero | v1.18.4 |
+| Velero AWS plugin | v1.14.4 |
+| VolSync | 0.17.0 |
+| Kopiur | 0.10.21 (alpha) |
+| PostgreSQL | 17.12 |
+| kind node image | v1.37.0 |
+| csi-driver-host-path | v1.19.0 |
+| external-snapshotter | v8.7.0 |
 
 ## Option A: Helm chart (recommended)
 
@@ -22,16 +33,6 @@ The chart is published as an OCI artifact with each release:
 ```bash
 helm install bret-operator oci://ghcr.io/linogics/charts/bret-operator \
   --version 0.1.0 \
-  --namespace bret-operator-system \
-  --create-namespace
-```
-
-To install from a checkout of this repository:
-
-```bash
-make helm-sync                       # copies CRDs into charts/bret-operator-crds, RBAC into charts/bret-operator
-helm dependency build ./charts/bret-operator   # bundles the CRD chart as a dependency
-helm install bret-operator ./charts/bret-operator \
   --namespace bret-operator-system \
   --create-namespace
 ```
@@ -57,7 +58,7 @@ The full table is in [charts/bret-operator/README.md](../charts/bret-operator/RE
 | `replicaCount` | `1` | Leader election keeps one active replica. More replicas only add standby. |
 | `metrics.enabled` | `true` | You do not scrape Prometheus. |
 | `metrics.secure` | `true` | Keep it `true`. Scrapers need a token (see below). |
-| `resources` | 10m/64Mi request, 128Mi limit | Raise the memory limit when the cache grows with many objects. |
+| `resources` | requests 10m CPU / 64Mi memory; limits 500m CPU / 128Mi memory | Raise the memory limit when the cache grows with many objects. |
 | `extraArgs` | `[]` | You want more manager flags, for example `--zap-log-level=debug`. |
 
 Example values file:
@@ -109,13 +110,6 @@ deployment, all in `bret-operator-system`:
 kubectl apply -f https://github.com/linogics/bret-operator/releases/download/v0.1.0/install.yaml
 ```
 
-Build it yourself from a checkout:
-
-```bash
-make build-installer IMG=ghcr.io/linogics/bret-operator:0.1.0
-kubectl apply -f dist/install.yaml
-```
-
 Plain manifests do not upgrade cleanly across versions. Prefer the Helm chart for upgrades.
 
 ## Upgrading
@@ -126,8 +120,6 @@ So apply the CRDs yourself before you upgrade the chart:
 
 ```bash
 kubectl apply --server-side -f https://github.com/linogics/bret-operator/releases/download/v0.1.0/install.yaml
-# or, from a checkout:
-kubectl apply --server-side -f charts/bret-operator-crds/crds/
 helm upgrade bret-operator oci://ghcr.io/linogics/charts/bret-operator --version 0.2.0 -n bret-operator-system
 ```
 

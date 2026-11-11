@@ -1,7 +1,8 @@
+# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. The operator
+# accepts one entry, so it rejects this check with ProviderUnsupported. It runs with hack/check-test.
 # TESTED: round trip PASS. Negative test FAIL, as expected.
-# DESIGN DELTA: restoredVolumes (not in design §7.1)
 # Native sidecar: mariadb is an initContainer with restartPolicy: Always (k8s 1.29+).
-# The startupProbe gates it. This is not in design §7.1. See INDEX.md.
+# The startupProbe gates it.
 # Secret wordpress-db holds WORDPRESS_DB_USER, WORDPRESS_DB_PASSWORD and WORDPRESS_DB_NAME.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck

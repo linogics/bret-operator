@@ -1,5 +1,6 @@
+# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. The operator
+# accepts one entry, so it rejects this check with ProviderUnsupported. It runs with hack/check-test.
 # TESTED: round trip PASS. Negative test FAIL, as expected.
-# DESIGN DELTA: restoredVolumes (not in design §7.1)
 # Two volumes: /etc/pihole (gravity.db, setupVars, custom.list) and /etc/dnsmasq.d.
 # Canary contract: the adlist https://bret-canary.invalid/list.txt is in gravity.db.
 # The line "10.0.0.53 bret-canary.test" is in /etc/pihole/custom.list. Seed both before the backup.

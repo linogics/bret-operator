@@ -1,11 +1,21 @@
 # Apps with data and a database
 
-Some apps keep state in two places: files and a database, or a database plus a separate
-file store. Both must come from the same backup point. This page explains why, and how to
-do it.
+Some apps keep state in two places: files and a database, or a database plus a separate file
+store. Both parts must come from the same backup point. This page explains why, and how to do it.
 
-Design status: restoring several volumes together needs `restoredVolumes` and a group key.
-Both are **design deltas, proposed**. Neither is in design §7.1 or the Go types.
+## Current limit (v1)
+
+A `RestoreCheck` accepts one restored volume. The operator restores one PVC per `Restore`. A check
+with two or more `restoredVolumes` entries is rejected with `ProviderUnsupported`.
+
+These checks have several volumes and are not runnable by the operator in v1:
+`checks/nextcloud.yaml`, `checks/wordpress.yaml`, `checks/jellyfin.yaml` and `checks/pihole.yaml`.
+They run with `hack/check-test/check.sh`, which accepts several `KEY=PVC` pairs.
+
+Not in v1:
+
+- Restoring several volumes of one app in one attempt.
+- A group key that ties several restores together.
 
 ## The problem
 
@@ -28,23 +38,20 @@ Symptoms seen in the apps:
 
 1. **Restore the whole app group from one backup point.**
    - A Velero namespace backup is one point. Restoring it gives one consistent set.
-   - VolSync and Kopiur work per PVC. Group the PVCs of one app with a shared trigger time.
-     Or accept the skew, and check it.
-   - The group key that ties several restores together is **design delta, proposed**.
-     It is not specified yet.
-2. **Use `restoredVolumes` for multi-PVC apps.** Each volume is its own PVC, restored from
-   the same point. Mount each one at its original path. (Design delta, proposed.)
+   - VolSync and Kopiur work per PVC. Group the PVCs of one app with a shared trigger time,
+     or accept the skew and check it.
+2. **Test one volume per operator check in v1.** Use `hack/check-test` for a run that mounts
+   several volumes.
 3. **Quiesce the database, or rely on crash recovery.** Pick one:
-   - **Crash-consistent copy, WAL recovery on boot.** The spike did this with Postgres 17.
-     The copy of a live database was recovered on boot, and the SQL check passed. This is
-     not proof under heavy write load.
-   - **Pre-backup flush hook.** Flush or checkpoint the DB before the snapshot. The spike
-     does not cover this. **Unverified** as a pattern in this project.
-   - For SQLite-in-volume apps (gitea, grafana, home-assistant, vaultwarden, uptime-kuma):
-     take the backup with the app stopped, or with a consistent snapshot. The
-     `INDEX.md` says the sqlite file itself is the main risk.
-4. **Write checks that cross-reference.** A DB row must point to a file that exists, and
-   the file must match the row.
+   - **Crash-consistent copy, WAL recovery on boot.** Tested with Postgres 17. The copy of a
+     live database recovered on boot, and the SQL check passed. Not tested under heavy write load.
+   - **Pre-backup flush hook.** Flush or checkpoint the database before the snapshot. Not tested
+     in this project.
+   - **SQLite-in-volume apps** (gitea, grafana, home-assistant, vaultwarden, uptime-kuma): take
+     the backup with the app stopped, or with a consistent snapshot. `checks/INDEX.md` names the
+     SQLite file as the main risk.
+4. **Write checks that cross-reference.** A DB row must point to a file that exists, and the
+   file must match the row.
 5. **Each restored workload holds its PVC alone.** Scale restored workloads to 0 before the
    check pod mounts the PVCs (RWO). See [best-practices.md](best-practices.md).
 
@@ -55,13 +62,14 @@ Files plus Postgres, two PVCs.
 - Volumes: `html` at `/var/www/html`, `pgdata` at `/var/lib/postgresql/data`.
 - Files: `/var/www/html/data`. The rows that say which files exist and their sizes are in
   `oc_filecache` in Postgres.
-- Restore: both PVCs in one attempt, from one backup selector.
+- Restore: both PVCs from one backup selector. The operator cannot run this check in v1. Use
+  `hack/check-test`.
 - Repair if drift happens: `occ files:scan` can fix listings but may drop or duplicate
   entries. (Index.)
 - Check (`checks/nextcloud.yaml`): `occ status` shows installed, `occ integrity:check-core`
   passes, and the canary `oc_filecache.size` equals the file size on disk.
-- The check uses a native sidecar for Postgres (design delta). The check rewrites
-  `dbhost` to `127.0.0.1` in `config.php`.
+- The check runs Postgres as a native sidecar: an init container with `restartPolicy: Always`.
+  The check rewrites `dbhost` to `127.0.0.1` in `config.php`.
 - Open issue: `pdo_pgsql` in the image is assumed, not verified.
 
 ## Worked example: WordPress
@@ -70,23 +78,13 @@ Files plus MariaDB, two PVCs.
 
 - Volumes: `html` at `/var/www/html`, `mysql` at `/var/lib/mysql`.
 - DB rows (`wp_posts`) reference uploads in `wp-content/uploads`.
-- Restore: both volumes in one attempt.
-- Check: MariaDB ping. The canary post's content equals the sha256 of the uploaded
-  canary file.
-- Not checked: front-end render, plugin-generated tables. (Index.)
+- Restore: both volumes from one backup point. Run with `hack/check-test` in v1.
+- Check: MariaDB ping. The canary post's content equals the sha256 of the uploaded canary file.
+- Not checked: front-end render, plugin-generated tables.
 
 ## Other apps with two volumes
 
-- **Jellyfin:** config (`library.db`, `jellyfin.db`) and media. Restore both from one
-  attempt. Option: restore config only if media is too large. Then the check covers the DB
-  only.
+- **Jellyfin:** config (`library.db`, `jellyfin.db`) and media. Restore both from one backup
+  point. If media is too large, restore config only. Then the check covers the database only.
 - **Pi-hole:** `gravity.db` and `/etc/dnsmasq.d`. The config must match the FTL version.
   Check the canary adlist row, the canary line in `custom.list`, and that dnsmasq config parses.
-
-## Design deltas in this page
-
-| Item | State |
-|---|---|
-| `restoredVolumes` in `RestoreCheck` | design delta, proposed |
-| Group key tying several `Restore` objects to one backup point | design delta, proposed, not specified |
-| Native-sidecar init containers | design delta, needs a decision |

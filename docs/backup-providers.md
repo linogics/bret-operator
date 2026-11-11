@@ -1,11 +1,11 @@
 # Backup providers
 
-bret-operator restores with a backup tool that you already run. This page shows the setup that
-the kind spike verified. Each provider needs a backup that the tool can restore, and a
+bret-operator restores with a backup tool that you already run. This page shows setup that was
+tested on a kind cluster. Each provider needs a backup that the tool can restore, and a
 `RestoreCheck` that checks the result.
 
 The examples use an S3-compatible endpoint named `s3.example.internal`. Replace it with your
-own. The spike used Versity Gateway as the S3 endpoint, which is open source. MinIO's open
+own. The tests used Versity Gateway as the S3 endpoint, which is open source. MinIO's open
 source distribution is no longer maintained, so this project does not use it.
 
 Use one bucket or prefix per tool. Do not share a repository between tools.
@@ -23,12 +23,12 @@ kubectl get storageclass
 You need one `VolumeSnapshotClass` that uses your CSI driver. Note its name. The examples call
 it `csi-snapclass`. Each backup tool also needs a `StorageClass` that the driver supports.
 
-The spike used `csi-driver-host-path` v1.19.0 with external-snapshotter v8.7.0. For production,
+Tested with `csi-driver-host-path` v1.19.0 and external-snapshotter v8.7.0. For production,
 use the snapshot controller and driver that your storage vendor documents.
 
 ## Velero
 
-Verified with Velero v1.18.4 and the AWS plugin v1.14.4.
+Tested with Velero v1.18.4 and the AWS plugin v1.14.4.
 
 ### Install
 
@@ -66,7 +66,7 @@ velero backup create orders-db-2026-11-14 \
 
 **Required:** `--snapshot-move-data`. Without it, the volume data stays in the cluster as a
 snapshot. A restore then works only while that snapshot exists. Off-cluster recovery does not
-work. The spike confirmed this.
+work.
 
 Enable the provider in the chart with `providers.velero.enabled: true`. The Velero install
 namespace is `providers.velero.namespace`, default `velero`. The chart passes it to the operator
@@ -78,21 +78,25 @@ The operator creates a `velero.io/v1` `Restore` in the Velero namespace. The PVC
 restored into the scratch namespace `bret-scratch-<hash>` (hash of `<namespace>/<name>`). The check
 pod runs in that namespace. The `Restore` sets `includedNamespaces` to the `Restore`
 namespace, so Velero restores no other namespace of the backup. The operator copies the
-`pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch namespace. The
-operator waits for `status.phase` to reach `Completed`, `PartiallyFailed` or `Failed`.
+`pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch namespace.
 
-Checks for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap, secret
-or hostPath volumes. A check that does fails with `ProviderUnsupported`.
+The operator reads the Velero `Restore` `status.phase`. `Completed` runs the check. `Failed`,
+`PartiallyFailed` and `FailedValidation` fail the attempt.
+
+Checks for Velero must not set `serviceAccountName`, `imagePullSecrets`, a configMap or secret
+volume, a hostPath volume, or an env or envFrom reference to a Secret or ConfigMap. A check that
+does fails with `ProviderUnsupported`. A check that needs a Secret must use Kopiur or VolSync.
+See [checks.md](checks.md#secrets).
 
 Restored workloads are a trap. Velero restores Deployments and StatefulSets as well. They
 start and hold the restored RWO volume. Scale them to zero, or delete them, before the check
-pod runs. The spike hit this.
+pod runs.
 
 The restore log shows a harmless warning: `ConfigMap:kube-root-ca.crt already exists`.
 
 ## VolSync
 
-Verified with VolSync 0.17.0 and restic.
+Tested with VolSync 0.17.0 and restic.
 
 ### Install
 
@@ -148,7 +152,7 @@ repository Secret name and the source PVC come from the backup's `ReplicationSou
 namespace. The operator uses `backupRef.namespace`. If that is not set, it uses the `Restore` namespace.
 The Secret itself must exist in the `Restore` namespace. Without `spec.restic.repository` on the
 `ReplicationSource`, the `Restore` shows the reason `RepositoryMissing`.
-The restore is done when `status.lastManualSync` equals the trigger value.
+The check runs when the `ReplicationDestination` reports `status.latestImage.kind: PersistentVolumeClaim`.
 
 Mover pods use a default non-database UID. They cannot read a Postgres data directory
 (`permission denied`). The operator takes the mover UID from the check (annotation
@@ -160,8 +164,8 @@ changes. Delete the cache PVC. VolSync then creates a new one.
 
 ## Kopiur (alpha)
 
-Verified with Kopiur 0.10.21. Kopiur is alpha. Its restore-related issue `kopiur#233` was not
-hit in the spike, but it is still open.
+Tested with Kopiur 0.10.21. Kopiur is alpha. Upstream issue `kopiur#233` affects restores and is
+still open.
 
 Enable the provider in the chart with `providers.kopiur.enabled`. It is on by default.
 
@@ -248,8 +252,8 @@ Wait until `status.phase` is `Succeeded`.
 ### Restore
 
 A Kopiur restore runs in a namespace. Copy the repository credentials Secret into that
-namespace first. Kopiur did not find the Secret in another namespace, and it failed with
-`MissingCredentialsSecret`.
+namespace first. Kopiur did not find the Secret in another namespace. Without it, the restore
+fails with `MissingCredentialsSecret`.
 
 ```yaml
 apiVersion: kopiur.home-operations.com/v1alpha1
@@ -290,7 +294,7 @@ spec:
     name: orders-db-restore
 ```
 
-Use your own `StorageClass` for the PVC. The spike used `csi-hostpath-sc`.
+Use your own `StorageClass` for the PVC. The tests used `csi-hostpath-sc`.
 
 The restore is done when the `Restore` has `status.phase: Completed`, and its condition `Ready` has reason
 `RestoreSucceeded`. Kopiur says `Completed`, not `Succeeded`. Do not confuse these words with the

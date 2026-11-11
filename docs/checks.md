@@ -35,7 +35,7 @@ spec:
 | Field | Required | Meaning |
 |---|---|---|
 | `restoreMount` | one of `restoreMount` or `restoredVolumes` | Mount path of the single restored volume. It is mounted in every init and check container. |
-| `restoredVolumes` | one of the two | List of `{name, mountPath}` for apps with several volumes. Each entry is its own restored volume. |
+| `restoredVolumes` | one of the two | List with one `{name, mountPath, sourcePVC}` entry in v1. See below. |
 | `initContainers` | no | Run before the checks. A native sidecar (see below) also goes here. |
 | `containers` | yes, at least one | The check containers. Exit code 0 means pass. |
 | `scratchVolumes` | no | `{name, mountPath, storageClassName, size}`. Empty PVCs created per attempt. |
@@ -49,7 +49,6 @@ Set exactly one of `restoreMount` and `restoredVolumes`. The API rejects both or
 - An init container that exits non-zero fails the attempt before the checks run.
 - A check that hangs is stopped by `restoreWindow` (see [restoretest-guide.md](restoretest-guide.md)).
 - Test each check with a broken input. Make the expected value wrong once, and confirm exit 1.
-  The spike did this, and the check failed as it should.
 
 ## One volume: restoreMount
 
@@ -58,22 +57,22 @@ Use `restoreMount` when the application has one volume.
 Key rule: the mount path must be the path the application used in production. Absolute paths in
 the application's config then still resolve on the restored copy.
 
-## Several volumes: restoredVolumes
+## One entry: restoredVolumes
 
-Use `restoredVolumes` when the application has two or more volumes, for example a web root
-plus a database directory:
+`restoredVolumes` takes one entry in v1. Each entry names the restored volume, the mount path,
+and the PVC in the backed-up namespace that it restores (`sourcePVC`):
 
 ```yaml
 spec:
   restoredVolumes:
-    - name: html                 # the restored volume's key, see below
-      mountPath: /var/www/html
-    - name: mysql
-      mountPath: /var/lib/mysql
+    - name: data                 # the key for hack/check-test/check.sh
+      mountPath: /var/lib/app
+      sourcePVC: app-data        # PVC in the backed-up namespace
 ```
 
-How the names map to volumes: when you test with `hack/check-test`, the restored PVC for
-the key `html` is named `r-html`. The operator's name mapping is planned with the controller.
+The operator rejects a check with two or more entries. The check then fails with
+`ProviderUnsupported`. Checks for apps with several volumes cannot run in the operator in v1. See
+[data-and-database.md](data-and-database.md). Multi-entry support is not in v1.
 
 ## Scratch volumes
 
@@ -89,13 +88,13 @@ spec:
       size: 20Gi
 ```
 
-Rules (design §7.1):
+Rules:
 
 - The operator creates one PVC per scratch volume per attempt. The `Restore` owns the PVC.
 - The operator deletes scratch PVCs with the attempt. With `keepOnFailure`, it keeps them.
 - `size` is required. Set it to what the check needs, not what the source had.
-- The restored volume's default size is the source volume's capacity. A restore into a volume
-  that is too small fails early with `InsufficientCapacity` (planned).
+- The restored volume's size must be at least the source size. A smaller scratch volume fails
+  early with `InsufficientCapacity`.
 
 ## Native sidecars
 
@@ -116,9 +115,6 @@ spec:
         periodSeconds: 2
         failureThreshold: 60
 ```
-
-Design §7.1 describes `initContainers` as run-to-completion. Native sidecars are an extension
-that the checks use. The design needs a decision before the controller ships.
 
 ## Canary convention
 
@@ -142,19 +138,57 @@ Name the canary in the header comment of your check. Put the seed for it in
 
 ## Secrets
 
-The check needs some credentials. For example: a database password, an admin token, or an encryption key.
-Take them from a Secret in the `RestoreTest`'s namespace. Reference it with `env[].valueFrom.secretKeyRef`.
+A check can read a Secret, for example for a database password, an admin token, or an encryption
+key. You do not need to know a target namespace in advance. The `RestoreTest`, the `RestoreCheck`
+and every `Restore` it starts live in the same namespace. The check pod runs in that namespace too
+(Kopiur and VolSync). So create the Secret in the namespace of your `RestoreTest`.
 
-Values must match the source. An encryption key or admin password that differs makes the check
-fail for a reason unrelated to the backup. Keep one Secret per application. Make the backup
-and the check read the same one.
+Find the Secrets a check needs before you apply it:
+
+```bash
+grep -n -A3 'secretKeyRef\|secretRef\|secret:' check.yaml
+```
+
+The easiest source is the workload that runs the app. Its `env` and `envFrom` already name the
+Secret that it uses.
+
+Reference a Secret in the container:
+
+```yaml
+spec:
+  containers:
+    - name: check
+      image: postgres:17
+      env:
+        - name: PGPASSWORD              # one key
+          valueFrom:
+            secretKeyRef:
+              name: orders-db-check     # Secret in the RestoreTest namespace
+              key: password
+      envFrom:                          # or every key of the Secret
+        - secretRef:
+            name: orders-db-check
+```
+
+For a file, put the Secret in `spec.volumes` and mount it in the container with `volumeMounts`.
+The operator mounts only the restored volume and the scratch volumes for you.
+
+Rules:
+
+- The operator does not check that the Secret exists. A missing Secret keeps the check pod from
+  starting. When the `restoreWindow` expires, the attempt ends as `Canceled`.
+- Values must match the source. An encryption key or admin password that differs makes the check
+  fail for a reason unrelated to the backup. Copy the Secret from the source namespace and keep
+  its values. Keep one Secret per application, and make the backup and the check read the same one.
+- Velero does not support Secrets in checks. The check pod runs in a scratch namespace for Velero,
+  and the operator rejects the check with `ProviderUnsupported`.
 
 ## Pod security
 
 Set `securityContext.runAsUser` on each container to the UID that the image runs as. Check the image
 with `docker run --rm <image> id`, or read the image's documentation.
 
-Two rules from the spike:
+Two rules for database checks:
 
 - **Do not set `fsGroup` on a database data directory.** `fsGroup` changes the mode to `2770`. Postgres
   refuses to start on that mode. Set `fsGroup` only on application writers that need it.
@@ -171,8 +205,7 @@ mover security context of each tool.
 - Pin a tag. Do not use `latest`.
 - The check image should match the major version of the app. A database restored into a different
   major version may not start.
-- Confirm that the tag exists before you use it. `hack/check-test` pulls the image as part of
-  its run.
+- Confirm that the tag exists before you use it. The check pod pulls the image when it runs.
 
 ## Testing a check
 

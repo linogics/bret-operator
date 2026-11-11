@@ -45,7 +45,7 @@ It does not:
 | `volsync` | `volsync.backube/v1alpha1` `ReplicationDestination` with a manual trigger | `status.lastManualSync` matches the trigger | `ReplicationSource` `status.lastSyncTime` changes |
 | `kopiur` (alpha) | `kopiur.home-operations.com/v1alpha1` `Restore` | `status.phase` is `Completed` and condition `Ready` is `True` | `Snapshot` `status.phase` is `Succeeded` |
 
-Kopiur is alpha. The rows above are the ones the spike verified. Setup steps are in
+Kopiur is alpha. Setup steps are in
 [backup-providers.md](backup-providers.md).
 
 Enable providers in the Helm chart with `providers.<name>.enabled`. Kopiur is on by
@@ -61,8 +61,9 @@ Velero and VolSync have these rules:
   `<namespace>/<name>`. So equal Restore names in two namespaces never share data. The operator
   copies the `pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch
   namespace before the check pod starts. The pod then runs under the same Pod Security rules. A
-  check for Velero must not set `serviceAccountName`, `imagePullSecrets`, or configMap, secret
-  or hostPath volumes. Such a check fails with `ProviderUnsupported`. Velero restores at the
+  check for Velero must not set `serviceAccountName`, `imagePullSecrets`, a configMap or secret
+  volume, a hostPath volume, or an env or envFrom reference to a Secret or ConfigMap. Such a check
+  fails with `ProviderUnsupported`. Velero restores at the
   original size. So `target.size` and `autoExpand` only gate the run.
 - VolSync: the operator creates a `ReplicationDestination` with a restic mover. The repository
   Secret name and the source PVC come from the backup's `ReplicationSource`, in the backup namespace
@@ -110,6 +111,31 @@ Two failures are reported as reasons on the `Restore`:
 
 ## The restore test lifecycle
 
+The diagram shows the phases of one `Restore`, with the retry and keep rules that apply after it ends.
+
+```text
+┌─────────┐
+│ Pending │  Restore created. Adds the cleanup finalizer.
+└────┬────┘
+     ▼
+┌─────────┐
+│ Running │  Native restore, then check pod.
+└────┬────┘
+     │
+     ├─▶ check exits 0 ────────────────▶ Succeeded
+     ├─▶ restore or check fails ───────▶ Failed
+     └─▶ restoreWindow ends ───────────▶ Canceled
+
+Terminal phase: cleanup runs after the status is stored.
+  Succeeded             deletes pod, scratch PVC, native object
+  Failed or Canceled    keepOnFailure: true keeps them
+                        keepOnFailure: false deletes them
+
+Retries, set on the RestoreTest. Only Failed is retried.
+  Failed, attempts left wait retries.backoff, next attempt
+  Canceled                  not retried
+```
+
 One attempt, in order:
 
 1. Create the scratch volume, owned by the `Restore`.
@@ -138,7 +164,7 @@ the operator's phases.
 - `retries.count` is the number of extra attempts after the first. The maximum is 10. The
   default is 0.
 - `retries.backoff` is the wait between attempts. The default is `5m`.
-- Each cancel writes a `RestoreCanceled` Event on the `Restore`. Events for retries are planned.
+- Each cancel writes a `RestoreCanceled` Event on the `Restore`.
 
 ### restoreWindow
 
@@ -184,6 +210,33 @@ A `RestoreTest` uses any combination of these triggers.
 
 Example: a manual run needs no CLI. `kubectl annotate restoretest orders-db bret.linogics.io/run-now="$(date +%s)" --overwrite`
 
+### Trigger flow
+
+The diagram shows how a trigger becomes a run, and how a run becomes a `RunResult`.
+
+```text
+  cron tick ───────────────┐
+  backup + delay ──────────┤
+  run-now annotation ──────┘
+                           ▼
+┌──────────────────────────────────────────┐
+│ Run already in progress?                 │
+└────────┬─────────────────────────┬───────┘
+      no │                         │ yes
+         ▼                         ▼
+  start one Restore       overlapPolicy
+                          ├─ Skip     Event RunSkipped
+                          ├─ Queue    keep one pending run
+                          └─ Replace  Event RunReplaced, delete
+                                      running Restore, start new
+         ▼
+  one Restore per attempt: <test>-<run>-a<n>
+         ▼
+  Restore ends Failed, and attempt <= retries.count?
+     yes ─▶ wait retries.backoff ─▶ next attempt (a<n+1>)
+     no  ─▶ RunResult: Succeeded or Failed (status.lastRun)
+```
+
 ## Scope
 
 Namespaces:
@@ -195,8 +248,7 @@ Namespaces:
   Pod and PVC rights are in the per-namespace `Role` objects, and the cache is limited to those
   namespaces. With Velero on, they stay in the `ClusterRole`, because the scratch namespaces are
   not watched.
-- A `RestoreTest` in a namespace that is not watched is ignored. The operator sets the
-  condition `WatchedNamespace` to `False` on it (planned).
+- A `RestoreTest` in a namespace that is not watched is ignored. The operator writes nothing to it.
 - Pods and volumes always live in the namespace of the `Restore` or `RestoreTest`.
 - Velero backups live in the Velero namespace (`velero` by default). The operator reads
   backup objects there. In namespaced mode, this is the one cross-namespace read it needs.

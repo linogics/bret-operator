@@ -1,7 +1,8 @@
+# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. The operator
+# accepts one entry, so it rejects this check with ProviderUnsupported. It runs with hack/check-test.
 # TESTED: round trip PASS. Negative test FAIL, as expected.
-# DESIGN DELTA: restoredVolumes (not in design §7.1)
 # Two volumes: config (library.db, jellyfin.db) and media. The mount paths equal the image paths,
-# so library paths stored in the DB still resolve. Media may be very large. See INDEX.md.
+# so library paths stored in the DB still resolve. Media may be very large.
 # Canary contract: /media/bret-canary/canary.txt and canary.sha256 (sha256sum format).
 # Seed the canary before the backup.
 apiVersion: bret.linogics.io/v1alpha1
