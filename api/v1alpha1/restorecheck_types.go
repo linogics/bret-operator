@@ -35,7 +35,8 @@ type ScratchVolume struct {
 type RestoreCheckSpec struct {
 	// RestoreMount is the mount path of the single restored volume in every container.
 	RestoreMount string `json:"restoreMount,omitempty"`
-	// RestoredVolumes lists several restored volumes, each with its own mount path.
+	// RestoredVolumes lists the restored volumes, each with its own mount path. In v1 the operator
+	// accepts one entry only. Checks with more entries are rejected with ProviderUnsupported.
 	RestoredVolumes []RestoredVolume `json:"restoredVolumes,omitempty"`
 	// InitContainers run before the check containers.
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`

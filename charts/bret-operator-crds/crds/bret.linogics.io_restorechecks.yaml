@@ -3848,8 +3848,9 @@ spec:
                   volume in every container.
                 type: string
               restoredVolumes:
-                description: RestoredVolumes lists several restored volumes, each
-                  with its own mount path.
+                description: |-
+                  RestoredVolumes lists the restored volumes, each with its own mount path. In v1 the operator
+                  accepts one entry only. Checks with more entries are rejected with ProviderUnsupported.
                 items:
                   description: RestoredVolume maps one restored PVC to a mount path
                     in the check pod.

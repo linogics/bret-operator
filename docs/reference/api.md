@@ -249,7 +249,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `restoreMount` _string_ | RestoreMount is the mount path of the single restored volume in every container. |  |  |
-| `restoredVolumes` _[RestoredVolume](#restoredvolume) array_ | RestoredVolumes lists several restored volumes, each with its own mount path. |  |  |
+| `restoredVolumes` _[RestoredVolume](#restoredvolume) array_ | RestoredVolumes lists the restored volumes, each with its own mount path. In v1 the operator<br />accepts one entry only. Checks with more entries are rejected with ProviderUnsupported. |  |  |
 | `initContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#container-v1-core) array_ | InitContainers run before the check containers. |  |  |
 | `containers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#container-v1-core) array_ | Containers run the check. Exit code 0 means pass. |  | MinItems: 1 <br /> |
 | `scratchVolumes` _[ScratchVolume](#scratchvolume) array_ | ScratchVolumes are PVCs created for each attempt. They provide staging space and are deleted after the attempt. |  |  |
