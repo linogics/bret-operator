@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -23,7 +24,7 @@ var _ = Describe("RestoreCheck Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: testNamespace, // TODO(user):Modify as needed
+			Namespace: testNamespace,
 		}
 		restorecheck := &restorev1alpha1.RestoreCheck{}
 
@@ -39,7 +40,7 @@ var _ = Describe("RestoreCheck Controller", func() {
 					},
 					Spec: restorev1alpha1.RestoreCheckSpec{
 						RestoreMount: "/restore",
-						Containers:   []corev1.Container{{Name: testCheckName, Image: "busybox"}},
+						Containers:   []corev1.Container{{Name: testCheckName, Image: testImage}},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -47,7 +48,6 @@ var _ = Describe("RestoreCheck Controller", func() {
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &restorev1alpha1.RestoreCheck{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
@@ -67,8 +67,12 @@ var _ = Describe("RestoreCheck Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			By("Checking the Ready condition is true for a valid spec")
+
+			got := &restorev1alpha1.RestoreCheck{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, got)).To(Succeed())
+			Expect(meta.IsStatusConditionTrue(got.Status.Conditions, "Ready")).To(BeTrue())
 		})
 	})
 })

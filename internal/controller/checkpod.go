@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
@@ -35,6 +36,17 @@ func dnsLabel(s string) string {
 func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
 	if bp.Spec.RestoreMount == "" && len(bp.Spec.RestoredVolumes) == 0 {
 		return fmt.Errorf("check %s: restoreMount or restoredVolumes is required", bp.Name)
+	}
+
+	if bp.Annotations[allowHostPathAnnotation] == "true" {
+		return nil
+	}
+
+	for _, v := range bp.Spec.Volumes {
+		if v.HostPath != nil {
+			return fmt.Errorf("check %s: volume %q is a hostPath; set annotation %s=\"true\" to allow it",
+				bp.Name, v.Name, allowHostPathAnnotation)
+		}
 	}
 
 	return nil
@@ -94,6 +106,17 @@ func buildCheckPod(
 
 	volumes = append(volumes, spec.Volumes...)
 
+	initContainers := withMounts(spec.InitContainers, mounts)
+	containers := withMounts(spec.Containers, mounts)
+
+	for i := range initContainers {
+		hardenContainer(&initContainers[i])
+	}
+
+	for i := range containers {
+		hardenContainer(&containers[i])
+	}
+
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      checkPodName(restore),
@@ -104,18 +127,19 @@ func buildCheckPod(
 			},
 		},
 		Spec: corev1.PodSpec{
-			RestartPolicy:      corev1.RestartPolicyNever,
-			InitContainers:     withMounts(spec.InitContainers, mounts),
-			Containers:         withMounts(spec.Containers, mounts),
-			Volumes:            volumes,
-			SecurityContext:    spec.SecurityContext,
-			ServiceAccountName: spec.ServiceAccountName,
-			ImagePullSecrets:   spec.ImagePullSecrets,
-			NodeSelector:       spec.NodeSelector,
-			Tolerations:        spec.Tolerations,
-			Affinity:           spec.Affinity,
-			PriorityClassName:  spec.PriorityClassName,
-			RuntimeClassName:   spec.RuntimeClassName,
+			RestartPolicy:                corev1.RestartPolicyNever,
+			InitContainers:               initContainers,
+			Containers:                   containers,
+			Volumes:                      volumes,
+			SecurityContext:              hardenPod(spec.SecurityContext),
+			AutomountServiceAccountToken: automountToken(bp),
+			ServiceAccountName:           spec.ServiceAccountName,
+			ImagePullSecrets:             spec.ImagePullSecrets,
+			NodeSelector:                 spec.NodeSelector,
+			Tolerations:                  spec.Tolerations,
+			Affinity:                     spec.Affinity,
+			PriorityClassName:            spec.PriorityClassName,
+			RuntimeClassName:             spec.RuntimeClassName,
 		},
 	}, nil
 }
@@ -140,4 +164,74 @@ func pvcVolume(name, claim string) corev1.Volume {
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: claim},
 		},
 	}
+}
+
+// allowHostPathAnnotation lets a check mount a hostPath volume. Without it, validation rejects the check.
+const allowHostPathAnnotation = "bret.linogics.io/allow-host-path"
+
+// hardenPod sets the pod default: the RuntimeDefault seccomp profile. An explicit value wins.
+func hardenPod(sc *corev1.PodSecurityContext) *corev1.PodSecurityContext {
+	if sc == nil {
+		sc = &corev1.PodSecurityContext{}
+	}
+
+	if sc.SeccompProfile == nil {
+		sc.SeccompProfile = &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
+	}
+
+	return sc
+}
+
+// hardenContainer sets the container defaults: no privilege escalation and not privileged.
+// Explicit values win, so a check can still opt out of them.
+func hardenContainer(c *corev1.Container) {
+	if c.SecurityContext == nil {
+		c.SecurityContext = &corev1.SecurityContext{}
+	}
+
+	if c.SecurityContext.AllowPrivilegeEscalation == nil {
+		c.SecurityContext.AllowPrivilegeEscalation = boolPtr(false)
+	}
+
+	if c.SecurityContext.Privileged == nil {
+		c.SecurityContext.Privileged = boolPtr(false)
+	}
+}
+
+// automountToken is the check's service account token setting. Unset means false.
+func automountToken(bp *restorev1alpha1.RestoreCheck) *bool {
+	if bp.Spec.AutomountServiceAccountToken != nil {
+		return bp.Spec.AutomountServiceAccountToken
+	}
+
+	return boolPtr(false)
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// RenderCheck returns the scratch PVCs and the check pod of one attempt, built the way the operator builds them.
+// The check harness calls it, so the harness runs the same pod as the operator.
+func RenderCheck(
+	restore *restorev1alpha1.Restore,
+	bp *restorev1alpha1.RestoreCheck,
+	restoredClaim string,
+) ([]client.Object, error) {
+	var objs []client.Object
+
+	scratch := map[string]string{}
+
+	for _, sv := range bp.Spec.ScratchVolumes {
+		pvc := scratchPVC(restore, sv)
+		scratch[sv.Name] = pvc.Name
+		objs = append(objs, pvc)
+	}
+
+	pod, err := buildCheckPod(restore, bp, restoredClaim, scratch)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(objs, pod), nil
 }

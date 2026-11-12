@@ -21,6 +21,8 @@ const (
 	testPVCKeyA       = "ns/a"
 	testPVCKeyB       = "ns/b"
 	testRepoSecret    = "repo-secret"
+	testImage         = "busybox"
+	testScratchPath   = "/scratch"
 )
 
 func quantityPtr(s string) *resource.Quantity {

@@ -20,7 +20,7 @@ func checkPodCheck() *restorev1alpha1.RestoreCheck {
 		Spec: restorev1alpha1.RestoreCheckSpec{
 			RestoreMount: testMountPath,
 			InitContainers: []corev1.Container{
-				{Name: "perms", Image: "busybox"},
+				{Name: "perms", Image: testImage},
 			},
 			Containers: []corev1.Container{
 				{
@@ -30,7 +30,7 @@ func checkPodCheck() *restorev1alpha1.RestoreCheck {
 				},
 			},
 			ScratchVolumes: []restorev1alpha1.ScratchVolume{
-				{Name: testWorkArea, MountPath: "/scratch", Size: resource.MustParse("1Gi")},
+				{Name: testWorkArea, MountPath: testScratchPath, Size: resource.MustParse("1Gi")},
 			},
 			ServiceAccountName: "checker",
 			NodeSelector:       map[string]string{"disk": "ssd"},
@@ -166,14 +166,14 @@ func TestMoverUID(t *testing.T) {
 
 	bp := checkPodCheck()
 
-	uid, err := moverUID(bp)
+	uid, err := MoverUID(bp)
 	if err != nil || uid == nil || *uid != 999 {
 		t.Fatalf("container runAsUser: got %v, %v; want 999", uid, err)
 	}
 
 	bp.Annotations = map[string]string{moverUIDAnnotation: `{"data": 70}`}
 
-	uid, err = moverUID(bp)
+	uid, err = MoverUID(bp)
 	if err != nil || uid == nil || *uid != 70 {
 		t.Fatalf("annotation: got %v, %v; want 70", uid, err)
 	}
