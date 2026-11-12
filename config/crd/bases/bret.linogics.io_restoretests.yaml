@@ -309,6 +309,11 @@ spec:
                 description: LastRunNowValue is the last value of the run-now annotation
                   that started a run.
                 type: string
+              lastSuccess:
+                description: LastSuccess is the time of the last run that passed.
+                  It drives the success metric.
+                format: date-time
+                type: string
               nextRun:
                 description: NextRun is when the next cron run is scheduled.
                 format: date-time

@@ -121,6 +121,8 @@ type HandledBackup struct {
 type RestoreTestStatus struct {
 	// LastRun is the outcome of the most recent run.
 	LastRun *LastRun `json:"lastRun,omitempty"`
+	// LastSuccess is the time of the last run that passed. It drives the success metric.
+	LastSuccess *metav1.Time `json:"lastSuccess,omitempty"`
 	// NextRun is when the next cron run is scheduled.
 	NextRun *metav1.Time `json:"nextRun,omitempty"`
 	// LastHandled is the newest backup that an afterBackup trigger used. Only newer backups start a run.

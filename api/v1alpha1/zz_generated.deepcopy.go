@@ -277,6 +277,11 @@ func (in *RestoreCheckSpec) DeepCopyInto(out *RestoreCheckSpec) {
 		*out = new(corev1.PodSecurityContext)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.AutomountServiceAccountToken != nil {
+		in, out := &in.AutomountServiceAccountToken, &out.AutomountServiceAccountToken
+		*out = new(bool)
+		**out = **in
+	}
 	if in.ImagePullSecrets != nil {
 		in, out := &in.ImagePullSecrets, &out.ImagePullSecrets
 		*out = make([]corev1.LocalObjectReference, len(*in))
@@ -563,6 +568,10 @@ func (in *RestoreTestStatus) DeepCopyInto(out *RestoreTestStatus) {
 		in, out := &in.LastRun, &out.LastRun
 		*out = new(LastRun)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.LastSuccess != nil {
+		in, out := &in.LastSuccess, &out.LastSuccess
+		*out = (*in).DeepCopy()
 	}
 	if in.NextRun != nil {
 		in, out := &in.NextRun, &out.NextRun

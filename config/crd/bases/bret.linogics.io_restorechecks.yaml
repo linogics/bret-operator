@@ -954,6 +954,10 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                 type: object
+              automountServiceAccountToken:
+                description: AutomountServiceAccountToken mounts the service account
+                  token in the check pod. Unset means false.
+                type: boolean
               containers:
                 description: Containers run the check. Exit code 0 means pass.
                 items:

@@ -52,6 +52,8 @@ type RestoreCheckSpec struct {
 	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
 	// ServiceAccountName is the service account the check pod runs as.
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+	// AutomountServiceAccountToken mounts the service account token in the check pod. Unset means false.
+	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty"`
 	// ImagePullSecrets are secrets used to pull the check images from private registries.
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 	// NodeSelector constrains the check pod to nodes with these labels.

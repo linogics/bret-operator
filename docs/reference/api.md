@@ -256,6 +256,7 @@ _Appears in:_
 | `volumes` _[Volume](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#volume-v1-core) array_ | Volumes are extra volumes for the check pod. For example, ConfigMaps or Secrets. |  |  |
 | `securityContext` _[PodSecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#podsecuritycontext-v1-core)_ | SecurityContext is the pod-level security context. For example, fsGroup or runAsUser applies to all containers. |  |  |
 | `serviceAccountName` _string_ | ServiceAccountName is the service account the check pod runs as. |  |  |
+| `automountServiceAccountToken` _boolean_ | AutomountServiceAccountToken mounts the service account token in the check pod. Unset means false. |  |  |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#localobjectreference-v1-core) array_ | ImagePullSecrets are secrets used to pull the check images from private registries. |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ | NodeSelector constrains the check pod to nodes with these labels. |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#toleration-v1-core) array_ | Tolerations allow the check pod to run on tainted nodes. |  |  |
@@ -440,6 +441,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `lastRun` _[LastRun](#lastrun)_ | LastRun is the outcome of the most recent run. |  |  |
+| `lastSuccess` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | LastSuccess is the time of the last run that passed. It drives the success metric. |  |  |
 | `nextRun` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | NextRun is when the next cron run is scheduled. |  |  |
 | `lastHandled` _[HandledBackup](#handledbackup)_ | LastHandled is the newest backup that an afterBackup trigger used. Only newer backups start a run. |  |  |
 | `retainedResources` _string array_ | RetainedResources lists objects kept after a failed run. They help debugging. |  |  |
