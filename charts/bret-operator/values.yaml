@@ -87,6 +87,10 @@ providers:
 # -- Namespaces the manager watches. Empty means cluster-wide. Otherwise the restore rights are bound per namespace with a Role.
 watchNamespaces: []
 
+# -- How often a running attempt is checked again, for example 30s. Minimum 5s.
+# Lower values show results sooner, but cost one API read per running attempt per poll.
+pollInterval: 30s
+
 metrics:
   # -- Serve Prometheus metrics. When false the metrics endpoint is disabled.
   enabled: true

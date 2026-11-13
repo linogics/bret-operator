@@ -55,6 +55,8 @@ spec:
               value: {{ .Values.providers.velero.namespace | quote }}
             - name: WATCH_NAMESPACES
               value: {{ join "," .Values.watchNamespaces | quote }}
+            - name: POLL_INTERVAL
+              value: {{ .Values.pollInterval | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

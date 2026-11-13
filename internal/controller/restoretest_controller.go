@@ -90,13 +90,40 @@ func (r *RestoreTestReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if !test.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, r.finalize(ctx, test)
+	}
+
+	if controllerutil.AddFinalizer(test, metricsFinalizer) {
+		if err := r.Update(ctx, test); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	result, err := r.advance(ctx, test)
+
+	// The gauge is set from status, so it survives an operator restart.
+	if test.Status.LastSuccess != nil {
+		restoreTestLastSuccess.WithLabelValues(test.Name, test.Namespace).Set(float64(test.Status.LastSuccess.Unix()))
+	}
 
 	if statusErr := r.Status().Update(ctx, test); statusErr != nil {
 		return ctrl.Result{}, errors.Join(err, statusErr)
 	}
 
 	return result, err
+}
+
+// finalize removes the metric series of a deleted or renamed RestoreTest, then releases it.
+func (r *RestoreTestReconciler) finalize(ctx context.Context, test *restorev1alpha1.RestoreTest) error {
+	if !controllerutil.ContainsFinalizer(test, metricsFinalizer) {
+		return nil
+	}
+
+	restoreTestLastSuccess.DeleteLabelValues(test.Name, test.Namespace)
+	controllerutil.RemoveFinalizer(test, metricsFinalizer)
+
+	return client.IgnoreNotFound(r.Update(ctx, test))
 }
 
 // advance settles a finished run, then starts or queues the next run when a trigger is due.
@@ -179,7 +206,8 @@ func (r *RestoreTestReconciler) settle(
 		result = restorev1alpha1.RunResultSucceeded
 		status = metav1.ConditionTrue
 
-		restoreTestLastSuccess.WithLabelValues(test.Name, test.Namespace).Set(float64(now.Unix()))
+		done := metav1.NewTime(now)
+		test.Status.LastSuccess = &done
 	}
 
 	test.Status.LastRun = &restorev1alpha1.LastRun{

@@ -24,8 +24,7 @@ const (
 	apiVersionAlpha1     = "v1alpha1"
 	fieldKind            = "kind"
 	readyConditionType   = "Ready"
-	restoreRequeueAfter  = 10 * time.Second
-	checkRequeueAfter    = 30 * time.Second
+	defaultPollInterval  = 30 * time.Second
 	defaultRestoreWindow = 45 * time.Minute
 )
 
@@ -58,6 +57,17 @@ type RestoreReconciler struct {
 	EnabledProviders map[restorev1alpha1.Provider]bool
 	// VeleroNamespace is the Velero install namespace. Empty means "velero".
 	VeleroNamespace string
+	// PollInterval is how often a running attempt is checked again. Zero means the default, 30s.
+	PollInterval time.Duration
+}
+
+// pollInterval is the requeue delay while an attempt runs.
+func (r *RestoreReconciler) pollInterval() time.Duration {
+	if r.PollInterval > 0 {
+		return r.PollInterval
+	}
+
+	return defaultPollInterval
 }
 
 // +kubebuilder:rbac:groups=bret.linogics.io,resources=restores,verbs=get;list;watch;create;update;patch;delete
@@ -141,7 +151,7 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		if apierrors.IsNotFound(err) {
 			r.block(restore, reasonCheckNotFound, fmt.Sprintf("RestoreCheck %s not found", key.Name))
 
-			return ctrl.Result{RequeueAfter: checkRequeueAfter}, nil
+			return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 		}
 
 		return ctrl.Result{}, err
@@ -173,7 +183,7 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		}
 	}
 
-	uid, err := moverUID(bp)
+	uid, err := MoverUID(bp)
 	if err != nil {
 		r.block(restore, reasonCheckUnsupported, err.Error())
 
@@ -260,7 +270,7 @@ func (r *RestoreReconciler) progress(
 	case kopiurPhaseCompleted:
 		return r.check(ctx, restore, bp, restoredClaimName(restore), restore.Namespace, claims)
 	default:
-		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
 }
 
@@ -359,7 +369,7 @@ func (r *RestoreReconciler) check(
 
 		return ctrl.Result{}, nil
 	default:
-		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
 }
 

@@ -6,4 +6,8 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: restorecheck-sample
 spec:
-  # TODO(user): Add fields here
+  restoreMount: /data
+  containers:
+    - name: check
+      image: busybox:1.37
+      command: ["/bin/sh", "-c", "test -f /data/canary.txt"]

@@ -191,7 +191,7 @@ func (r *RestoreReconciler) reconcileVelero(
 
 		return ctrl.Result{}, nil
 	default:
-		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
 }
 
@@ -205,7 +205,7 @@ func (r *RestoreReconciler) checkVelero(
 	ns := veleroScratchNamespace(restore)
 
 	if err := r.getObject(ctx, ns); err != nil {
-		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, client.IgnoreNotFound(err)
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, client.IgnoreNotFound(err)
 	}
 
 	if err := r.copyPodSecurity(ctx, restore, ns); err != nil {
@@ -219,7 +219,7 @@ func (r *RestoreReconciler) checkVelero(
 
 	claim := r.restoredVeleroClaim(ctx, restore, pvcs.Items)
 	if claim == "" {
-		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
 
 	claims := make(map[string]string, len(bp.Spec.ScratchVolumes))

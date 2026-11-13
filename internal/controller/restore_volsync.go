@@ -124,7 +124,7 @@ func (r *RestoreReconciler) reconcileVolSync(
 		}
 
 		if err != nil || repo == "" {
-			return ctrl.Result{RequeueAfter: restoreRequeueAfter}, err
+			return ctrl.Result{RequeueAfter: r.pollInterval()}, err
 		}
 
 		if _, err := r.ensure(ctx, restore, volsyncScratchPVC(restore, size)); err != nil {
@@ -148,7 +148,7 @@ func (r *RestoreReconciler) reconcileVolSync(
 	setRunning(restore)
 
 	if kind, _, _ := unstructured.NestedString(rd.Object, "status", "latestImage", "kind"); kind != "PersistentVolumeClaim" {
-		return ctrl.Result{RequeueAfter: restoreRequeueAfter}, nil
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
 
 	claims, err := r.ensureScratchClaims(ctx, restore, bp)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	// Import all Kubernetes client auth plugins. For example, Azure, GCP and OIDC.
 	// This lets exec-entrypoint and run use them.
@@ -39,6 +40,23 @@ func init() {
 
 	utilruntime.Must(restorev1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
+}
+
+// pollIntervalEnv reads POLL_INTERVAL, for example 30s. Empty means the controller default.
+// A value that cannot be parsed, or is under 5s, stops the operator at startup.
+func pollIntervalEnv() time.Duration {
+	raw := os.Getenv("POLL_INTERVAL")
+	if raw == "" {
+		return 0
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil || d < 5*time.Second {
+		setupLog.Error(err, "POLL_INTERVAL must be a duration of at least 5s", "value", raw)
+		os.Exit(1)
+	}
+
+	return d
 }
 
 // csvEnv splits a comma-separated env var. It drops empty items.
@@ -177,7 +195,7 @@ func main() {
 	// If the certificate is not specified, controller-runtime generates self-signed certificates for the metrics server.
 	// This is convenient for development and testing. This setup is not recommended for production.
 	//
-	// TODO(user): To enable certManager, uncomment the following lines:
+	// To use cert-manager certificates, uncomment the following lines:
 	// - [METRICS-WITH-CERTS] at config/default/kustomization.yaml to generate and use certificates
 	// managed by cert-manager for the metrics server.
 	// - [PROMETHEUS-WITH-CERTS] at config/prometheus/kustomization.yaml for TLS certification.
@@ -255,6 +273,7 @@ func main() {
 
 		EnabledProviders: enabledProviders,
 		VeleroNamespace:  os.Getenv("VELERO_NAMESPACE"),
+		PollInterval:     pollIntervalEnv(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Restore")
 		os.Exit(1)

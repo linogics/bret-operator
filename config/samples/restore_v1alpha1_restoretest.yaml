@@ -6,4 +6,13 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: restoretest-sample
 spec:
-  # TODO(user): Add fields here
+  provider: kopiur
+  backupSelector:
+    labels:
+      app.kubernetes.io/name: orders-db
+  restoreCheckRef:
+    name: restorecheck-sample
+  target:
+    size: 20Gi
+  triggers:
+    manual: true

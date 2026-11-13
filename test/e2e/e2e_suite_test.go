@@ -45,8 +45,7 @@ var _ = BeforeSuite(func() {
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image")
 
-	// TODO(user): If you want to change the e2e test vendor from Kind, ensure the image is
-	// built and available before running the tests. Also, remove the following block.
+	// The image is loaded into Kind. Change this block if the test cluster is not Kind.
 	By("loading the manager(Operator) image on Kind")
 
 	err = utils.LoadImageToKindClusterWithName(projectImage)
