@@ -1,4 +1,5 @@
 # RestoreTest: test the newest orders-db backup every night. Test it again after each new backup.
+# The backup selector matches Kopiur Snapshot objects in this namespace.
 # Check: examples/restorecheck-minimal.yaml. Or use your own check.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
@@ -6,7 +7,7 @@ metadata:
   name: orders-db-nightly
   namespace: data
 spec:
-  provider: volsync
+  provider: kopiur
   backupSelector:
     labels:
       app.kubernetes.io/name: orders-db

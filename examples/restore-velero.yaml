@@ -1,0 +1,17 @@
+# Restore: one manual restore attempt of a named backup. A RestoreTest usually creates these.
+# The check in restoreCheckRef runs after the restore. Check: examples/restorecheck-minimal.yaml.
+apiVersion: bret.linogics.io/v1alpha1
+kind: Restore
+metadata:
+  name: orders-db-manual
+  namespace: data
+spec:
+  provider: velero
+  source:
+    backupRef:
+      name: orders-db-2026-11-14 # A Velero Backup in the Velero namespace (providers.velero.namespace).
+  target:
+    storageClassName: fast-ssd   # Storage class for the scratch volume.
+    size: 20Gi                   # Scratch volume size. It must be at least the source size.
+  restoreCheckRef:
+    name: minimal                # A RestoreCheck in the same namespace as this Restore.
