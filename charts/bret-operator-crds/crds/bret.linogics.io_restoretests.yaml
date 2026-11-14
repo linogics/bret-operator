@@ -54,23 +54,6 @@ spec:
           spec:
             description: Spec is the desired state of the test.
             properties:
-              backupSelector:
-                description: BackupSelector chooses which backups the restores read
-                  from.
-                properties:
-                  labels:
-                    additionalProperties:
-                      type: string
-                    description: Labels selects backup objects that carry all of these
-                      labels.
-                    type: object
-                  name:
-                    description: Name is the name of one backup object.
-                    type: string
-                type: object
-                x-kubernetes-validations:
-                - message: name or labels must be set
-                  rule: has(self.name) || has(self.labels)
               keepOnFailure:
                 default: false
                 description: KeepOnFailure keeps the check pod and restore objects
@@ -123,57 +106,91 @@ spec:
                     minimum: 0
                     type: integer
                 type: object
-              target:
-                description: Target is the scratch volume that each run restores into.
-                  It has the same meaning as Restore.spec.target.
-                properties:
-                  autoExpand:
-                    description: AutoExpand derives the size from the source size
-                      when Size is unset.
-                    properties:
-                      max:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        description: Max is the upper bound of the derived size.
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
-                      min:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        description: Min is the lower bound of the derived size.
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
-                      percentage:
-                        description: Percentage is the headroom added to the source
-                          size, in percent.
-                        format: int32
-                        type: integer
-                    required:
-                    - percentage
-                    type: object
-                    x-kubernetes-validations:
-                    - message: percentage must be greater than 0
-                      rule: self.percentage > 0
-                    - message: percentage must not be greater than 1000
-                      rule: self.percentage <= 1000
-                    - message: min must not be greater than max
-                      rule: '!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max))
-                        <= 0'
-                  size:
-                    anyOf:
-                    - type: integer
-                    - type: string
-                    description: Size is the capacity of the scratch volume. The source
-                      size sets it when unset.
-                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                    x-kubernetes-int-or-string: true
-                  storageClassName:
-                    description: StorageClassName is the storage class of the scratch
-                      volume.
-                    type: string
-                type: object
+              sources:
+                description: Sources are the volumes each run restores.
+                items:
+                  description: 'RestoreTestSource is one volume a RestoreTest restores:
+                    the PVC, the backups to pick from, and the scratch target.'
+                  properties:
+                    autoExpand:
+                      description: AutoExpand derives the size from the source size
+                        when Size is unset.
+                      properties:
+                        max:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: Max is the upper bound of the derived size.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        min:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: Min is the lower bound of the derived size.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        percentage:
+                          description: Percentage is the headroom added to the source
+                            size, in percent.
+                          format: int32
+                          type: integer
+                      required:
+                      - percentage
+                      type: object
+                      x-kubernetes-validations:
+                      - message: percentage must be greater than 0
+                        rule: self.percentage > 0
+                      - message: percentage must not be greater than 1000
+                        rule: self.percentage <= 1000
+                      - message: min must not be greater than max
+                        rule: '!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max))
+                          <= 0'
+                    backupSelector:
+                      description: BackupSelector chooses which backups the restore
+                        reads from.
+                      properties:
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels selects backup objects that carry all
+                            of these labels.
+                          type: object
+                        name:
+                          description: Name is the name of one backup object.
+                          type: string
+                      type: object
+                      x-kubernetes-validations:
+                      - message: name or labels must be set
+                        rule: has(self.name) || has(self.labels)
+                    size:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Size is the capacity of the scratch volume. The
+                        source size sets it when unset.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    sourcePVC:
+                      description: SourcePVC is the name of the PVC in the backed-up
+                        namespace.
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    storageClassName:
+                      description: StorageClassName is the storage class of the scratch
+                        volume.
+                      type: string
+                  required:
+                  - backupSelector
+                  - sourcePVC
+                  type: object
+                maxItems: 10
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - sourcePVC
+                x-kubernetes-list-type: map
               triggers:
                 description: Triggers defines what starts a run.
                 properties:
@@ -197,11 +214,11 @@ spec:
                     type: boolean
                 type: object
             required:
-            - backupSelector
             - provider
             - restoreCheckRef
             - restoreWindow
             - retries
+            - sources
             type: object
           status:
             description: Status is the observed state of the test.
@@ -273,18 +290,29 @@ spec:
               lastHandled:
                 description: LastHandled is the newest backup that an afterBackup
                   trigger used. Only newer backups start a run.
-                properties:
-                  createdAt:
-                    description: CreatedAt is the time the backup completed.
-                    format: date-time
-                    type: string
-                  name:
-                    description: Name is the backup name.
-                    type: string
-                required:
-                - createdAt
-                - name
-                type: object
+                items:
+                  description: HandledBackup identifies the backup an afterBackup
+                    trigger used last.
+                  properties:
+                    createdAt:
+                      description: CreatedAt is the time the backup completed.
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name is the backup name.
+                      type: string
+                    sourcePVC:
+                      description: SourcePVC is the source this entry belongs to.
+                      type: string
+                  required:
+                  - createdAt
+                  - name
+                  - sourcePVC
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - sourcePVC
+                x-kubernetes-list-type: map
               lastRun:
                 description: LastRun is the outcome of the most recent run.
                 properties:
@@ -318,10 +346,13 @@ spec:
                 description: NextRun is when the next cron run is scheduled.
                 format: date-time
                 type: string
-              pendingRun:
-                description: PendingRun is the backup of the queued run, which waits
-                  for the run in progress. It applies to overlap policy Queue.
-                type: string
+              pendingBackups:
+                additionalProperties:
+                  type: string
+                description: PendingBackups maps each sourcePVC to the backup of the
+                  queued run, which waits for the run in progress. It applies to overlap
+                  policy Queue.
+                type: object
               pendingRunSource:
                 description: PendingRunSource is the trigger source of the queued
                   run. It keeps the name of the queued Restore stable across reconciles.

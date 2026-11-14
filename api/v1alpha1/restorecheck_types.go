@@ -8,13 +8,13 @@ import (
 
 // RestoredVolume maps one restored PVC to a mount path in the check pod.
 type RestoredVolume struct {
-	// Name is the name of the restored volume entry.
-	Name string `json:"name"`
-	// MountPath is where the restored volume is mounted in every container.
-	MountPath string `json:"mountPath"`
 	// SourcePVC is the name of the PVC in the backed-up namespace that this volume restores.
-	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	// +kubebuilder:validation:MaxLength=63
 	SourcePVC string `json:"sourcePVC"`
+	// MountPath is where the restored volume is mounted in every container.
+	// +kubebuilder:validation:MinLength=1
+	MountPath string `json:"mountPath"`
 }
 
 // ScratchVolume is a PVC that the operator creates for each attempt. It provides staging space for the check.
@@ -32,13 +32,12 @@ type ScratchVolume struct {
 }
 
 // RestoreCheckSpec defines the desired check pod template.
-// +kubebuilder:validation:XValidation:rule="has(self.restoreMount) != has(self.restoredVolumes)",message="exactly one of restoreMount or restoredVolumes must be set"
 type RestoreCheckSpec struct {
-	// RestoreMount is the mount path of the single restored volume in every container.
-	RestoreMount string `json:"restoreMount,omitempty"`
-	// RestoredVolumes lists the restored volumes, each with its own mount path. In v1 the operator
-	// accepts one entry only. Checks with more entries are rejected with ProviderUnsupported.
-	RestoredVolumes []RestoredVolume `json:"restoredVolumes,omitempty"`
+	// RestoredVolumes lists the restored volumes, each with its own mount path.
+	// +kubebuilder:validation:MinItems=1
+	// +listType=map
+	// +listMapKey=sourcePVC
+	RestoredVolumes []RestoredVolume `json:"restoredVolumes"`
 	// InitContainers run before the check containers.
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 	// Containers run the check. Exit code 0 means pass.

@@ -18,7 +18,7 @@ var replicationSourceGVK = schema.GroupVersionKind{Group: "volsync.backube", Ver
 
 // sourceSize returns the size of the backed-up source, or nil when the provider cannot tell.
 func (r *RestoreReconciler) sourceSize(ctx context.Context, restore *restorev1alpha1.Restore) (*resource.Quantity, error) {
-	backup := restore.Spec.Source.BackupRef
+	backup := restore.Spec.Sources[0].BackupRef
 	namespace := backupNamespace(restore)
 
 	switch restore.Spec.Provider {

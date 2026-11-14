@@ -39,7 +39,6 @@ const (
 var (
 	veleroRestoreGVK   = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "Restore"}
 	downloadRequestGVK = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "DownloadRequest"}
-	checkGVK           = schema.GroupVersionKind{Group: "bret.linogics.io", Version: apiVersionAlpha1, Kind: "RestoreCheck"}
 
 	// Variables so tests can shorten them.
 	veleroDownloadWait = 30 * time.Second
@@ -84,7 +83,7 @@ func (r *RestoreReconciler) veleroRestoreObject(restore *restorev1alpha1.Restore
 	obj := r.veleroStub(restore)
 	obj.SetLabels(restoreLabels(restore))
 	obj.Object["spec"] = map[string]any{
-		"backupName":         restore.Spec.Source.BackupRef.Name,
+		"backupName":         restore.Spec.Sources[0].BackupRef.Name,
 		"includedNamespaces": []any{restore.Namespace},
 		"includedResources":  []any{"persistentvolumeclaims", "persistentvolumes"},
 		"namespaceMapping":   map[string]any{restore.Namespace: veleroScratchName(restore)},
@@ -178,9 +177,9 @@ func (r *RestoreReconciler) reconcileVelero(
 		phase, _, _ = unstructured.NestedString(cur.Object, "status", "phase")
 	}
 
-	restore.Status.ProviderRef = &restorev1alpha1.ProviderRef{
+	restore.Status.ProviderRefs = []restorev1alpha1.ProviderRef{{
 		Kind: veleroRestoreGVK.Kind, Name: cur.GetName(), Namespace: cur.GetNamespace(),
-	}
+	}}
 	setRunning(restore)
 
 	switch phase {
@@ -329,7 +328,7 @@ func (r *RestoreReconciler) downloadURL(ctx context.Context, restore *restorev1a
 		fieldKind:    downloadRequestGVK.Kind,
 		"metadata":   map[string]any{keyName: veleroName(restore) + "-size", keyNamespace: r.veleroNS()},
 		"spec": map[string]any{"target": map[string]any{
-			fieldKind: "BackupContents", keyName: restore.Spec.Source.BackupRef.Name,
+			fieldKind: "BackupContents", keyName: restore.Spec.Sources[0].BackupRef.Name,
 		}},
 	}}
 
@@ -366,30 +365,19 @@ func (r *RestoreReconciler) downloadURL(ctx context.Context, restore *restorev1a
 }
 
 // checkSourcePVC returns restoredVolumes[0].sourcePVC of the Restore's check, or an empty string.
-// It reads the check unstructured, so it does not depend on the typed field.
 func (r *RestoreReconciler) checkSourcePVC(ctx context.Context, restore *restorev1alpha1.Restore) string {
 	if restore.Spec.RestoreCheckRef.Name == "" {
 		return ""
 	}
 
-	bp := &unstructured.Unstructured{}
-	bp.SetGroupVersionKind(checkGVK)
-	bp.SetNamespace(restore.Namespace)
-	bp.SetName(restore.Spec.RestoreCheckRef.Name)
+	bp := &restorev1alpha1.RestoreCheck{}
+	key := client.ObjectKey{Namespace: restore.Namespace, Name: restore.Spec.RestoreCheckRef.Name}
 
-	if err := r.getObject(ctx, bp); err != nil {
+	if err := r.Get(ctx, key, bp); err != nil || len(bp.Spec.RestoredVolumes) == 0 {
 		return ""
 	}
 
-	vols, _, _ := unstructured.NestedSlice(bp.Object, "spec", "restoredVolumes")
-	if len(vols) == 0 {
-		return ""
-	}
-
-	first, _ := vols[0].(map[string]any)
-	name, _ := first["sourcePVC"].(string)
-
-	return name
+	return bp.Spec.RestoredVolumes[0].SourcePVC
 }
 
 func fetchPVCSizes(ctx context.Context, url, namespace string) (_ map[string]resource.Quantity, err error) {

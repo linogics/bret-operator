@@ -103,9 +103,12 @@ func TestVeleroPVCSizes(t *testing.T) {
 }
 
 func TestVeleroSourceSize(t *testing.T) {
-	check := unstructuredObj("bret.linogics.io", "RestoreCheck", "bp", map[string]any{
-		"spec": map[string]any{"restoredVolumes": []any{map[string]any{"name": testDataName, "sourcePVC": "b"}}},
-	})
+	check := &restorev1alpha1.RestoreCheck{
+		ObjectMeta: metav1.ObjectMeta{Name: "bp", Namespace: "ns"},
+		Spec: restorev1alpha1.RestoreCheckSpec{
+			RestoredVolumes: []restorev1alpha1.RestoredVolume{{SourcePVC: "b", MountPath: testDataPath}},
+		},
+	}
 
 	tests := []struct {
 		name   string
@@ -144,6 +147,10 @@ func TestVeleroSourceSize(t *testing.T) {
 
 			scheme := runtime.NewScheme()
 			if err := clientgoscheme.AddToScheme(scheme); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := restorev1alpha1.AddToScheme(scheme); err != nil {
 				t.Fatal(err)
 			}
 

@@ -15,8 +15,8 @@ func bareCheck() *restorev1alpha1.RestoreCheck {
 	return &restorev1alpha1.RestoreCheck{
 		ObjectMeta: metav1.ObjectMeta{Name: testApp, Namespace: testNamespace},
 		Spec: restorev1alpha1.RestoreCheckSpec{
-			RestoreMount: testMountPath,
-			Containers:   []corev1.Container{{Name: testCheckName, Image: testImage}},
+			RestoredVolumes: []restorev1alpha1.RestoredVolume{{SourcePVC: testDataName, MountPath: testMountPath}},
+			Containers:      []corev1.Container{{Name: testCheckName, Image: testImage}},
 		},
 	}
 }

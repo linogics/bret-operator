@@ -21,7 +21,7 @@ func sizeTestRestore(provider restorev1alpha1.Provider) *restorev1alpha1.Restore
 		ObjectMeta: metav1.ObjectMeta{Name: "r", Namespace: "ns"},
 		Spec: restorev1alpha1.RestoreSpec{
 			Provider: provider,
-			Source:   restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: testBackupName}},
+			Sources:  []restorev1alpha1.RestoreSource{{BackupRef: restorev1alpha1.BackupRef{Name: testBackupName}}},
 		},
 	}
 }

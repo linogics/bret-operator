@@ -32,7 +32,7 @@ func kopiurName(restore *restorev1alpha1.Restore) string {
 
 // backupNamespace is the namespace of the backup object. It is backupRef.namespace, or else the Restore namespace.
 func backupNamespace(restore *restorev1alpha1.Restore) string {
-	if ns := restore.Spec.Source.BackupRef.Namespace; ns != "" {
+	if ns := restore.Spec.Sources[0].BackupRef.Namespace; ns != "" {
 		return ns
 	}
 
@@ -66,7 +66,7 @@ func kopiurStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 
 // kopiurRestoreObject returns the desired Kopiur Restore of one attempt. uid is the mover UID when set.
 func kopiurRestoreObject(restore *restorev1alpha1.Restore, uid *int64) *unstructured.Unstructured {
-	backup := restore.Spec.Source.BackupRef
+	backup := restore.Spec.Sources[0].BackupRef
 
 	spec := map[string]any{
 		"source": map[string]any{
@@ -143,7 +143,7 @@ func restoredPVC(restore *restorev1alpha1.Restore, size resource.Quantity) *core
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources:        claimResources(size),
-			StorageClassName: optionalString(restore.Spec.Target.StorageClassName),
+			StorageClassName: optionalString(restore.Spec.Sources[0].StorageClassName),
 			DataSourceRef: &corev1.TypedObjectReference{
 				APIGroup: &apiGroup,
 				Kind:     kopiurRestoreGVK.Kind,

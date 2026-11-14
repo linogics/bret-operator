@@ -72,7 +72,7 @@ func (r *RestoreReconciler) volsyncRepository(ctx context.Context, restore *rest
 	src := &unstructured.Unstructured{}
 	src.SetGroupVersionKind(replicationSourceGVK)
 	src.SetNamespace(backupNamespace(restore))
-	src.SetName(restore.Spec.Source.BackupRef.Name)
+	src.SetName(restore.Spec.Sources[0].BackupRef.Name)
 
 	if err := r.getObject(ctx, src); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -141,9 +141,9 @@ func (r *RestoreReconciler) reconcileVolSync(
 		return ctrl.Result{}, err
 	}
 
-	restore.Status.ProviderRef = &restorev1alpha1.ProviderRef{
+	restore.Status.ProviderRefs = []restorev1alpha1.ProviderRef{{
 		Kind: replicationDestinationGVK.Kind, Name: rd.GetName(), Namespace: rd.GetNamespace(),
-	}
+	}}
 	setRunning(restore)
 
 	if kind, _, _ := unstructured.NestedString(rd.Object, "status", "latestImage", "kind"); kind != "PersistentVolumeClaim" {
@@ -165,7 +165,7 @@ func volsyncScratchPVC(restore *restorev1alpha1.Restore, size resource.Quantity)
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources:        claimResources(size),
-			StorageClassName: optionalString(restore.Spec.Target.StorageClassName),
+			StorageClassName: optionalString(restore.Spec.Sources[0].StorageClassName),
 		},
 	}
 }

@@ -176,15 +176,7 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		return ctrl.Result{}, err
 	}
 
-	err := validateRestoredVolumes(bp)
-	if err != nil {
-		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
-		r.block(restore, reasonProviderUnsupported, err.Error())
-
-		return ctrl.Result{}, nil
-	}
-
-	err = validateCheck(bp)
+	err := validateCheck(bp)
 	if err != nil {
 		r.block(restore, reasonCheckUnsupported, err.Error())
 
@@ -259,11 +251,11 @@ func (r *RestoreReconciler) progress(
 		r.Recorder.Event(restore, corev1.EventTypeNormal, reasonRestoreStarted, "started Kopiur restore "+kopiur.GetName())
 	}
 
-	restore.Status.ProviderRef = &restorev1alpha1.ProviderRef{
+	restore.Status.ProviderRefs = []restorev1alpha1.ProviderRef{{
 		Kind:      kopiurRestoreGVK.Kind,
 		Name:      kopiur.GetName(),
 		Namespace: kopiur.GetNamespace(),
-	}
+	}}
 	setRunning(restore)
 
 	switch kopiurPhase(kopiur) {
@@ -281,12 +273,13 @@ func (r *RestoreReconciler) progress(
 // scratchSize resolves the scratch size once and stores it in the status.
 // Later reconciles reuse it, so the source is read once.
 func (r *RestoreReconciler) scratchSize(ctx context.Context, restore *restorev1alpha1.Restore) (resource.Quantity, error) {
-	if restore.Status.ResolvedSize != nil {
-		return *restore.Status.ResolvedSize, nil
+	key := restore.Spec.Sources[0].SourcePVC // Velero has no sourcePVC, so its key is empty.
+	if size, ok := restore.Status.ResolvedSizes[key]; ok {
+		return size, nil
 	}
 
 	// A Restore from before the size was stored has no size to create objects with.
-	if restore.Status.ProviderRef != nil {
+	if len(restore.Status.ProviderRefs) > 0 {
 		return resource.Quantity{}, ErrSizeUnknown
 	}
 
@@ -295,12 +288,16 @@ func (r *RestoreReconciler) scratchSize(ctx context.Context, restore *restorev1a
 		return resource.Quantity{}, err
 	}
 
-	size, err := resolveSize(restore.Spec.Target, source)
+	size, err := resolveSize(restore.Spec.Sources[0].RestoreTarget, source)
 	if err != nil {
 		return resource.Quantity{}, err
 	}
 
-	restore.Status.ResolvedSize = &size
+	if restore.Status.ResolvedSizes == nil {
+		restore.Status.ResolvedSizes = map[string]resource.Quantity{}
+	}
+
+	restore.Status.ResolvedSizes[key] = size
 
 	return size, nil
 }

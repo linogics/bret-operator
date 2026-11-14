@@ -11,6 +11,7 @@ const (
 	testLabelValue = "pg"
 
 	testDataName      = "data"
+	testDataPath      = "/data"
 	testBackupName    = "backup"
 	testStatusKey     = "status"
 	testWorkArea      = "Work Area"

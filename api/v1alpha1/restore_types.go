@@ -43,10 +43,22 @@ type BackupRef struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-// RestoreSource identifies the backup a Restore reads from.
+// RestoreSource identifies one backup a Restore reads from and the scratch volume it writes into.
+// +kubebuilder:validation:XValidation:rule="!(has(self.labelSelector) && has(self.orLabelSelectors))",message="labelSelector and orLabelSelectors are mutually exclusive"
 type RestoreSource struct {
+	// SourcePVC is the name of the PVC in the backed-up namespace that this source restores.
+	// Velero restores a whole namespace and does not use it.
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	// +kubebuilder:validation:MaxLength=63
+	SourcePVC string `json:"sourcePVC,omitempty"`
 	// BackupRef is the backup to restore.
 	BackupRef BackupRef `json:"backupRef"`
+	// LabelSelector selects the namespace objects to restore. Velero only.
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+	// OrLabelSelectors select the namespace objects to restore, any one may match. Velero only.
+	OrLabelSelectors []*metav1.LabelSelector `json:"orLabelSelectors,omitempty"`
+	// RestoreTarget is the scratch volume to restore into.
+	RestoreTarget `json:",inline"`
 }
 
 // Condition reasons for a Restore that cannot resolve its scratch size.
@@ -82,13 +94,16 @@ type RestoreTarget struct {
 }
 
 // RestoreSpec defines the desired state of Restore.
+// +kubebuilder:validation:XValidation:rule="self.provider != 'velero' || (size(self.sources) == 1 && !has(self.sources[0].sourcePVC) && !has(self.sources[0].size) && !has(self.sources[0].autoExpand) && !has(self.sources[0].storageClassName))",message="provider velero takes exactly one source without sourcePVC, size, autoExpand or storageClassName"
+// +kubebuilder:validation:XValidation:rule="self.provider == 'velero' || self.sources.all(s, has(s.sourcePVC) && !has(s.labelSelector) && !has(s.orLabelSelectors))",message="sources need a sourcePVC and no label selectors unless provider is velero"
+// +kubebuilder:validation:XValidation:rule="self.provider == 'velero' || self.sources.all(s, self.sources.exists_one(o, o.sourcePVC == s.sourcePVC))",message="sourcePVC must be unique across sources"
 type RestoreSpec struct {
 	// Provider is the backup tool that performs the restore.
 	Provider Provider `json:"provider"`
-	// Source is the backup to restore from.
-	Source RestoreSource `json:"source"`
-	// Target is the scratch volume to restore into.
-	Target RestoreTarget `json:"target"`
+	// Sources are the backups to restore from, each with its scratch volume.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=10
+	Sources []RestoreSource `json:"sources"`
 	// RestoreCheckRef is the RestoreCheck that checks the restored data.
 	RestoreCheckRef RestoreCheckRef `json:"restoreCheckRef"`
 	// RestoreWindow is the deadline for this attempt. It covers the restore, image pulls and the check.
@@ -119,10 +134,11 @@ type RestoreStatus struct {
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 	// Deadline is when the current attempt times out.
 	Deadline *metav1.Time `json:"deadline,omitempty"`
-	// ProviderRef is the native object created by the provider.
-	ProviderRef *ProviderRef `json:"providerRef,omitempty"`
-	// ResolvedSize is the scratch size resolved on the first reconcile. Later reconciles reuse it.
-	ResolvedSize *resource.Quantity `json:"resolvedSize,omitempty"`
+	// ProviderRefs are the native objects created by the provider.
+	ProviderRefs []ProviderRef `json:"providerRefs,omitempty"`
+	// ResolvedSizes maps each sourcePVC to the scratch size resolved on the first reconcile. Later reconciles reuse it.
+	// Velero uses the empty key.
+	ResolvedSizes map[string]resource.Quantity `json:"resolvedSizes,omitempty"`
 	// Message is a human-readable detail about the current phase.
 	Message string `json:"message,omitempty"`
 	// Conditions are the latest observations of the restore state.

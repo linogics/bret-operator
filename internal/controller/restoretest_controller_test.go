@@ -42,8 +42,12 @@ var _ = Describe("RestoreTest Controller", func() {
 						Namespace: testNamespace,
 					},
 					Spec: restorev1alpha1.RestoreTestSpec{
-						Provider:        restorev1alpha1.ProviderVelero,
-						BackupSelector:  restorev1alpha1.BackupSelector{Name: testBackupName},
+						Provider: restorev1alpha1.ProviderVelero,
+						Sources: []restorev1alpha1.RestoreTestSource{{
+							SourcePVC:      testDataName,
+							BackupSelector: restorev1alpha1.BackupSelector{Name: testBackupName},
+							RestoreTarget:  restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
+						}},
 						RestoreCheckRef: restorev1alpha1.RestoreCheckRef{Name: testCheckName},
 						RestoreWindow:   metav1.Duration{Duration: 45 * time.Minute},
 					},

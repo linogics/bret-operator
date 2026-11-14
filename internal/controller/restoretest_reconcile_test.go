@@ -77,10 +77,13 @@ func newRestoreTestObject() *restorev1alpha1.RestoreTest {
 	return &restorev1alpha1.RestoreTest{
 		ObjectMeta: metav1.ObjectMeta{Name: "t1", Namespace: testNamespace},
 		Spec: restorev1alpha1.RestoreTestSpec{
-			Provider:        restorev1alpha1.ProviderKopiur,
-			BackupSelector:  restorev1alpha1.BackupSelector{Name: "b1"},
+			Provider: restorev1alpha1.ProviderKopiur,
+			Sources: []restorev1alpha1.RestoreTestSource{{
+				SourcePVC:      testDataName,
+				BackupSelector: restorev1alpha1.BackupSelector{Name: "b1"},
+				RestoreTarget:  restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
+			}},
 			RestoreCheckRef: restorev1alpha1.RestoreCheckRef{Name: testApp},
-			Target:          restorev1alpha1.RestoreTarget{Size: quantityPtr("1Gi")},
 			RestoreWindow:   metav1.Duration{Duration: 45 * time.Minute},
 			OverlapPolicy:   restorev1alpha1.OverlapPolicySkip,
 		},
@@ -241,7 +244,7 @@ func TestRestoreTestCronCreatesRestore(t *testing.T) {
 		t.Errorf("restore name = %q, want t1-<id>-a1", restores[0].Name)
 	}
 
-	if got := restores[0].Spec.Source.BackupRef.Name; got != "b1" {
+	if got := restores[0].Spec.Sources[0].BackupRef.Name; got != "b1" {
 		t.Errorf("backupRef name = %q, want b1", got)
 	}
 
@@ -253,7 +256,7 @@ func TestRestoreTestCronCreatesRestore(t *testing.T) {
 
 func TestRestoreTestAfterBackupOneRunPerSnapshot(t *testing.T) {
 	test := newRestoreTestObject()
-	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
+	test.Spec.Sources[0].BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
 	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
 	test.Spec.OverlapPolicy = restorev1alpha1.OverlapPolicyQueue
 
@@ -288,7 +291,7 @@ func TestRestoreTestAfterBackupOneRunPerSnapshot(t *testing.T) {
 	}
 
 	last := f.test().Status.LastHandled
-	if last == nil || last.Name != "b" {
+	if len(last) != 1 || last[0].Name != "b" || last[0].SourcePVC != testDataName {
 		t.Errorf("lastHandled = %v, want b", last)
 	}
 }
@@ -362,8 +365,8 @@ func TestRestoreTestQueueStartsPendingRunAfterCurrent(t *testing.T) {
 		t.Fatalf("restores while queued = %d, want 1", n)
 	}
 
-	if got := f.test().Status.PendingRun; got != "b1" {
-		t.Fatalf("pendingRun = %q, want b1", got)
+	if got := f.test().Status.PendingBackups[testDataName]; got != "b1" {
+		t.Fatalf("pendingBackups = %q, want b1", got)
 	}
 
 	f.finishRunning(restorev1alpha1.RestorePhaseSucceeded)
@@ -373,8 +376,8 @@ func TestRestoreTestQueueStartsPendingRunAfterCurrent(t *testing.T) {
 		t.Fatalf("restores after current run ended = %d, want 2", n)
 	}
 
-	if got := f.test().Status.PendingRun; got != "" {
-		t.Errorf("pendingRun = %q, want empty", got)
+	if got := f.test().Status.PendingBackups[testDataName]; got != "" {
+		t.Errorf("pendingBackups = %q, want empty", got)
 	}
 }
 
@@ -452,7 +455,7 @@ func TestRestoreTestRetryAfterBackoffOnly(t *testing.T) {
 
 func TestRestoreTestTargetMissing(t *testing.T) {
 	test := newRestoreTestObject()
-	test.Spec.Target = restorev1alpha1.RestoreTarget{}
+	test.Spec.Sources[0].RestoreTarget = restorev1alpha1.RestoreTarget{}
 	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
 
 	f := newRestoreTestFixture(t, test)
@@ -472,7 +475,7 @@ func TestRestoreTestTargetMissing(t *testing.T) {
 func TestRestoreTestAfterBackupIgnoresBackupsBeforeCreation(t *testing.T) {
 	test := newRestoreTestObject()
 	test.CreationTimestamp = metav1.NewTime(time.Date(2026, 11, 15, 10, 5, 0, 0, time.UTC))
-	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
+	test.Spec.Sources[0].BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
 	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
 
 	pg := map[string]string{testLabelKey: testLabelValue}
@@ -491,14 +494,14 @@ func TestRestoreTestAfterBackupIgnoresBackupsBeforeCreation(t *testing.T) {
 		t.Fatalf("restores = %d, want 1 (only the backup after creation)", len(restores))
 	}
 
-	if got := restores[0].Spec.Source.BackupRef.Name; got != "new" {
+	if got := restores[0].Spec.Sources[0].BackupRef.Name; got != "new" {
 		t.Errorf("restore source = %q, want new", got)
 	}
 }
 
 func TestRestoreTestKopiurDisabled(t *testing.T) {
 	test := newRestoreTestObject()
-	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
+	test.Spec.Sources[0].BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
 	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
 
 	snap := newSnapshot("a", map[string]string{testLabelKey: testLabelValue}, "Succeeded",
@@ -588,7 +591,7 @@ func TestRestoreTestQueuedRunIsIdempotent(t *testing.T) {
 
 func TestRestoreTestBackupNotFoundRequeues(t *testing.T) {
 	test := newRestoreTestObject()
-	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: "x"}}
+	test.Spec.Sources[0].BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: "x"}}
 	test.Spec.Triggers = &restorev1alpha1.Triggers{Cron: testHourlyCron}
 	other := newSnapshot("other", map[string]string{testLabelKey: "y"}, "Succeeded", testStart)
 

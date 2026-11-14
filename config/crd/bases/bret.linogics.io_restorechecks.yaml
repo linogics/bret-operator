@@ -3847,14 +3847,9 @@ spec:
                 description: PriorityClassName is the priority class of the check
                   pod.
                 type: string
-              restoreMount:
-                description: RestoreMount is the mount path of the single restored
-                  volume in every container.
-                type: string
               restoredVolumes:
-                description: |-
-                  RestoredVolumes lists the restored volumes, each with its own mount path. In v1 the operator
-                  accepts one entry only. Checks with more entries are rejected with ProviderUnsupported.
+                description: RestoredVolumes lists the restored volumes, each with
+                  its own mount path.
                 items:
                   description: RestoredVolume maps one restored PVC to a mount path
                     in the check pod.
@@ -3862,21 +3857,23 @@ spec:
                     mountPath:
                       description: MountPath is where the restored volume is mounted
                         in every container.
-                      type: string
-                    name:
-                      description: Name is the name of the restored volume entry.
+                      minLength: 1
                       type: string
                     sourcePVC:
                       description: SourcePVC is the name of the PVC in the backed-up
                         namespace that this volume restores.
-                      minLength: 1
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string
                   required:
                   - mountPath
-                  - name
                   - sourcePVC
                   type: object
+                minItems: 1
                 type: array
+                x-kubernetes-list-map-keys:
+                - sourcePVC
+                x-kubernetes-list-type: map
               runtimeClassName:
                 description: RuntimeClassName is the runtime class of the check pod.
                 type: string
@@ -5977,10 +5974,8 @@ spec:
                 type: array
             required:
             - containers
+            - restoredVolumes
             type: object
-            x-kubernetes-validations:
-            - message: exactly one of restoreMount or restoredVolumes must be set
-              rule: has(self.restoreMount) != has(self.restoredVolumes)
           status:
             description: Status is the observed state of the check.
             properties:

@@ -36,7 +36,7 @@ func (c *countingReader) Get(ctx context.Context, key client.ObjectKey, obj clie
 
 func TestSourceSizeIsResolvedOnce(t *testing.T) {
 	restore := newTestRestore()
-	restore.Spec.Target.Size = nil
+	restore.Spec.Sources[0].Size = nil
 	c, r := fakeRestoreClient(t, restore, newTestCheck(), kopiurSnapshotOfSize(2<<30))
 	counter := &countingReader{Reader: c}
 	r.APIReader = counter
@@ -50,8 +50,8 @@ func TestSourceSizeIsResolvedOnce(t *testing.T) {
 		t.Fatalf("snapshot read %d times, want 1", counter.snapshots)
 	}
 
-	if got := getRestore(t, c, key).Status.ResolvedSize; got == nil || got.Value() != (2<<30)*110/100 {
-		t.Fatalf("resolvedSize = %v", got)
+	if got, ok := getRestore(t, c, key).Status.ResolvedSizes[testDataName]; !ok || got.Value() != (2<<30)*110/100 {
+		t.Fatalf("resolvedSizes = %v", got)
 	}
 }
 
@@ -371,7 +371,7 @@ func TestPreUpgradeRestoreWithoutSizeFails(t *testing.T) {
 	deadline := metav1.NewTime(started.Add(time.Hour))
 	stored.Status = restorev1alpha1.RestoreStatus{
 		Phase: restorev1alpha1.RestorePhaseRunning, Attempt: 1, StartTime: &started, Deadline: &deadline,
-		ProviderRef: &restorev1alpha1.ProviderRef{Kind: "Restore", Name: "r1-kopiur", Namespace: testNamespace},
+		ProviderRefs: []restorev1alpha1.ProviderRef{{Kind: "Restore", Name: "r1-kopiur", Namespace: testNamespace}},
 	}
 
 	if err := c.Status().Update(context.Background(), stored); err != nil {

@@ -37,6 +37,18 @@ type BackupSelector struct {
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
+// RestoreTestSource is one volume a RestoreTest restores: the PVC, the backups to pick from, and the scratch target.
+type RestoreTestSource struct {
+	// SourcePVC is the name of the PVC in the backed-up namespace.
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	// +kubebuilder:validation:MaxLength=63
+	SourcePVC string `json:"sourcePVC"`
+	// BackupSelector chooses which backups the restore reads from.
+	BackupSelector BackupSelector `json:"backupSelector"`
+	// RestoreTarget is the scratch volume that each run restores into.
+	RestoreTarget `json:",inline"`
+}
+
 // RestoreCheckRef names the RestoreCheck used for the check.
 type RestoreCheckRef struct {
 	// Name is the name of the RestoreCheck in the same namespace.
@@ -77,12 +89,14 @@ type Retries struct {
 type RestoreTestSpec struct {
 	// Provider is the backup tool that performs the restores.
 	Provider Provider `json:"provider"`
-	// BackupSelector chooses which backups the restores read from.
-	BackupSelector BackupSelector `json:"backupSelector"`
+	// Sources are the volumes each run restores.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=10
+	// +listType=map
+	// +listMapKey=sourcePVC
+	Sources []RestoreTestSource `json:"sources"`
 	// RestoreCheckRef names the check to run against each restored volume.
 	RestoreCheckRef RestoreCheckRef `json:"restoreCheckRef"`
-	// Target is the scratch volume that each run restores into. It has the same meaning as Restore.spec.target.
-	Target RestoreTarget `json:"target,omitempty"`
 	// Triggers defines what starts a run.
 	Triggers *Triggers `json:"triggers,omitempty"`
 	// RestoreWindow is the deadline for each attempt.
@@ -111,6 +125,8 @@ type LastRun struct {
 
 // HandledBackup identifies the backup an afterBackup trigger used last.
 type HandledBackup struct {
+	// SourcePVC is the source this entry belongs to.
+	SourcePVC string `json:"sourcePVC"`
 	// Name is the backup name.
 	Name string `json:"name"`
 	// CreatedAt is the time the backup completed.
@@ -126,15 +142,17 @@ type RestoreTestStatus struct {
 	// NextRun is when the next cron run is scheduled.
 	NextRun *metav1.Time `json:"nextRun,omitempty"`
 	// LastHandled is the newest backup that an afterBackup trigger used. Only newer backups start a run.
-	LastHandled *HandledBackup `json:"lastHandled,omitempty"`
+	// +listType=map
+	// +listMapKey=sourcePVC
+	LastHandled []HandledBackup `json:"lastHandled,omitempty"`
 	// RetainedResources lists objects kept after a failed run. They help debugging.
 	RetainedResources []string `json:"retainedResources,omitempty"`
 	// CurrentRestore is the Restore of the run in progress. It is empty when no run is in progress.
 	CurrentRestore string `json:"currentRestore,omitempty"`
 	// RetryAt is when the next attempt of the run in progress is created.
 	RetryAt *metav1.Time `json:"retryAt,omitempty"`
-	// PendingRun is the backup of the queued run, which waits for the run in progress. It applies to overlap policy Queue.
-	PendingRun string `json:"pendingRun,omitempty"`
+	// PendingBackups maps each sourcePVC to the backup of the queued run, which waits for the run in progress. It applies to overlap policy Queue.
+	PendingBackups map[string]string `json:"pendingBackups,omitempty"`
 	// PendingRunSource is the trigger source of the queued run. It keeps the name of the queued Restore stable across reconciles.
 	PendingRunSource string `json:"pendingRunSource,omitempty"`
 	// LastRunNowValue is the last value of the run-now annotation that started a run.

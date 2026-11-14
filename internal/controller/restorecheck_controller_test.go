@@ -39,8 +39,8 @@ var _ = Describe("RestoreCheck Controller", func() {
 						Namespace: testNamespace,
 					},
 					Spec: restorev1alpha1.RestoreCheckSpec{
-						RestoreMount: "/restore",
-						Containers:   []corev1.Container{{Name: testCheckName, Image: testImage}},
+						RestoredVolumes: []restorev1alpha1.RestoredVolume{{SourcePVC: testDataName, MountPath: "/restore"}},
+						Containers:      []corev1.Container{{Name: testCheckName, Image: testImage}},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -73,30 +73,6 @@ var _ = Describe("RestoreCheck Controller", func() {
 			got := &restorev1alpha1.RestoreCheck{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, got)).To(Succeed())
 			Expect(meta.IsStatusConditionTrue(got.Status.Conditions, "Ready")).To(BeTrue())
-		})
-
-		It("should mark a check with two restoredVolumes as Invalid", func() {
-			got := &restorev1alpha1.RestoreCheck{}
-			Expect(k8sClient.Get(ctx, typeNamespacedName, got)).To(Succeed())
-
-			got.Spec.RestoreMount = ""
-			got.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{
-				{Name: "a", MountPath: "/a", SourcePVC: "pvc-a"},
-				{Name: "b", MountPath: "/b", SourcePVC: "pvc-b"},
-			}
-			Expect(k8sClient.Update(ctx, got)).To(Succeed())
-
-			controllerReconciler := &RestoreCheckReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
-
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(k8sClient.Get(ctx, typeNamespacedName, got)).To(Succeed())
-
-			ready := meta.FindStatusCondition(got.Status.Conditions, "Ready")
-			Expect(ready).NotTo(BeNil())
-			Expect(ready.Status).To(Equal(metav1.ConditionFalse))
-			Expect(ready.Reason).To(Equal("Invalid"))
 		})
 	})
 })

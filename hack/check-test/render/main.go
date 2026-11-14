@@ -123,16 +123,11 @@ func run(args []string) error {
 	return nil
 }
 
-// volumeKeys lists the keys the harness takes claims for. A restoreMount check uses "data".
-// A restoredVolumes check uses the entry names.
+// volumeKeys lists the keys the harness takes claims for. They are the restoredVolumes sourcePVC names.
 func volumeKeys(bp *restorev1alpha1.RestoreCheck) []string {
-	if bp.Spec.RestoreMount != "" {
-		return []string{"data"}
-	}
-
 	keys := make([]string, 0, len(bp.Spec.RestoredVolumes))
 	for _, v := range bp.Spec.RestoredVolumes {
-		keys = append(keys, v.Name)
+		keys = append(keys, v.SourcePVC)
 	}
 
 	return keys

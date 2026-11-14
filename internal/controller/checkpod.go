@@ -34,8 +34,8 @@ func dnsLabel(s string) string {
 
 // validateCheck rejects checks that this round cannot run.
 func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
-	if bp.Spec.RestoreMount == "" && len(bp.Spec.RestoredVolumes) == 0 {
-		return fmt.Errorf("check %s: restoreMount or restoredVolumes is required", bp.Name)
+	if len(bp.Spec.RestoredVolumes) == 0 {
+		return fmt.Errorf("check %s: restoredVolumes is required", bp.Name)
 	}
 
 	if bp.Annotations[allowHostPathAnnotation] == "true" {
@@ -47,15 +47,6 @@ func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
 			return fmt.Errorf("check %s: volume %q is a hostPath; set annotation %s=\"true\" to allow it",
 				bp.Name, v.Name, allowHostPathAnnotation)
 		}
-	}
-
-	return nil
-}
-
-// validateRestoredVolumes rejects checks with more than one restored volume. Providers restore one PVC.
-func validateRestoredVolumes(bp *restorev1alpha1.RestoreCheck) error {
-	if len(bp.Spec.RestoredVolumes) > 1 {
-		return fmt.Errorf("check %s: only one restoredVolumes entry is supported, got %d", bp.Name, len(bp.Spec.RestoredVolumes))
 	}
 
 	return nil
@@ -75,20 +66,12 @@ func buildCheckPod(
 	scratchClaims map[string]string,
 ) (*corev1.Pod, error) {
 	err := validateCheck(bp)
-	if err == nil {
-		err = validateRestoredVolumes(bp)
-	}
-
 	if err != nil {
 		return nil, err
 	}
 
 	spec := bp.Spec.DeepCopy()
-	volName, mountPath := restoredVolume, spec.RestoreMount
-
-	if len(spec.RestoredVolumes) > 0 {
-		volName, mountPath = spec.RestoredVolumes[0].Name, spec.RestoredVolumes[0].MountPath
-	}
+	volName, mountPath := restoredVolume, spec.RestoredVolumes[0].MountPath
 
 	volumes := []corev1.Volume{pvcVolume(volName, restoredClaim)}
 	mounts := []corev1.VolumeMount{{Name: volName, MountPath: mountPath}}

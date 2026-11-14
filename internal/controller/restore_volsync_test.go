@@ -144,7 +144,7 @@ func TestVolSyncRestoreIsRouted(t *testing.T) {
 
 func TestVolSyncRestoreSizeUnknownFails(t *testing.T) {
 	restore := volsyncTestRestore()
-	restore.Spec.Target.Size = nil
+	restore.Spec.Sources[0].Size = nil
 	c, r := fakeRestoreClient(t, restore, newTestCheck(), volsyncSource(), volsyncSecret()) // source PVC is missing
 
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
@@ -157,7 +157,7 @@ func TestVolSyncRestoreSizeUnknownFails(t *testing.T) {
 
 func TestVolSyncSourceInBackupNamespace(t *testing.T) {
 	restore := volsyncTestRestore()
-	restore.Spec.Source.BackupRef.Namespace = "backups"
+	restore.Spec.Sources[0].BackupRef.Namespace = "backups"
 
 	src := volsyncSource()
 	src.SetNamespace("backups")
