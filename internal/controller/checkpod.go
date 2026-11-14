@@ -20,13 +20,13 @@ const (
 
 var nonDNSLabelChars = regexp.MustCompile(`[^a-z0-9-]`)
 
-// dnsLabel mirrors dns() in hack/check-test/render.py. Names then match the rendered test pods.
+// dnsLabel turns s into a DNS label: lower case, only a-z, 0-9 and "-", at most 50 characters, no leading or trailing dash.
 func dnsLabel(s string) string {
 	s = nonDNSLabelChars.ReplaceAllString(strings.ToLower(s), "-")
 	s = strings.Trim(s, "-")
 
 	if len(s) > 50 {
-		s = s[:50]
+		s = strings.Trim(s[:50], "-")
 	}
 
 	return s
@@ -66,7 +66,7 @@ func checkPodName(restore *restorev1alpha1.Restore) string {
 	return restore.Name + "-check"
 }
 
-// buildCheckPod renders the check pod for one attempt. It works the same way as hack/check-test/render.py.
+// buildCheckPod renders the check pod for one attempt.
 // restoredClaim is mounted at restoreMount. scratchClaims maps scratch volume names to their PVC names.
 func buildCheckPod(
 	restore *restorev1alpha1.Restore,

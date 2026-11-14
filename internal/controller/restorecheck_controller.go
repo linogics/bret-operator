@@ -38,7 +38,12 @@ func (r *RestoreCheckReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		ObservedGeneration: check.Generation,
 	}
 
-	if err := validateCheck(check); err != nil {
+	err := validateCheck(check)
+	if err == nil {
+		err = validateRestoredVolumes(check)
+	}
+
+	if err != nil {
 		cond.Status = metav1.ConditionFalse
 		cond.Reason = "Invalid"
 		cond.Message = err.Error()

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -187,4 +188,14 @@ func pvcClaim(pod *corev1.Pod, volume string) string {
 	}
 
 	return ""
+}
+
+func TestDNSLabel(t *testing.T) {
+	for _, in := range []string{strings.Repeat("a", 49) + "-b", "_", "-x-", "My_App"} {
+		got := dnsLabel(in)
+
+		if len(got) > 50 || strings.HasPrefix(got, "-") || strings.HasSuffix(got, "-") {
+			t.Errorf("dnsLabel(%q) = %q, want at most 50 characters and no leading or trailing dash", in, got)
+		}
+	}
 }

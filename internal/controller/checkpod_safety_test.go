@@ -98,7 +98,7 @@ func TestCheckRejectsHostPathUnlessAllowed(t *testing.T) {
 		t.Fatalf("hostPath must be rejected by default")
 	}
 
-	bp.Annotations = map[string]string{allowHostPathAnnotation: "true"}
+	bp.Annotations = map[string]string{allowHostPathAnnotation: testTrue}
 
 	if err := validateCheck(bp); err != nil {
 		t.Fatalf("hostPath with the opt-in annotation must pass: %v", err)

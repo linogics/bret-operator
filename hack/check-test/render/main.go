@@ -5,6 +5,8 @@
 //	render CHECK.yaml --name POD [--ns NS] [--claims KEY=PVC ...]  print YAML
 //	render CHECK.yaml --list                                       print volume keys, one per line
 //	render CHECK.yaml --uid KEY                                    print the mover UID, or nothing
+//
+// KEY of --uid is ignored. The annotation key is always "data".
 package main
 
 import (
@@ -20,7 +22,8 @@ import (
 	"github.com/linogics/bret-operator/internal/controller"
 )
 
-const usage = "usage: render CHECK.yaml [--name POD] [--ns NS] [--claims KEY=PVC ...] [--list] [--uid KEY]"
+const usage = "usage: render CHECK.yaml [--name POD] [--ns NS] [--claims KEY=PVC ...] [--list] [--uid KEY]\n" +
+	"KEY of --uid is ignored, the annotation key is always data"
 
 type options struct {
 	check  string
@@ -28,7 +31,6 @@ type options struct {
 	ns     string
 	claims map[string]string
 	list   bool
-	uid    string
 	hasUID bool
 }
 
@@ -162,7 +164,7 @@ func parse(args []string) (options, error) {
 			case "--ns":
 				o.ns = args[i]
 			default:
-				o.uid, o.hasUID = args[i], true
+				o.hasUID = true
 			}
 		case "--claims":
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {

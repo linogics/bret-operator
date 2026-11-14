@@ -21,6 +21,7 @@ type RestoredVolume struct {
 type ScratchVolume struct {
 	// Name is the name of the scratch volume.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
 	Name string `json:"name"`
 	// MountPath is where the scratch volume is mounted in every container.
 	MountPath string `json:"mountPath"`
