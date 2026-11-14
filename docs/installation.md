@@ -60,6 +60,7 @@ The full table is in [charts/bret-operator/README.md](../charts/bret-operator/RE
 | `metrics.secure` | `true` | Keep it `true`. Scrapers need a token (see below). |
 | `resources` | requests 10m CPU / 64Mi memory; limits 500m CPU / 128Mi memory | Raise the memory limit when the cache grows with many objects. |
 | `extraArgs` | `[]` | You want more manager flags, for example `--zap-log-level=debug`. |
+| `pollInterval` | `30s` | A running attempt should be checked more or less often. Minimum `5s`. Each poll is one API read per running attempt. |
 
 Example values file:
 

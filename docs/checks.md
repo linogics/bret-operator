@@ -185,6 +185,22 @@ Rules:
 
 ## Pod security
 
+The operator sets safe defaults on every check pod. Any field you set yourself wins, so you can
+change a default when a check needs it:
+
+| Field | Default | Overwrite it with |
+|---|---|---|
+| `automountServiceAccountToken` (on the RestoreCheck) | `false` | `true` |
+| `securityContext.seccompProfile` (pod) | `RuntimeDefault` | any profile |
+| `securityContext.allowPrivilegeEscalation` (container) | `false` | `true` |
+| `securityContext.privileged` (container) | `false` | `true` |
+
+A `hostPath` volume is rejected unless the RestoreCheck has the annotation
+`bret.linogics.io/allow-host-path: "true"`. The Velero provider never allows it.
+
+Defaults do not drop Linux capabilities. Several checks run `chown` in an init container, and that
+needs `CAP_CHOWN`. A check that does not need capabilities can set `capabilities.drop: [ALL]`.
+
 Set `securityContext.runAsUser` on each container to the UID that the image runs as. Check the image
 with `docker run --rm <image> id`, or read the image's documentation.
 

@@ -10,7 +10,7 @@ controllers, so you can test today.
 
 | Script | Purpose |
 |---|---|
-| `render.py` | Turns a `RestoreCheck` into a check pod, the way the operator is meant to. Mounts restored volumes at their paths, creates scratch PVCs. |
+| `render.py` | Turns a `RestoreCheck` into a check pod. It runs the Go renderer in `hack/check-test/render`, which calls the operator's own code, so the pod is the same one the operator makes. |
 | `check.sh` | Runs one check pod against restored PVCs you name. Prints each container's exit code and the last logs. Exit 0 means pass. |
 | `roundtrip.sh` | Full test for one app: seed a source volume, back it up with Kopiur, restore it into `r-<volume>` PVCs, run the check. |
 | `seeds/<app>.yaml` | The seed for one app: source PVCs and a `seed` pod that writes the data and the canary. |
