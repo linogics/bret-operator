@@ -22,8 +22,9 @@ var (
 	}, []string{labelProvider, labelResult})
 
 	restoreDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "bret_restore_duration_seconds",
-		Help: "Duration of finished restore attempts by provider and result.",
+		Name:    "bret_restore_duration_seconds",
+		Help:    "Duration of finished restore attempts by provider and result.",
+		Buckets: prometheus.ExponentialBuckets(15, 2, 9), // 15s to 64m, covers the 45m default window
 	}, []string{labelProvider, labelResult})
 )
 

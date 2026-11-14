@@ -102,8 +102,8 @@ func kopiurPhase(obj *unstructured.Unstructured) string {
 	return phase
 }
 
-// moverUID is the UID that the mover writes the restored volume as.
-// The check annotation wins. Then the runAsUser of the first main container applies, as in hack/check-test/render.py.
+// MoverUID is the UID that the mover writes the restored volume as.
+// The check annotation wins. Then the runAsUser of the first main container applies.
 // Nil means unset.
 func MoverUID(bp *restorev1alpha1.RestoreCheck) (*int64, error) {
 	if raw := bp.Annotations[moverUIDAnnotation]; raw != "" {

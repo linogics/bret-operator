@@ -118,7 +118,6 @@ func (r *RestoreReconciler) reconcileVolSync(
 		if errors.Is(err, errRepositoryMissing) {
 			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
 			r.block(restore, reasonRepositoryMissing, err.Error())
-			recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
 
 			return ctrl.Result{}, nil
 		}

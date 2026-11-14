@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +22,10 @@ const retainedLabel = "bret.linogics.io/retained"
 func (r *RestoreReconciler) ensure(ctx context.Context, restore *restorev1alpha1.Restore, obj client.Object) (bool, error) {
 	err := r.getObject(ctx, obj)
 	if err == nil {
+		if obj.GetLabels()[restoreLabel] != restore.Name {
+			return false, fmt.Errorf("%T %s/%s exists and does not belong to restore %s", obj, obj.GetNamespace(), obj.GetName(), restore.Name)
+		}
+
 		return false, nil
 	}
 
@@ -92,6 +97,11 @@ func (r *RestoreReconciler) cleanupObject(ctx context.Context, obj client.Object
 	err := r.getObject(ctx, obj)
 	if err != nil {
 		return ignoreUncleanable(err)
+	}
+
+	// Cluster-scoped objects (the Velero scratch Namespace) are created by Velero and carry no label.
+	if _, ours := obj.GetLabels()[restoreLabel]; !ours && obj.GetNamespace() != "" {
+		return nil
 	}
 
 	if !keep {

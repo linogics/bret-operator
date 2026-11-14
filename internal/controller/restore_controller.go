@@ -46,7 +46,7 @@ const (
 // Owner references cannot reach the objects outside the Restore namespace.
 const cleanupFinalizer = "bret.linogics.io/cleanup"
 
-// RestoreReconciler reconciles a Restore object. One attempt restores with Kopiur and runs the check.
+// RestoreReconciler reconciles a Restore object. One attempt restores with Kopiur, Velero or VolSync and runs the check.
 type RestoreReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
@@ -102,12 +102,19 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		err    error
 	)
 
-	if !isTerminal(restore.Status.Phase) {
+	wasTerminal := isTerminal(restore.Status.Phase)
+
+	if !wasTerminal {
 		result, err = r.advance(ctx, restore)
 	}
 
 	if statusErr := r.Status().Update(ctx, restore); statusErr != nil {
 		return ctrl.Result{}, errors.Join(err, statusErr)
+	}
+
+	// Count after the status is stored, so a failed update does not count the run twice.
+	if !wasTerminal && isTerminal(restore.Status.Phase) {
+		recordRestoreRun(restore, restore.Status.Phase)
 	}
 
 	// Cleanup runs after the terminal status is stored, so a failed cleanup is retried
@@ -139,7 +146,19 @@ func (r *RestoreReconciler) finalize(ctx context.Context, restore *restorev1alph
 // advance runs one step of the attempt and reports how the reconciler should be requeued.
 func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha1.Restore) (ctrl.Result, error) {
 	if !r.providerEnabled(restore.Spec.Provider) {
-		r.block(restore, reasonProviderUnsupported, fmt.Sprintf("provider %s is not supported yet", restore.Spec.Provider))
+		r.block(restore, reasonProviderUnsupported, fmt.Sprintf("provider %s is disabled or not supported", restore.Spec.Provider))
+
+		return ctrl.Result{}, nil
+	}
+
+	if restore.Status.StartTime == nil {
+		startAttempt(restore, time.Now())
+
+		return ctrl.Result{RequeueAfter: time.Second}, nil
+	}
+
+	if restore.Status.Deadline != nil && !time.Now().Before(restore.Status.Deadline.Time) {
+		r.finish(restore, restorev1alpha1.RestorePhaseCanceled, reasonRestoreCanceled, "restore window expired")
 
 		return ctrl.Result{}, nil
 	}
@@ -161,7 +180,6 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 	if err != nil {
 		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
 		r.block(restore, reasonProviderUnsupported, err.Error())
-		recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
 
 		return ctrl.Result{}, nil
 	}
@@ -170,14 +188,13 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 	if err != nil {
 		r.block(restore, reasonCheckUnsupported, err.Error())
 
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
 		if err = validateVeleroCheck(bp); err != nil {
 			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
 			r.block(restore, reasonProviderUnsupported, err.Error())
-			recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
 
 			return ctrl.Result{}, nil
 		}
@@ -187,25 +204,13 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 	if err != nil {
 		r.block(restore, reasonCheckUnsupported, err.Error())
 
-		return ctrl.Result{}, nil
-	}
-
-	if restore.Status.StartTime == nil {
-		startAttempt(restore, time.Now())
-
-		return ctrl.Result{RequeueAfter: time.Second}, nil
-	}
-
-	if restore.Status.Deadline != nil && !time.Now().Before(restore.Status.Deadline.Time) {
-		r.finish(restore, restorev1alpha1.RestorePhaseCanceled, reasonRestoreCanceled, "restore window expired")
-
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
 
 	return r.progress(ctx, restore, bp, uid)
 }
 
-// progress creates the claims and the Kopiur Restore, then runs the check once Kopiur completes.
+// progress creates the claims and the provider restore (Kopiur, Velero or VolSync), then runs the check once it completes.
 func (r *RestoreReconciler) progress(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
@@ -226,7 +231,6 @@ func (r *RestoreReconciler) progress(
 
 		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
 		r.block(restore, reason, err.Error())
-		recordRestoreRun(restore, restorev1alpha1.RestorePhaseFailed)
 
 		return ctrl.Result{}, nil
 	}
@@ -413,7 +417,6 @@ func (r *RestoreReconciler) finish(
 
 	setReady(restore, status, string(phase), msg)
 	r.Recorder.Event(restore, eventType, reason, msg)
-	recordRestoreRun(restore, phase)
 }
 
 // block sets Ready=False with a reason and emits a warning event when the reason changes.

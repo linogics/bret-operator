@@ -2,11 +2,13 @@ package controller
 
 import (
 	"context"
+	stderrors "errors"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -17,6 +19,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -330,5 +333,186 @@ func TestRestoreSizeAutoExpand(t *testing.T) {
 	got := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 	if want := resource.MustParse("5Gi"); got.Cmp(want) != 0 {
 		t.Errorf("PVC size %s, want 5Gi", got.String())
+	}
+}
+
+func foreignCheckPod(restore *restorev1alpha1.Restore) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: checkPodName(restore), Namespace: restore.Namespace},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "x", Image: "x"}}},
+		Status:     corev1.PodStatus{Phase: corev1.PodSucceeded},
+	}
+}
+
+func TestEnsureRejectsForeignObject(t *testing.T) {
+	ctx := context.Background()
+	restore := newTestRestore()
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), foreignCheckPod(restore))
+	key := client.ObjectKeyFromObject(restore)
+
+	reconcileRestore(t, r, key)
+	reconcileRestore(t, r, key)
+
+	kopiur := kopiurStub(restore)
+	if err := c.Get(ctx, client.ObjectKeyFromObject(kopiur), kopiur); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := unstructured.SetNestedField(kopiur.Object, kopiurPhaseCompleted, "status", "phase"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Update(ctx, kopiur); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key}); err == nil {
+		t.Fatal("reconcile accepted a check pod that the operator did not create")
+	}
+
+	if got := getRestore(t, c, key).Status.Phase; got == restorev1alpha1.RestorePhaseSucceeded {
+		t.Errorf("phase = %q, foreign pod must not decide the result", got)
+	}
+}
+
+func TestCleanupSkipsForeignObject(t *testing.T) {
+	ctx := context.Background()
+	restore := newTestRestore()
+	c, r := fakeRestoreClient(t, restore, newTestCheck(), foreignCheckPod(restore))
+	key := client.ObjectKeyFromObject(restore)
+
+	reconcileRestore(t, r, key)
+
+	if err := c.Delete(ctx, getRestore(t, c, key)); err != nil {
+		t.Fatal(err)
+	}
+
+	reconcileRestore(t, r, key)
+
+	if err := c.Get(ctx, key, &restorev1alpha1.Restore{}); !errors.IsNotFound(err) {
+		t.Fatalf("restore not released: %v", err)
+	}
+
+	pod := foreignCheckPod(restore)
+	if err := c.Get(ctx, client.ObjectKeyFromObject(pod), pod); err != nil {
+		t.Errorf("foreign pod was deleted by cleanup: %v", err)
+	}
+}
+
+func TestRestoreCheckUnsupportedRequeues(t *testing.T) {
+	ctx := context.Background()
+	restore := newTestRestore()
+	check := newTestCheck()
+	check.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/"}}}}
+
+	c, r := fakeRestoreClient(t, restore, check)
+	key := client.ObjectKeyFromObject(restore)
+
+	reconcileRestore(t, r, key)
+
+	res, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res.RequeueAfter != r.pollInterval() {
+		t.Errorf("RequeueAfter = %v, want %v", res.RequeueAfter, r.pollInterval())
+	}
+
+	if got := readyReason(getRestore(t, c, key)); got != reasonCheckUnsupported {
+		t.Fatalf("reason = %q, want %s", got, reasonCheckUnsupported)
+	}
+
+	stored := &restorev1alpha1.RestoreCheck{}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(check), stored); err != nil {
+		t.Fatal(err)
+	}
+
+	stored.Annotations = map[string]string{allowHostPathAnnotation: testTrue}
+	if err := c.Update(ctx, stored); err != nil {
+		t.Fatal(err)
+	}
+
+	reconcileRestore(t, r, key)
+
+	if got := getRestore(t, c, key).Status.Phase; got != restorev1alpha1.RestorePhaseRunning {
+		t.Errorf("phase = %q, want Running after the annotation", got)
+	}
+}
+
+func TestRestoreWindowCancelsWithoutCheck(t *testing.T) {
+	ctx := context.Background()
+	restore := newTestRestore()
+	c, r := fakeRestoreClient(t, restore)
+	key := client.ObjectKeyFromObject(restore)
+
+	started := metav1.NewTime(time.Now().Add(-2 * time.Hour))
+	deadline := metav1.NewTime(started.Add(45 * time.Minute))
+
+	stored := getRestore(t, c, key)
+	stored.Status = restorev1alpha1.RestoreStatus{
+		Phase:     restorev1alpha1.RestorePhasePending,
+		Attempt:   1,
+		StartTime: &started,
+		Deadline:  &deadline,
+	}
+
+	if err := c.Status().Update(ctx, stored); err != nil {
+		t.Fatal(err)
+	}
+
+	reconcileRestore(t, r, key)
+
+	if got := getRestore(t, c, key).Status.Phase; got != restorev1alpha1.RestorePhaseCanceled {
+		t.Errorf("phase = %q, want Canceled", got)
+	}
+}
+
+func TestRestoreRunCountedOnce(t *testing.T) {
+	ctx := context.Background()
+	restore := newTestRestore()
+	c, r := fakeRestoreClient(t, restore, newTestCheck())
+	key := client.ObjectKeyFromObject(restore)
+
+	started := metav1.NewTime(time.Now().Add(-2 * time.Hour))
+	deadline := metav1.NewTime(started.Add(45 * time.Minute))
+
+	stored := getRestore(t, c, key)
+	stored.Status = restorev1alpha1.RestoreStatus{
+		Phase:     restorev1alpha1.RestorePhaseRunning,
+		Attempt:   1,
+		StartTime: &started,
+		Deadline:  &deadline,
+	}
+
+	if err := c.Status().Update(ctx, stored); err != nil {
+		t.Fatal(err)
+	}
+
+	fail := true
+	r.Client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+		SubResourceUpdate: func(ctx context.Context, cl client.Client, sub string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+			if _, ok := obj.(*restorev1alpha1.Restore); ok && fail {
+				fail = false
+
+				return stderrors.New("conflict (simulated)")
+			}
+
+			return cl.SubResource(sub).Update(ctx, obj, opts...)
+		},
+	})
+
+	counter := restoreRuns.WithLabelValues(string(restorev1alpha1.ProviderKopiur), "canceled")
+	before := testutil.ToFloat64(counter)
+
+	if _, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key}); err == nil {
+		t.Fatal("first reconcile: want status update error")
+	}
+
+	reconcileRestore(t, r, key)
+	reconcileRestore(t, r, key)
+
+	if got := testutil.ToFloat64(counter) - before; got != 1 {
+		t.Errorf("runs counted = %v, want 1", got)
 	}
 }

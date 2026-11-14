@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -123,7 +124,13 @@ func TestVeleroSourceSize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body := pvcTarGz(t, tt.files)
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+
+			var served, closeAsked atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				served.Store(true)
+				closeAsked.Store(req.Close)
+
 				if tt.status != 200 {
 					w.WriteHeader(tt.status)
 
@@ -173,6 +180,10 @@ func TestVeleroSourceSize(t *testing.T) {
 
 			if err := c.List(context.Background(), left); err != nil || len(left.Items) != 0 {
 				t.Fatalf("DownloadRequest not deleted: %v %d", err, len(left.Items))
+			}
+
+			if served.Load() && !closeAsked.Load() {
+				t.Error("download request does not ask to close the connection")
 			}
 		})
 	}
@@ -290,7 +301,7 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 				t.Fatalf("scratch namespace present=%v, want %v (%v)", err == nil, tt.wantNS, err)
 			}
 
-			if tt.wantNS && scratch.Labels[retainedLabel] != "true" {
+			if tt.wantNS && scratch.Labels[retainedLabel] != testTrue {
 				t.Fatalf("kept namespace not labelled retained: %v", scratch.Labels)
 			}
 
@@ -319,10 +330,18 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 		}, "imagePullSecrets"},
 		{"configmap volume", func(bp *restorev1alpha1.RestoreCheck) {
 			bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{}}}}
-		}, "volumes"},
+		}, testVolumes},
 		{"secret volume", func(bp *restorev1alpha1.RestoreCheck) {
 			bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{}}}}
-		}, "volumes"},
+		}, testVolumes},
+		{"projected volume", func(bp *restorev1alpha1.RestoreCheck) {
+			bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{}}}}
+		}, testVolumes},
+		{"pvc volume", func(bp *restorev1alpha1.RestoreCheck) {
+			bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "c"},
+			}}}
+		}, testVolumes},
 		{"clean", func(*restorev1alpha1.RestoreCheck) {}, ""},
 	}
 

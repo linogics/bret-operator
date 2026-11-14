@@ -107,8 +107,8 @@ func validateVeleroCheck(bp *restorev1alpha1.RestoreCheck) error {
 	for i := range bp.Spec.Volumes {
 		v := bp.Spec.Volumes[i]
 
-		if v.ConfigMap != nil || v.Secret != nil {
-			return fmt.Errorf("check %s: volumes[%d] %q uses a configMap or secret, not supported with Velero", bp.Name, i, v.Name)
+		if v.ConfigMap != nil || v.Secret != nil || v.Projected != nil || v.PersistentVolumeClaim != nil {
+			return fmt.Errorf("check %s: volumes[%d] %q uses a configMap, secret, projected or persistentVolumeClaim volume, not supported with Velero", bp.Name, i, v.Name)
 		}
 
 		if v.HostPath != nil {
@@ -399,7 +399,7 @@ func fetchPVCSizes(ctx context.Context, url, namespace string) (_ map[string]res
 	}
 
 	// DisableCompression keeps the body as the gzip archive it is.
-	c := &http.Client{Timeout: veleroHTTPTimeout, Transport: &http.Transport{DisableCompression: true}}
+	c := &http.Client{Timeout: veleroHTTPTimeout, Transport: &http.Transport{DisableCompression: true, DisableKeepAlives: true, Proxy: http.ProxyFromEnvironment}}
 
 	resp, err := c.Do(req)
 	if err != nil {
