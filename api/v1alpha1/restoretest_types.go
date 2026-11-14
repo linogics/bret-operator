@@ -135,6 +135,8 @@ type RestoreTestStatus struct {
 	RetryAt *metav1.Time `json:"retryAt,omitempty"`
 	// PendingRun is the backup of the queued run, which waits for the run in progress. It applies to overlap policy Queue.
 	PendingRun string `json:"pendingRun,omitempty"`
+	// PendingRunSource is the trigger source of the queued run. It keeps the name of the queued Restore stable across reconciles.
+	PendingRunSource string `json:"pendingRunSource,omitempty"`
 	// LastRunNowValue is the last value of the run-now annotation that started a run.
 	LastRunNowValue string `json:"lastRunNowValue,omitempty"`
 	// Conditions are the latest observations of the test state.
@@ -146,6 +148,7 @@ type RestoreTestStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=rtest
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) <= 50",message="name must be at most 50 characters"
 // +kubebuilder:printcolumn:name="Provider",type=string,JSONPath=`.spec.provider`
 // +kubebuilder:printcolumn:name="Last",type=string,JSONPath=`.status.lastRun.result`
 // +kubebuilder:printcolumn:name="Next",type=date,JSONPath=`.status.nextRun`

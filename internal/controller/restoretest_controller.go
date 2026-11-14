@@ -44,6 +44,7 @@ const (
 	reasonRunning        = "Running"
 	reasonTargetMissing  = "TargetMissing"
 	reasonBackupNotFound = "BackupNotFound"
+	reasonInvalidCron    = "InvalidCron"
 )
 
 // snapshotGVK is the Kopiur Snapshot kind. It is used as unstructured, so Kopiur is not a Go dependency.
@@ -166,7 +167,14 @@ func (r *RestoreTestReconciler) currentRestore(ctx context.Context, test *restor
 
 	restore := &restorev1alpha1.Restore{}
 
-	err := r.Get(ctx, client.ObjectKey{Namespace: test.Namespace, Name: test.Status.CurrentRestore}, restore)
+	key := client.ObjectKey{Namespace: test.Namespace, Name: test.Status.CurrentRestore}
+
+	err := r.Get(ctx, key, restore)
+	if apierrors.IsNotFound(err) {
+		// The cache can lag behind a Restore created in the last reconcile. Ask the API before dropping the run.
+		err = r.reader().Get(ctx, key, restore)
+	}
+
 	if apierrors.IsNotFound(err) {
 		test.Status.CurrentRestore = ""
 		test.Status.RetryAt = nil
@@ -285,12 +293,21 @@ func (r *RestoreTestReconciler) retry(
 // runTriggers starts the queued run when no run is in progress, then handles one due trigger.
 func (r *RestoreTestReconciler) runTriggers(ctx context.Context, test *restorev1alpha1.RestoreTest) (ctrl.Result, error) {
 	if test.Status.CurrentRestore == "" && test.Status.PendingRun != "" {
-		started, err := r.start(ctx, test, "queued-"+r.now().UTC().Format(time.RFC3339Nano), test.Status.PendingRun)
-		if err != nil || !started {
+		started, err := r.start(ctx, test, test.Status.PendingRunSource, test.Status.PendingRun)
+		if err != nil {
 			return ctrl.Result{}, err
 		}
 
+		if !started {
+			if testReadyReason(test) == reasonBackupNotFound {
+				return ctrl.Result{RequeueAfter: snapshotPollInterval}, nil
+			}
+
+			return ctrl.Result{}, nil
+		}
+
 		test.Status.PendingRun = ""
+		test.Status.PendingRunSource = ""
 
 		return ctrl.Result{}, nil
 	}
@@ -305,8 +322,16 @@ func (r *RestoreTestReconciler) runTriggers(ctx context.Context, test *restorev1
 	}
 
 	handled, err := r.handle(ctx, test, trig)
-	if err != nil || !handled {
+	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	if !handled {
+		if testReadyReason(test) == reasonBackupNotFound {
+			return ctrl.Result{RequeueAfter: snapshotPollInterval}, nil
+		}
+
+		return ctrl.Result{}, nil
 	}
 
 	// Another trigger may be due. Check again right away.
@@ -316,6 +341,10 @@ func (r *RestoreTestReconciler) runTriggers(ctx context.Context, test *restorev1
 // nextTrigger returns the first due trigger, or nil. It also returns how long to wait for the next one, zero for none.
 func (r *RestoreTestReconciler) nextTrigger(ctx context.Context, test *restorev1alpha1.RestoreTest) (*trigger, time.Duration, error) {
 	triggers := test.Spec.Triggers
+	if triggers == nil || triggers.Cron == "" {
+		test.Status.NextRun = nil
+	}
+
 	if triggers == nil {
 		return nil, 0, nil
 	}
@@ -335,11 +364,15 @@ func (r *RestoreTestReconciler) nextTrigger(ctx context.Context, test *restorev1
 	if triggers.Cron != "" {
 		schedule, err := cron.ParseStandard(triggers.Cron)
 		if err != nil {
-			return nil, 0, fmt.Errorf("parse cron %q: %w", triggers.Cron, err)
+			r.blockTest(test, reasonInvalidCron, fmt.Sprintf("parse cron %q: %v", triggers.Cron, err))
+
+			return nil, 0, nil
 		}
 
-		if test.Status.NextRun == nil {
-			next := metav1.NewTime(schedule.Next(now.UTC()))
+		next := metav1.NewTime(schedule.Next(now.UTC()))
+
+		stale := test.Status.NextRun != nil && now.Before(test.Status.NextRun.Time) && !next.Time.Equal(test.Status.NextRun.Time)
+		if test.Status.NextRun == nil || stale {
 			test.Status.NextRun = &next
 		}
 
@@ -475,6 +508,7 @@ func (r *RestoreTestReconciler) queue(ctx context.Context, test *restorev1alpha1
 	}
 
 	test.Status.PendingRun = backup
+	test.Status.PendingRunSource = "queued-" + trig.source
 
 	trig.consume()
 
@@ -487,18 +521,29 @@ func (r *RestoreTestReconciler) replace(ctx context.Context, test *restorev1alph
 		return false, nil
 	}
 
-	old := &restorev1alpha1.Restore{ObjectMeta: metav1.ObjectMeta{Name: test.Status.CurrentRestore, Namespace: test.Namespace}}
+	old := &restorev1alpha1.Restore{}
 
-	err := client.IgnoreNotFound(r.Delete(ctx, old))
-	if err != nil {
+	err := r.Get(ctx, client.ObjectKey{Namespace: test.Namespace, Name: test.Status.CurrentRestore}, old)
+	if client.IgnoreNotFound(err) != nil {
 		return false, err
 	}
 
-	r.Recorder.Event(test, corev1.EventTypeNormal, reasonRunReplaced, "replaced run "+old.Name+" with "+trig.source)
+	if err == nil {
+		if err = r.deleteEarlierAttempts(ctx, test, old); err != nil {
+			return false, err
+		}
+
+		if err = client.IgnoreNotFound(r.Delete(ctx, old)); err != nil {
+			return false, err
+		}
+	}
+
+	r.Recorder.Event(test, corev1.EventTypeNormal, reasonRunReplaced, "replaced run "+test.Status.CurrentRestore+" with "+trig.source)
 
 	test.Status.CurrentRestore = ""
 	test.Status.RetryAt = nil
 	test.Status.PendingRun = ""
+	test.Status.PendingRunSource = ""
 
 	started, err := r.start(ctx, test, trig.source, trig.backup)
 	if err != nil || !started {
@@ -527,7 +572,7 @@ func (r *RestoreTestReconciler) start(ctx context.Context, test *restorev1alpha1
 		return false, nil
 	}
 
-	err = r.createRestore(ctx, test, runID(source), name, 1)
+	err = r.createRestore(ctx, test, startRunID(test, source), name, 1)
 	if err != nil {
 		return false, err
 	}
@@ -738,6 +783,16 @@ func runID(source string) string {
 	return hex.EncodeToString(sum[:4])
 }
 
+// startRunID is runID of the source and the time of the last finished run. A source that comes back later
+// gets a new name. While a run is starting, LastRun does not change, so the name stays stable.
+func startRunID(test *restorev1alpha1.RestoreTest, source string) string {
+	if test.Status.LastRun == nil {
+		return runID(source)
+	}
+
+	return runID(source + "@" + test.Status.LastRun.Time.UTC().Format(time.RFC3339))
+}
+
 // earliest returns the shorter of two waits, where zero means no wait is needed.
 func earliest(a, b time.Duration) time.Duration {
 	if a == 0 || (b != 0 && b < a) {
@@ -755,7 +810,7 @@ func (r *RestoreTestReconciler) now() time.Time {
 	return time.Now()
 }
 
-// reader reads Kopiur Snapshots through the API reader when one is set. It starts no informer for them.
+// reader reads through the API reader when one is set, so it starts no informer. It is used for Kopiur Snapshots and cache-miss lookups.
 func (r *RestoreTestReconciler) reader() client.Reader {
 	if r.APIReader != nil {
 		return r.APIReader

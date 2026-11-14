@@ -2,20 +2,24 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
@@ -207,7 +211,7 @@ func newSnapshot(name string, labels map[string]string, phase string, ready time
 
 func TestRestoreTestCronCreatesRestore(t *testing.T) {
 	test := newRestoreTestObject()
-	test.Spec.Triggers = &restorev1alpha1.Triggers{Cron: "0 * * * *"}
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Cron: testHourlyCron}
 
 	f := newRestoreTestFixture(t, test)
 
@@ -542,5 +546,230 @@ func TestWatermarkTieBreaksOnName(t *testing.T) {
 		if got := isNewerThanWatermark(tt.b, tt.wm); got != tt.want {
 			t.Errorf("%s: got %v, want %v", tt.name, got, tt.want)
 		}
+	}
+}
+
+func TestRestoreTestQueuedRunIsIdempotent(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+	test.Spec.OverlapPolicy = restorev1alpha1.OverlapPolicyQueue
+
+	f := newRestoreTestFixture(t, test)
+	f.setRunNow("n1")
+	f.run()
+	f.setRunNow("n2")
+	f.run()
+	f.finishRunning(restorev1alpha1.RestorePhaseSucceeded)
+
+	fail := true
+	f.r.Client = interceptor.NewClient(f.c.(client.WithWatch), interceptor.Funcs{
+		SubResourceUpdate: func(ctx context.Context, c client.Client, sub string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+			if _, ok := obj.(*restorev1alpha1.RestoreTest); ok && fail {
+				fail = false
+
+				return errors.New("conflict (simulated)")
+			}
+
+			return c.SubResource(sub).Update(ctx, obj, opts...)
+		},
+	})
+
+	if _, err := f.r.Reconcile(f.ctx, ctrl.Request{NamespacedName: f.key}); err == nil {
+		t.Fatal("first reconcile: want status update error")
+	}
+
+	f.now = f.now.Add(time.Millisecond)
+	f.run()
+
+	if n := len(f.restores()); n != 2 {
+		t.Errorf("restores = %d, want 2", n)
+	}
+}
+
+func TestRestoreTestBackupNotFoundRequeues(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: "x"}}
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Cron: testHourlyCron}
+	other := newSnapshot("other", map[string]string{testLabelKey: "y"}, "Succeeded", testStart)
+
+	f := newRestoreTestFixture(t, test, other)
+	f.run()
+
+	f.now = time.Date(2026, 11, 15, 11, 0, 1, 0, time.UTC)
+
+	res, err := f.r.Reconcile(f.ctx, ctrl.Request{NamespacedName: f.key})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := testReadyReason(f.test()); got != reasonBackupNotFound {
+		t.Fatalf("reason = %q, want %s", got, reasonBackupNotFound)
+	}
+
+	if res.RequeueAfter != snapshotPollInterval {
+		t.Fatalf("RequeueAfter = %v, want %v", res.RequeueAfter, snapshotPollInterval)
+	}
+
+	match := newSnapshot("match", map[string]string{testLabelKey: "x"}, "Succeeded", testStart)
+	if err := f.c.Create(f.ctx, match); err != nil {
+		t.Fatal(err)
+	}
+
+	f.run()
+
+	if n := len(f.restores()); n != 1 {
+		t.Errorf("restores = %d, want 1", n)
+	}
+}
+
+func TestRestoreTestCronChangeTakesEffect(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Cron: "0 0 1 1 *"}
+
+	f := newRestoreTestFixture(t, test)
+	f.run()
+
+	cur := f.test()
+	cur.Spec.Triggers.Cron = "0 * * * *"
+
+	if err := f.c.Update(f.ctx, cur); err != nil {
+		t.Fatal(err)
+	}
+
+	f.run()
+
+	if next := f.test().Status.NextRun; next == nil || !next.Time.Equal(time.Date(2026, 11, 15, 11, 0, 0, 0, time.UTC)) {
+		t.Fatalf("nextRun = %v, want 11:00 after cron change", next)
+	}
+
+	f.now = time.Date(2026, 11, 15, 11, 0, 1, 0, time.UTC)
+	f.run()
+
+	if n := len(f.restores()); n != 1 {
+		t.Fatalf("restores after cron change = %d, want 1", n)
+	}
+
+	cur = f.test()
+	cur.Spec.Triggers.Cron = ""
+	cur.Spec.Triggers.Manual = true
+
+	if err := f.c.Update(f.ctx, cur); err != nil {
+		t.Fatal(err)
+	}
+
+	f.run()
+
+	if next := f.test().Status.NextRun; next != nil {
+		t.Errorf("nextRun = %v, want nil after cron removed", next)
+	}
+}
+
+func TestRestoreTestInvalidCronBlocks(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Cron: "99 99 * * *"}
+
+	f := newRestoreTestFixture(t, test)
+
+	if _, err := f.r.Reconcile(f.ctx, ctrl.Request{NamespacedName: f.key}); err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+
+	if got := testReadyReason(f.test()); got != reasonInvalidCron {
+		t.Errorf("reason = %q, want %s", got, reasonInvalidCron)
+	}
+
+	if events := f.events(); len(events) != 1 || !hasEvent(events, reasonInvalidCron) {
+		t.Errorf("events = %v, want one %s warning", events, reasonInvalidCron)
+	}
+}
+
+func TestRestoreTestKeepsCurrentRestoreOnCacheMiss(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+
+	f := newRestoreTestFixture(t, test)
+	f.setRunNow("n1")
+	f.run()
+
+	current := f.test().Status.CurrentRestore
+	if current == "" {
+		t.Fatal("no current restore after start")
+	}
+
+	f.r.APIReader = f.c
+	f.r.Client = interceptor.NewClient(f.c.(client.WithWatch), interceptor.Funcs{
+		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			if _, ok := obj.(*restorev1alpha1.Restore); ok {
+				return apierrors.NewNotFound(schema.GroupResource{Resource: "restores"}, key.Name)
+			}
+
+			return c.Get(ctx, key, obj, opts...)
+		},
+	})
+
+	f.run()
+
+	if got := f.test().Status.CurrentRestore; got != current {
+		t.Errorf("currentRestore = %q, want %q", got, current)
+	}
+}
+
+func TestRestoreTestReplaceDeletesEarlierAttempts(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+	test.Spec.OverlapPolicy = restorev1alpha1.OverlapPolicyReplace
+	test.Spec.Retries.Count = 1
+
+	f := newRestoreTestFixture(t, test)
+	f.setRunNow("n1")
+	f.run()
+
+	oldRun := f.restores()[0].Labels[runLabel]
+
+	f.finishRunning(restorev1alpha1.RestorePhaseFailed)
+	f.run()
+	f.now = f.now.Add(time.Hour)
+	f.run()
+
+	if n := len(f.restores()); n != 2 {
+		t.Fatalf("restores before replace = %d, want 2 attempts", n)
+	}
+
+	f.setRunNow("n2")
+	f.run()
+
+	for _, r := range f.restores() {
+		if r.Labels[runLabel] == oldRun {
+			t.Errorf("restore %s of the replaced run is still present", r.Name)
+		}
+	}
+}
+
+func TestRestoreTestReusedNonceStartsNewRestore(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+
+	f := newRestoreTestFixture(t, test)
+
+	for _, nonce := range []string{"a", "b", "a"} {
+		f.now = f.now.Add(time.Hour)
+		f.setRunNow(nonce)
+		f.run()
+		f.finishRunning(restorev1alpha1.RestorePhaseSucceeded)
+		f.now = f.now.Add(time.Minute)
+		f.run()
+	}
+
+	names := map[string]bool{}
+	for _, r := range f.restores() {
+		names[r.Name] = true
+	}
+
+	if len(names) != 3 {
+		t.Errorf("restores = %d, want 3 distinct", len(names))
+	}
+
+	if got := f.test().Status.LastRun.Time; !got.Time.Equal(f.now) {
+		t.Errorf("lastRun time = %v, want %v", got, f.now)
 	}
 }

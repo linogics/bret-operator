@@ -322,6 +322,10 @@ spec:
                 description: PendingRun is the backup of the queued run, which waits
                   for the run in progress. It applies to overlap policy Queue.
                 type: string
+              pendingRunSource:
+                description: PendingRunSource is the trigger source of the queued
+                  run. It keeps the name of the queued Restore stable across reconciles.
+                type: string
               retainedResources:
                 description: RetainedResources lists objects kept after a failed run.
                   They help debugging.
@@ -337,6 +341,9 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: name must be at most 50 characters
+          rule: size(self.metadata.name) <= 50
     served: true
     storage: true
     subresources:

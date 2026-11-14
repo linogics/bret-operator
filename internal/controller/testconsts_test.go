@@ -23,6 +23,9 @@ const (
 	testRepoSecret    = "repo-secret"
 	testImage         = "busybox"
 	testScratchPath   = "/scratch"
+	testTrue          = "true"
+	testVolumes       = "volumes"
+	testHourlyCron    = "0 * * * *"
 )
 
 func quantityPtr(s string) *resource.Quantity {

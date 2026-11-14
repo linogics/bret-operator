@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 
 	"time"
 
@@ -73,6 +74,33 @@ var _ = Describe("RestoreTest Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
+		})
+
+		It("should limit the name so the Restore name fits a label value", func() {
+			base := &restorev1alpha1.RestoreTest{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, base)).To(Succeed())
+
+			for _, tc := range []struct {
+				name    string
+				accepts bool
+			}{
+				{strings.Repeat("a", 50), true},
+				{strings.Repeat("a", 51), false},
+			} {
+				long := &restorev1alpha1.RestoreTest{
+					ObjectMeta: metav1.ObjectMeta{Name: tc.name, Namespace: testNamespace},
+					Spec:       *base.Spec.DeepCopy(),
+				}
+
+				err := k8sClient.Create(ctx, long)
+				if tc.accepts {
+					Expect(err).NotTo(HaveOccurred())
+					Expect(k8sClient.Delete(ctx, long)).To(Succeed())
+				} else {
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("name must be at most 50 characters"))
+				}
+			}
 		})
 	})
 })
