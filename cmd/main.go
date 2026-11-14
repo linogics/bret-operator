@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,20 +75,26 @@ func csvEnv(name string) []string {
 
 // parseProviders reads the PROVIDERS env var. Unset serves every provider, as outside the chart.
 // Set but empty, or "none", serves no provider. The chart renders that when every provider is off.
-func parseProviders(raw string, set bool) map[restorev1alpha1.Provider]bool {
+func parseProviders(raw string, set bool) (map[restorev1alpha1.Provider]bool, error) {
 	if !set {
-		return nil
+		return nil, nil
 	}
 
 	enabled := map[restorev1alpha1.Provider]bool{}
 
 	for _, n := range strings.Split(raw, ",") {
-		if n = strings.TrimSpace(n); n != "" && n != "none" {
+		n = strings.TrimSpace(n)
+
+		switch restorev1alpha1.Provider(n) {
+		case "", "none":
+		case restorev1alpha1.ProviderKopiur, restorev1alpha1.ProviderVelero, restorev1alpha1.ProviderVolSync:
 			enabled[restorev1alpha1.Provider(n)] = true
+		default:
+			return nil, fmt.Errorf("unknown provider %q in PROVIDERS", n)
 		}
 	}
 
-	return enabled
+	return enabled, nil
 }
 
 // nolint:gocyclo
@@ -219,7 +226,12 @@ func main() {
 		})
 	}
 
-	enabledProviders := parseProviders(os.LookupEnv("PROVIDERS"))
+	enabledProviders, err := parseProviders(os.LookupEnv("PROVIDERS"))
+	if err != nil {
+		setupLog.Error(err, "invalid PROVIDERS")
+		os.Exit(1)
+	}
+
 	veleroOn := enabledProviders == nil || enabledProviders[restorev1alpha1.ProviderVelero]
 
 	// Empty WATCH_NAMESPACES is cluster-wide. Otherwise the cache is limited to those namespaces. With Velero on,

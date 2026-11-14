@@ -12,16 +12,22 @@ func TestParseProviders(t *testing.T) {
 		raw  string
 		set  bool
 		want map[restorev1alpha1.Provider]bool
+		err  bool
 	}{
-		{"unset serves all", "", false, nil},
-		{"none serves none", "none", true, map[restorev1alpha1.Provider]bool{}},
-		{"empty serves none", "", true, map[restorev1alpha1.Provider]bool{}},
-		{"list", "kopiur, velero", true, map[restorev1alpha1.Provider]bool{"kopiur": true, "velero": true}},
+		{"unset serves all", "", false, nil, false},
+		{"none serves none", "none", true, map[restorev1alpha1.Provider]bool{}, false},
+		{"empty serves none", "", true, map[restorev1alpha1.Provider]bool{}, false},
+		{"list", "kopiur, velero", true, map[restorev1alpha1.Provider]bool{"kopiur": true, "velero": true}, false},
+		{"unknown is an error", "kopia", true, nil, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseProviders(tt.raw, tt.set)
+			got, err := parseProviders(tt.raw, tt.set)
+			if (err != nil) != tt.err {
+				t.Fatalf("err = %v, want error: %v", err, tt.err)
+			}
+
 			if (got == nil) != (tt.want == nil) || len(got) != len(tt.want) {
 				t.Fatalf("got %v, want %v", got, tt.want)
 			}
