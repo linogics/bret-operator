@@ -89,7 +89,19 @@ Kubernetes 1.37, Velero 1.18.4, VolSync 0.17.0, Kopiur 0.10.21 and PostgreSQL 17
 
 ### Nothing happens after a `RestoreTest` is created
 
-- **Cause:** the provider's live checks are still in progress. The `RestoreTest` controller runs
-  for the Kopiur provider. Velero and VolSync are implemented but not fully verified. See the
-  status table in [docs/README.md](README.md).
-- **Fix:** run the check by hand with [testing-checks.md](testing-checks.md).
+- **Symptom:** no `Restore` appears. Read the reason of the `Ready` condition and the Events:
+  `kubectl -n <namespace> describe restoretest <name>`.
+- **Cause and fix**, by what you see:
+  - No condition and no Events: the namespace is not in `watchNamespaces`, so the operator ignores
+    the object. Add the namespace to the chart value. Or `spec.triggers` is not set, or no trigger
+    is due yet. Then wait, or start a manual run. See
+    [restoretest-guide.md](restoretest-guide.md#triggers).
+  - `ProviderUnsupported`: `spec.provider` is not `kopiur`, or the Kopiur provider is disabled in
+    the chart. The `RestoreTest` controller runs for Kopiur only. For Velero and VolSync, create a
+    `Restore` by hand.
+  - `TargetMissing`: `spec.target.size` is not set, or it is zero. Set it.
+  - `BackupNotFound`: no `Succeeded` backup matches `backupSelector.labels`. Check the labels, and
+    that the backup is in the namespace of the `RestoreTest`.
+- A `Restore` exists but does not progress: read its `Ready` condition. `ProviderUnsupported`
+  means that its provider is disabled (`providers.<name>.enabled`). `CheckNotFound` means that the
+  `RestoreCheck` of `restoreCheckRef` is not in the namespace of the `Restore`.

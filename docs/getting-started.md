@@ -132,11 +132,8 @@ The operator now acts on the `RestoreTest`. The object shows the last result in 
 ```bash
 kubectl -n data get restoretests
 # NAME                 PROVIDER   LAST        NEXT                   AGE
-# orders-db-nightly    volsync    Succeeded   2026-11-15T03:17:00Z   2d
+# orders-db-nightly    kopiur     Succeeded   2026-11-15T03:17:00Z   2d
 ```
-
-The `volsync` provider needs `providers.volsync.enabled: true` in the chart. See
-[backup-providers.md](backup-providers.md).
 
 ## Step 6: Run a test on demand
 

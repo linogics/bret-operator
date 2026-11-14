@@ -1,5 +1,5 @@
 <h1 align="center">bret-operator</h1>
-<p align="center"><img align="center" src="docs/bret.png" alt="bret-operator" /></p>
+<p align="center"><img align="center" src="docs/bret.png" alt="bret" /></p>
 <p align="center">
   <a href="https://github.com/linogics/bret-operator/actions/workflows/test.yml"><img src="https://github.com/linogics/bret-operator/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
   <a href="https://github.com/linogics/bret-operator/actions/workflows/lint.yml"><img src="https://github.com/linogics/bret-operator/actions/workflows/lint.yml/badge.svg" alt="Lint"></a>
@@ -10,7 +10,7 @@
 
 **bret** stands for **b**ackup **re**store **T**est.
 
-bret-operator tests your Kubernetes backups. It restores a backup from Velero, VolSync or
+bret tests your Kubernetes backups. It restores a backup from Velero, VolSync or
 Kopiur into a scratch volume. It runs your check in a throwaway pod. Then it records the result.
 
 ## Quick links

@@ -87,7 +87,7 @@ Check tests do not run in CI. They need a cluster and several gigabytes of image
 | `charts/bret-operator/` | Helm chart. RBAC is copied from `config/`. Depends on `charts/bret-operator-crds/`, which holds the CRDs. |
 | `charts/bret-operator-crds/` | Helm chart with the CRDs only. Copied from `config/crd/bases/`. |
 | `checks/` | Check drafts for each app. See `checks/INDEX.md`. |
-| `examples/` | Minimal check, RestoreTest and Restore examples. |
+| `examples/` | Minimal check, RestoreTest and one Restore example per provider. |
 | `hack/check-test/` | Check harness and per-app seeds. |
 | `hack/helm/sync_rbac.py` | Copies RBAC rules into the chart. |
 | `docs/` | This documentation. `docs/reference/api.md` is generated. |

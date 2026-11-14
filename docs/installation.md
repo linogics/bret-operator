@@ -1,8 +1,7 @@
 # Installation
 
-This page installs the bret-operator CRDs and the manager. Install a backup tool first. See
-[backup-providers.md](backup-providers.md). The operator does not run restores until its
-controllers exist (see the status table in [README.md](README.md)).
+This page installs the bret CRDs and the manager. Install a backup tool first. See
+[backup-providers.md](backup-providers.md).
 
 ## Requirements
 
@@ -118,6 +117,10 @@ Plain manifests do not upgrade cleanly across versions. Prefer the Helm chart fo
 The CRDs ship in the `bret-operator-crds` chart, which the `bret-operator` chart depends on. Helm
 installs CRDs once and does not update them on upgrade. A new release can change the CRD schema.
 So apply the CRDs yourself before you upgrade the chart:
+
+```text
+apply CRDs (server-side) ─► helm upgrade
+```
 
 ```bash
 kubectl apply --server-side -f https://github.com/linogics/bret-operator/releases/download/v0.1.0/install.yaml

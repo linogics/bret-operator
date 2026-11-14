@@ -1,6 +1,6 @@
-# bret-operator documentation
+# bret documentation
 
-bret-operator tests your backups. It restores a backup into a scratch volume. It runs a check
+bret tests your backups. It restores a backup into a scratch volume. It runs a check
 against the restored data in a throwaway pod. Then it records the result on the custom resource,
 as Kubernetes Events and as Prometheus metrics. The operator does not move backup data. It
 drives the restore object of Velero, VolSync or Kopiur. Then it runs your check.
@@ -19,7 +19,7 @@ Each box is one step. The arrows show the order of work from your objects to the
 └──────────────────────┬───────────────────────┘
                        ▼
 ┌──────────────────────────────────────────────┐
-│ bret-operator controllers                    │
+│ bret controllers                             │
 │   RestoreTest, Restore, RestoreCheck         │
 └──────────────────────┬───────────────────────┘
                        ▼

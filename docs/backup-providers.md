@@ -1,6 +1,6 @@
 # Backup providers
 
-bret-operator restores with a backup tool that you already run. This page shows setup that was
+bret restores with a backup tool that you already run. This page shows setup that was
 tested on a kind cluster. Each provider needs a backup that the tool can restore, and a
 `RestoreCheck` that checks the result.
 
@@ -72,21 +72,18 @@ Enable the provider in the chart with `providers.velero.enabled: true`. The Vele
 namespace is `providers.velero.namespace`, default `velero`. The chart passes it to the operator
 as `VELERO_NAMESPACE`.
 
+A manual `Restore` for Velero: [examples/restore-velero.yaml](../examples/restore-velero.yaml).
+
 ### What the operator drives
 
-The operator creates a `velero.io/v1` `Restore` in the Velero namespace. The PVC and PVs are
-restored into the scratch namespace `bret-scratch-<hash>` (hash of `<namespace>/<name>`). The check
-pod runs in that namespace. The `Restore` sets `includedNamespaces` to the `Restore`
-namespace, so Velero restores no other namespace of the backup. The operator copies the
-`pod-security.kubernetes.io/*` labels of the `Restore` namespace onto the scratch namespace.
+The namespaces, the scratch namespace `bret-scratch-<hash>` and the list of what a Velero check
+must not set are in [concepts.md](concepts.md#velero). Only the facts below are specific to this
+page.
 
 The operator reads the Velero `Restore` `status.phase`. `Completed` runs the check. `Failed`,
 `PartiallyFailed` and `FailedValidation` fail the attempt.
 
-Checks for Velero must not set `serviceAccountName`, `imagePullSecrets`, a configMap or secret
-volume, a hostPath volume, or an env or envFrom reference to a Secret or ConfigMap. A check that
-does fails with `ProviderUnsupported`. A check that needs a Secret must use Kopiur or VolSync.
-See [checks.md](checks.md#secrets).
+A check that needs a Secret must use Kopiur or VolSync. See [checks.md](checks.md#secrets).
 
 Restored workloads are a trap. Velero restores Deployments and StatefulSets as well. They
 start and hold the restored RWO volume. Scale them to zero, or delete them, before the check
@@ -145,19 +142,17 @@ Postgres 17 uses 999. See [data-and-database.md](data-and-database.md).
 
 Enable the provider in the chart with `providers.volsync.enabled: true`.
 
+A manual `Restore` for VolSync: [examples/restore-volsync.yaml](../examples/restore-volsync.yaml).
+
 ### What the operator drives
 
-The operator creates a `ReplicationDestination` in the restore namespace with a restic mover. The
-repository Secret name and the source PVC come from the backup's `ReplicationSource`, in the backup
-namespace. The operator uses `backupRef.namespace`. If that is not set, it uses the `Restore` namespace.
-The Secret itself must exist in the `Restore` namespace. Without `spec.restic.repository` on the
-`ReplicationSource`, the `Restore` shows the reason `RepositoryMissing`.
+The namespaces, the repository Secret, the reason `RepositoryMissing` and the order of the mover
+UID are in [concepts.md](concepts.md#volsync). Only the facts below are specific to this page.
+
 The check runs when the `ReplicationDestination` reports `status.latestImage.kind: PersistentVolumeClaim`.
 
 Mover pods use a default non-database UID. They cannot read a Postgres data directory
-(`permission denied`). The operator takes the mover UID from the check (annotation
-`bret.linogics.io/mover-uid`, else the first container's `runAsUser`). It uses 65534 when the
-check sets neither.
+(`permission denied`). So set the mover UID on the check.
 
 A VolSync cache volume made by an earlier mover UID causes `permission denied` after the UID
 changes. Delete the cache PVC. VolSync then creates a new one.
@@ -248,6 +243,8 @@ spec:
 ```
 
 Wait until `status.phase` is `Succeeded`.
+
+A manual `Restore` for Kopiur: [examples/restore-kopiur.yaml](../examples/restore-kopiur.yaml).
 
 ### Restore
 

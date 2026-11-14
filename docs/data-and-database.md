@@ -19,10 +19,16 @@ Not in v1:
 
 ## The problem
 
-If the database comes from 10:00 and the files come from 10:05, they drift apart:
+The timeline shows how two backups taken at different times drift apart.
 
-- DB rows point at files that are missing.
-- Files exist with no DB row for them.
+```text
+10:00  DB backup ────────┐
+10:03  user uploads file │  row + file written
+10:05  files backup ─────┤
+                         ▼
+restore:  file exists, no DB row     (files newer than DB)
+swap the order: DB row, file missing
+```
 
 Symptoms seen in the apps:
 
@@ -65,7 +71,7 @@ Files plus Postgres, two PVCs.
 - Restore: both PVCs from one backup selector. The operator cannot run this check in v1. Use
   `hack/check-test`.
 - Repair if drift happens: `occ files:scan` can fix listings but may drop or duplicate
-  entries. (Index.)
+  entries.
 - Check (`checks/nextcloud.yaml`): `occ status` shows installed, `occ integrity:check-core`
   passes, and the canary `oc_filecache.size` equals the file size on disk.
 - The check runs Postgres as a native sidecar: an init container with `restartPolicy: Always`.

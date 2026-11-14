@@ -43,6 +43,25 @@ spec:
 
 Set exactly one of `restoreMount` and `restoredVolumes`. The API rejects both or neither.
 
+The diagram shows the check pod that the operator builds from these fields. The example is a
+Postgres check with a `pgdata-perms` init container and a `postgres` sidecar.
+
+```text
+check pod <restore>-check
+│
+├─ initContainers, in order
+│    pgdata-perms          runs, exits 0
+│    postgres (sidecar)    restartPolicy: Always, keeps running
+│
+├─ containers              all must exit 0 = pass
+│    check
+│
+└─ volumes
+     restored volume   at restoreMount, in every container
+     scratchVolumes    one empty PVC per attempt
+     volumes           your ConfigMaps and Secrets
+```
+
 ## Verdict rules
 
 - Pod `Succeeded`: pass. Pod `Failed`: fail. The operator reads the pod phase.
@@ -93,15 +112,14 @@ Rules:
 - The operator creates one PVC per scratch volume per attempt. The `Restore` owns the PVC.
 - The operator deletes scratch PVCs with the attempt. With `keepOnFailure`, it keeps them.
 - `size` is required. Set it to what the check needs, not what the source had.
-- The restored volume's size must be at least the source size. A smaller scratch volume fails
-  early with `InsufficientCapacity`.
+- The operator does not compare `size` with the source. `InsufficientCapacity` is about the
+  restored volume only. See [concepts.md](concepts.md#scratch-volume-size).
 
 ## Native sidecars
 
 A check often needs a database server that runs next to it. For example, Keycloak or Nextcloud
-check against Postgres. Use a native sidecar: an init container with `restartPolicy: Always`.
-It starts before the checks and keeps running while they run. Kubernetes 1.29 or newer is
-required.
+check against Postgres. Use a native sidecar: an init container with `restartPolicy: Always`, as
+`postgres` in the diagram under [Anatomy](#anatomy). Kubernetes 1.29 or newer is required.
 
 ```yaml
 spec:
@@ -139,9 +157,24 @@ Name the canary in the header comment of your check. Put the seed for it in
 ## Secrets
 
 A check can read a Secret, for example for a database password, an admin token, or an encryption
-key. You do not need to know a target namespace in advance. The `RestoreTest`, the `RestoreCheck`
-and every `Restore` it starts live in the same namespace. The check pod runs in that namespace too
-(Kopiur and VolSync). So create the Secret in the namespace of your `RestoreTest`.
+key. The diagram shows where the check pod runs, and so where the Secret must be. Here your
+namespace is `data`.
+
+```text
+Kopiur, VolSync: one namespace         Velero: two namespaces
+
+┌ data ───────────────────────┐        ┌ data ───────────────┐
+│ RestoreTest                 │        │ RestoreTest         │
+│ RestoreCheck                │        │ RestoreCheck        │
+│ Restore                     │        │ Restore             │
+│ check pod ──reads─► Secret  │        └─────────────────────┘
+└─────────────────────────────┘        ┌ bret-scratch-<hash> ┐
+                                       │ check pod           │  Secrets are rejected:
+                                       └─────────────────────┘  ProviderUnsupported
+```
+
+For Kopiur and VolSync, create the Secret in the namespace of your `RestoreTest`. You do not need
+to know a target namespace in advance.
 
 Find the Secrets a check needs before you apply it:
 
@@ -180,8 +213,9 @@ Rules:
 - Values must match the source. An encryption key or admin password that differs makes the check
   fail for a reason unrelated to the backup. Copy the Secret from the source namespace and keep
   its values. Keep one Secret per application, and make the backup and the check read the same one.
-- Velero does not support Secrets in checks. The check pod runs in a scratch namespace for Velero,
-  and the operator rejects the check with `ProviderUnsupported`.
+- Velero does not support Secrets in checks. The operator rejects the check with
+  `ProviderUnsupported`. The full list of what a Velero check must not set is in
+  [concepts.md](concepts.md#velero).
 
 ## Pod security
 

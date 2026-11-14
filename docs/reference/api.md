@@ -448,6 +448,7 @@ _Appears in:_
 | `currentRestore` _string_ | CurrentRestore is the Restore of the run in progress. It is empty when no run is in progress. |  |  |
 | `retryAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | RetryAt is when the next attempt of the run in progress is created. |  |  |
 | `pendingRun` _string_ | PendingRun is the backup of the queued run, which waits for the run in progress. It applies to overlap policy Queue. |  |  |
+| `pendingRunSource` _string_ | PendingRunSource is the trigger source of the queued run. It keeps the name of the queued Restore stable across reconciles. |  |  |
 | `lastRunNowValue` _string_ | LastRunNowValue is the last value of the run-now annotation that started a run. |  |  |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#condition-v1-meta) array_ | Conditions are the latest observations of the test state. |  |  |
 
@@ -518,7 +519,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `name` _string_ | Name is the name of the scratch volume. |  | MinLength: 1 <br /> |
+| `name` _string_ | Name is the name of the scratch volume. |  | MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
 | `mountPath` _string_ | MountPath is where the scratch volume is mounted in every container. |  |  |
 | `storageClassName` _string_ | StorageClassName is the storage class for the scratch PVC. Empty means the cluster default. |  |  |
 | `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the requested capacity of the scratch PVC, for example 20Gi. |  |  |
