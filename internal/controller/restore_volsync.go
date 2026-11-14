@@ -27,15 +27,11 @@ var errRepositoryMissing = errors.New(reasonRepositoryMissing)
 
 var replicationDestinationGVK = schema.GroupVersionKind{Group: "volsync.backube", Version: apiVersionAlpha1, Kind: "ReplicationDestination"}
 
-func volsyncName(restore *restorev1alpha1.Restore) string {
-	return restore.Name + "-volsync"
-}
-
 func volsyncStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{}
 	obj.SetGroupVersionKind(replicationDestinationGVK)
 	obj.SetNamespace(restore.Namespace)
-	obj.SetName(volsyncName(restore))
+	obj.SetName(volsyncName(restore, restore.Spec.Sources[0].SourcePVC))
 
 	return obj
 }
@@ -54,7 +50,7 @@ func volsyncDestinationObject(restore *restorev1alpha1.Restore, repository strin
 		"restic": map[string]any{
 			"repository":     repository,
 			"copyMethod":     "Direct",
-			"destinationPVC": restoredClaimName(restore),
+			"destinationPVC": restoredClaimName(restore, restore.Spec.Sources[0].SourcePVC),
 			"capacity":       size.String(),
 			"moverSecurityContext": map[string]any{
 				"runAsUser": mover, "runAsGroup": mover, "fsGroup": mover,
@@ -155,13 +151,15 @@ func (r *RestoreReconciler) reconcileVolSync(
 		return ctrl.Result{}, err
 	}
 
-	return r.check(ctx, restore, bp, restoredClaimName(restore), restore.Namespace, claims)
+	pvc := restore.Spec.Sources[0].SourcePVC
+
+	return r.check(ctx, restore, bp, map[string]string{pvc: restoredClaimName(restore, pvc)}, restore.Namespace, claims)
 }
 
 // volsyncScratchPVC is the plain PVC VolSync writes into. It has no data source.
 func volsyncScratchPVC(restore *restorev1alpha1.Restore, size resource.Quantity) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{Name: restoredClaimName(restore), Namespace: restore.Namespace, Labels: restoreLabels(restore)},
+		ObjectMeta: metav1.ObjectMeta{Name: restoredClaimName(restore, restore.Spec.Sources[0].SourcePVC), Namespace: restore.Namespace, Labels: restoreLabels(restore)},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources:        claimResources(size),

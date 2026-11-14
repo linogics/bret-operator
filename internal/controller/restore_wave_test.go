@@ -371,7 +371,7 @@ func TestPreUpgradeRestoreWithoutSizeFails(t *testing.T) {
 	deadline := metav1.NewTime(started.Add(time.Hour))
 	stored.Status = restorev1alpha1.RestoreStatus{
 		Phase: restorev1alpha1.RestorePhaseRunning, Attempt: 1, StartTime: &started, Deadline: &deadline,
-		ProviderRefs: []restorev1alpha1.ProviderRef{{Kind: "Restore", Name: "r1-kopiur", Namespace: testNamespace}},
+		ProviderRefs: []restorev1alpha1.ProviderRef{{Kind: "Restore", Name: "r1-kopiur-" + testDataName, Namespace: testNamespace}},
 	}
 
 	if err := c.Status().Update(context.Background(), stored); err != nil {

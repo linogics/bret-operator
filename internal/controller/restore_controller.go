@@ -192,7 +192,7 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		}
 	}
 
-	uid, err := MoverUID(bp)
+	uid, err := MoverUID(bp, restore.Spec.Sources[0].SourcePVC)
 	if err != nil {
 		r.block(restore, reasonCheckUnsupported, err.Error())
 
@@ -264,7 +264,9 @@ func (r *RestoreReconciler) progress(
 
 		return ctrl.Result{}, nil
 	case kopiurPhaseCompleted:
-		return r.check(ctx, restore, bp, restoredClaimName(restore), restore.Namespace, claims)
+		src := restore.Spec.Sources[0].SourcePVC
+
+		return r.check(ctx, restore, bp, map[string]string{src: restoredClaimName(restore, src)}, restore.Namespace, claims)
 	default:
 		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
@@ -342,10 +344,11 @@ func (r *RestoreReconciler) check(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreCheck,
-	restoredClaim, namespace string,
+	restoredClaims map[string]string,
+	namespace string,
 	claims map[string]string,
 ) (ctrl.Result, error) {
-	pod, err := buildCheckPod(restore, bp, restoredClaim, claims)
+	pod, err := buildCheckPod(restore, bp, restoredClaims, claims)
 	if err != nil {
 		r.block(restore, reasonCheckUnsupported, err.Error())
 

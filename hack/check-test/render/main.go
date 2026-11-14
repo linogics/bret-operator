@@ -6,7 +6,7 @@
 //	render CHECK.yaml --list                                       print volume keys, one per line
 //	render CHECK.yaml --uid KEY                                    print the mover UID, or nothing
 //
-// KEY of --uid is ignored. The annotation key is always "data".
+// KEY of --uid is the sourcePVC, the key of the mover-uid annotation.
 package main
 
 import (
@@ -23,7 +23,7 @@ import (
 )
 
 const usage = "usage: render CHECK.yaml [--name POD] [--ns NS] [--claims KEY=PVC ...] [--list] [--uid KEY]\n" +
-	"KEY of --uid is ignored, the annotation key is always data"
+	"KEY of --uid is the sourcePVC of a restored volume"
 
 type options struct {
 	check  string
@@ -31,6 +31,7 @@ type options struct {
 	ns     string
 	claims map[string]string
 	list   bool
+	uidKey string
 	hasUID bool
 }
 
@@ -70,7 +71,7 @@ func run(args []string) error {
 
 		return nil
 	case o.hasUID:
-		uid, err := controller.MoverUID(bp)
+		uid, err := controller.MoverUID(bp, o.uidKey)
 		if err != nil {
 			return err
 		}
@@ -90,14 +91,15 @@ func run(args []string) error {
 		return fmt.Errorf("check %s has no restored volume", bp.Name)
 	}
 
-	claim, ok := o.claims[keys[0]]
-	if !ok {
-		return fmt.Errorf("missing --claims %s=<pvc>; check needs keys %v", keys[0], keys)
+	for _, k := range keys {
+		if _, ok := o.claims[k]; !ok {
+			return fmt.Errorf("missing --claims %s=<pvc>; check needs keys %v", k, keys)
+		}
 	}
 
 	restore := &restorev1alpha1.Restore{ObjectMeta: metav1.ObjectMeta{Name: o.name, Namespace: o.ns}}
 
-	objs, err := controller.RenderCheck(restore, bp, claim)
+	objs, err := controller.RenderCheck(restore, bp, o.claims)
 	if err != nil {
 		return err
 	}
@@ -160,6 +162,7 @@ func parse(args []string) (options, error) {
 				o.ns = args[i]
 			default:
 				o.hasUID = true
+				o.uidKey = args[i]
 			}
 		case "--claims":
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {

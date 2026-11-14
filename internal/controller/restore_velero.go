@@ -234,7 +234,7 @@ func (r *RestoreReconciler) checkVelero(
 		claims[sv.Name] = pvc.Name
 	}
 
-	return r.check(ctx, restore, bp, claim, ns.Name, claims)
+	return r.check(ctx, restore, bp, map[string]string{bp.Spec.RestoredVolumes[0].SourcePVC: claim}, ns.Name, claims)
 }
 
 // copyPodSecurity puts the pod-security labels of the Restore namespace on the scratch namespace.

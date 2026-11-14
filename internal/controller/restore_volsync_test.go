@@ -50,7 +50,7 @@ func TestVolSyncRestoreSpec(t *testing.T) {
 	want := map[string]any{
 		"repository":     testRepoSecret,
 		"copyMethod":     "Direct",
-		"destinationPVC": restoredClaimName(restore),
+		"destinationPVC": restoredClaimName(restore, restore.Spec.Sources[0].SourcePVC),
 		"capacity":       "3Gi",
 		"moverSecurityContext": map[string]any{
 			"runAsUser": int64(65534), "runAsGroup": int64(65534), "fsGroup": int64(65534),
@@ -111,7 +111,7 @@ func TestVolSyncRestoreWaitsOnLatestImage(t *testing.T) {
 		t.Fatalf("check pod not created after latestImage: %v", err)
 	}
 
-	if pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName != restoredClaimName(restore) {
+	if pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName != restoredClaimName(restore, restore.Spec.Sources[0].SourcePVC) {
 		t.Fatalf("pod mounts %v, want the scratch PVC", pod.Spec.Volumes[0])
 	}
 }

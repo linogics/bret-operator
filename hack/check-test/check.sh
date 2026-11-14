@@ -3,7 +3,7 @@
 # Verdict = pod phase: Succeeded (every check container exit 0) passes.
 #
 # usage: check.sh CHECK NAMESPACE POD_NAME KEY=PVC [KEY=PVC ...]
-#   KEY is "data" for restoreMount checks, or the restoredVolumes entry name.
+#   KEY is the restoredVolumes sourcePVC.
 # env: TIMEOUT (seconds, default 900), KEEP=1 keeps the pod after the run.
 
 here=$(cd "$(dirname "$0")" && pwd)

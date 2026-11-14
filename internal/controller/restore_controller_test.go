@@ -222,7 +222,7 @@ func TestRestorePhasesToSucceeded(t *testing.T) {
 	}
 
 	pvc := &corev1.PersistentVolumeClaim{}
-	if err := c.Get(ctx, types.NamespacedName{Name: restoredClaimName(restore), Namespace: restore.Namespace}, pvc); !errors.IsNotFound(err) {
+	if err := c.Get(ctx, types.NamespacedName{Name: restoredClaimName(restore, restore.Spec.Sources[0].SourcePVC), Namespace: restore.Namespace}, pvc); !errors.IsNotFound(err) {
 		t.Errorf("restored PVC still present after success: %v", err)
 	}
 }
@@ -296,7 +296,7 @@ func assertSizeFailure(t *testing.T, c client.Client, restore *restorev1alpha1.R
 	}
 
 	pvc := &corev1.PersistentVolumeClaim{}
-	if err := c.Get(context.Background(), types.NamespacedName{Name: restoredClaimName(restore), Namespace: restore.Namespace}, pvc); !errors.IsNotFound(err) {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: restoredClaimName(restore, restore.Spec.Sources[0].SourcePVC), Namespace: restore.Namespace}, pvc); !errors.IsNotFound(err) {
 		t.Errorf("PVC created for a failed size: %v", err)
 	}
 
@@ -332,7 +332,7 @@ func TestRestoreSizeAutoExpand(t *testing.T) {
 	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
 
 	pvc := &corev1.PersistentVolumeClaim{}
-	if err := c.Get(context.Background(), types.NamespacedName{Name: restoredClaimName(restore), Namespace: restore.Namespace}, pvc); err != nil {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: restoredClaimName(restore, restore.Spec.Sources[0].SourcePVC), Namespace: restore.Namespace}, pvc); err != nil {
 		t.Fatal(err)
 	}
 

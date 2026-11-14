@@ -12,6 +12,7 @@ const (
 
 	testDataName      = "data"
 	testDataPath      = "/data"
+	testDataClaim     = "r1-data"
 	testBackupName    = "backup"
 	testStatusKey     = "status"
 	testWorkArea      = "Work Area"

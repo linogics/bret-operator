@@ -24,7 +24,7 @@ func bareCheck() *restorev1alpha1.RestoreCheck {
 func buildBare(t *testing.T, bp *restorev1alpha1.RestoreCheck) *corev1.Pod {
 	t.Helper()
 
-	pod, err := buildCheckPod(newTestRestore(), bp, "r1-scratch", nil)
+	pod, err := buildCheckPod(newTestRestore(), bp, map[string]string{testDataName: testDataClaim}, nil)
 	if err != nil {
 		t.Fatalf("buildCheckPod: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestRenderCheckMatchesOperatorPod(t *testing.T) {
 		{Name: testWorkArea, MountPath: testScratchPath, Size: resource.MustParse("1Gi")},
 	}
 
-	objs, err := RenderCheck(newTestRestore(), bp, "r1-scratch")
+	objs, err := RenderCheck(newTestRestore(), bp, map[string]string{testDataName: testDataClaim})
 	if err != nil {
 		t.Fatalf("RenderCheck: %v", err)
 	}

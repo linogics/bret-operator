@@ -44,7 +44,7 @@ func TestBuildCheckPod(t *testing.T) {
 	restore := newTestRestore()
 	bp := checkPodCheck()
 
-	pod, err := buildCheckPod(restore, bp, "r1-scratch", map[string]string{testWorkArea: testWorkAreaClaim})
+	pod, err := buildCheckPod(restore, bp, map[string]string{testDataName: testDataClaim}, map[string]string{testWorkArea: testWorkAreaClaim})
 	if err != nil {
 		t.Fatalf("buildCheckPod: %v", err)
 	}
@@ -65,8 +65,8 @@ func TestBuildCheckPod(t *testing.T) {
 		t.Errorf("pod-level fields not copied from check: %+v", pod.Spec)
 	}
 
-	if got := pvcClaim(pod, restoredVolume); got != "r1-scratch" {
-		t.Errorf("restored volume claim %q, want r1-scratch", got)
+	if got := pvcClaim(pod, restoredVolumeName(testDataName)); got != testDataClaim {
+		t.Errorf("restored volume claim %q, want r1-data", got)
 	}
 
 	if got := pvcClaim(pod, "scratch-work-area"); got != testWorkAreaClaim {
@@ -79,8 +79,8 @@ func TestBuildCheckPod(t *testing.T) {
 			mounts[m.Name] = m.MountPath
 		}
 
-		if mounts[restoredVolume] != testMountPath {
-			t.Errorf("container %s: restored mount %q, want /var/lib/postgresql/data", c.Name, mounts[restoredVolume])
+		if mounts[restoredVolumeName(testDataName)] != testMountPath {
+			t.Errorf("container %s: restored mount %q, want /var/lib/postgresql/data", c.Name, mounts[restoredVolumeName(testDataName)])
 		}
 
 		if mounts["scratch-work-area"] != "/scratch" {
@@ -96,7 +96,7 @@ func TestBuildCheckPod(t *testing.T) {
 func TestBuildCheckPodRejectsMissingScratchClaim(t *testing.T) {
 	t.Parallel()
 
-	if _, err := buildCheckPod(newTestRestore(), checkPodCheck(), "r1-scratch", nil); err == nil {
+	if _, err := buildCheckPod(newTestRestore(), checkPodCheck(), map[string]string{testDataName: testDataClaim}, nil); err == nil {
 		t.Error("missing scratch claim: want error, got none")
 	}
 }
@@ -107,13 +107,13 @@ func TestRestoredVolumesMapping(t *testing.T) {
 	bp := checkPodCheck()
 	bp.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{{MountPath: testDataPath, SourcePVC: "pg-data"}}
 
-	pod, err := buildCheckPod(newTestRestore(), bp, "r1-scratch", map[string]string{testWorkArea: testWorkAreaClaim})
+	pod, err := buildCheckPod(newTestRestore(), bp, map[string]string{"pg-data": testDataClaim}, map[string]string{testWorkArea: testWorkAreaClaim})
 	if err != nil {
 		t.Fatalf("buildCheckPod: %v", err)
 	}
 
-	if got := pvcClaim(pod, restoredVolume); got != "r1-scratch" {
-		t.Errorf("volume claim %q, want r1-scratch", got)
+	if got := pvcClaim(pod, restoredVolumeName("pg-data")); got != testDataClaim {
+		t.Errorf("volume claim %q, want r1-data", got)
 	}
 
 	for _, c := range pod.Spec.Containers {
@@ -122,8 +122,8 @@ func TestRestoredVolumesMapping(t *testing.T) {
 			mounts[m.Name] = m.MountPath
 		}
 
-		if mounts[restoredVolume] != "/data" {
-			t.Errorf("container %s: data mount %q, want /data", c.Name, mounts[restoredVolume])
+		if mounts[restoredVolumeName("pg-data")] != "/data" {
+			t.Errorf("container %s: data mount %q, want /data", c.Name, mounts[restoredVolumeName("pg-data")])
 		}
 	}
 }
@@ -133,14 +133,14 @@ func TestMoverUID(t *testing.T) {
 
 	bp := checkPodCheck()
 
-	uid, err := MoverUID(bp)
+	uid, err := MoverUID(bp, testDataName)
 	if err != nil || uid == nil || *uid != 999 {
 		t.Fatalf("container runAsUser: got %v, %v; want 999", uid, err)
 	}
 
 	bp.Annotations = map[string]string{moverUIDAnnotation: `{"data": 70}`}
 
-	uid, err = MoverUID(bp)
+	uid, err = MoverUID(bp, testDataName)
 	if err != nil || uid == nil || *uid != 70 {
 		t.Fatalf("annotation: got %v, %v; want 70", uid, err)
 	}
@@ -163,5 +163,98 @@ func TestDNSLabel(t *testing.T) {
 		if len(got) > 50 || strings.HasPrefix(got, "-") || strings.HasSuffix(got, "-") {
 			t.Errorf("dnsLabel(%q) = %q, want at most 50 characters and no leading or trailing dash", in, got)
 		}
+	}
+}
+
+const (
+	htmlName  = "html"
+	htmlPath  = "/var/www/html"
+	htmlClaim = "r1-html"
+)
+
+func twoVolumeCheck() *restorev1alpha1.RestoreCheck {
+	bp := checkPodCheck()
+	bp.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{
+		{SourcePVC: htmlName, MountPath: htmlPath},
+		{SourcePVC: "pgdata", MountPath: "/var/lib/postgresql/data"},
+	}
+
+	return bp
+}
+
+func TestCheckPodMountsAllRestoredVolumes(t *testing.T) {
+	t.Parallel()
+
+	claims := map[string]string{htmlName: htmlClaim, "pgdata": "r1-pgdata"}
+
+	pod, err := buildCheckPod(newTestRestore(), twoVolumeCheck(), claims, map[string]string{testWorkArea: testWorkAreaClaim})
+	if err != nil {
+		t.Fatalf("buildCheckPod: %v", err)
+	}
+
+	if got := pvcClaim(pod, "restored-html"); got != htmlClaim {
+		t.Errorf("restored-html claim %q, want r1-html", got)
+	}
+
+	if got := pvcClaim(pod, "restored-pgdata"); got != "r1-pgdata" {
+		t.Errorf("restored-pgdata claim %q, want r1-pgdata", got)
+	}
+
+	for _, c := range pod.Spec.Containers {
+		mounts := map[string]string{}
+		for _, m := range c.VolumeMounts {
+			mounts[m.Name] = m.MountPath
+		}
+
+		if mounts["restored-html"] != htmlPath || mounts["restored-pgdata"] != "/var/lib/postgresql/data" {
+			t.Errorf("container %s mounts %v, want both restored volumes", c.Name, mounts)
+		}
+	}
+}
+
+func TestCheckPodMissingRestoredClaim(t *testing.T) {
+	t.Parallel()
+
+	_, err := buildCheckPod(newTestRestore(), twoVolumeCheck(), map[string]string{htmlName: htmlClaim},
+		map[string]string{testWorkArea: testWorkAreaClaim})
+	if err == nil || !strings.Contains(err.Error(), "pgdata") {
+		t.Errorf("err = %v, want one naming pgdata", err)
+	}
+}
+
+func TestValidateCheckDuplicateMounts(t *testing.T) {
+	t.Parallel()
+
+	bp := twoVolumeCheck()
+	bp.Spec.RestoredVolumes[1].MountPath = htmlPath
+
+	if err := validateCheck(bp); err == nil {
+		t.Error("two restored volumes on one mountPath: want error")
+	}
+
+	bp = twoVolumeCheck()
+	bp.Spec.RestoredVolumes[0].MountPath = testScratchPath
+
+	if err := validateCheck(bp); err == nil {
+		t.Error("restored mountPath equal to a scratch mountPath: want error")
+	}
+}
+
+func TestMoverUIDPerVolume(t *testing.T) {
+	t.Parallel()
+
+	bp := checkPodCheck()
+	bp.Annotations = map[string]string{moverUIDAnnotation: `{"pgdata": 999}`}
+
+	uid, err := MoverUID(bp, "pgdata")
+	if err != nil || uid == nil || *uid != 999 {
+		t.Fatalf("pgdata: got %v, %v; want 999", uid, err)
+	}
+
+	bp.Annotations = map[string]string{moverUIDAnnotation: `{"pgdata": 70}`}
+
+	uid, err = MoverUID(bp, htmlName)
+	if err != nil || uid == nil || *uid != 999 {
+		t.Fatalf("html: got %v, %v; want container runAsUser 999", uid, err)
 	}
 }

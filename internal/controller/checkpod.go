@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	restoreLabel   = "bret.linogics.io/restore"
-	checkLabel     = "bret.linogics.io/check"
-	restoredVolume = "restored-data"
+	restoreLabel = "bret.linogics.io/restore"
+	checkLabel   = "bret.linogics.io/check"
 )
 
 var nonDNSLabelChars = regexp.MustCompile(`[^a-z0-9-]`)
@@ -38,6 +37,25 @@ func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
 		return fmt.Errorf("check %s: restoredVolumes is required", bp.Name)
 	}
 
+	mounts := map[string]bool{}
+
+	paths := make([]string, 0, len(bp.Spec.RestoredVolumes)+len(bp.Spec.ScratchVolumes))
+	for _, v := range bp.Spec.RestoredVolumes {
+		paths = append(paths, v.MountPath)
+	}
+
+	for _, v := range bp.Spec.ScratchVolumes {
+		paths = append(paths, v.MountPath)
+	}
+
+	for _, p := range paths {
+		if mounts[p] {
+			return fmt.Errorf("check %s: mountPath %q is used twice", bp.Name, p)
+		}
+
+		mounts[p] = true
+	}
+
 	if bp.Annotations[allowHostPathAnnotation] == "true" {
 		return nil
 	}
@@ -58,11 +76,12 @@ func checkPodName(restore *restorev1alpha1.Restore) string {
 }
 
 // buildCheckPod renders the check pod for one attempt.
-// restoredClaim is mounted at restoreMount. scratchClaims maps scratch volume names to their PVC names.
+// restoredClaims maps each restoredVolumes sourcePVC to its PVC, mounted at the entry's mountPath.
+// scratchClaims maps scratch volume names to their PVC names.
 func buildCheckPod(
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreCheck,
-	restoredClaim string,
+	restoredClaims map[string]string,
 	scratchClaims map[string]string,
 ) (*corev1.Pod, error) {
 	err := validateCheck(bp)
@@ -71,10 +90,20 @@ func buildCheckPod(
 	}
 
 	spec := bp.Spec.DeepCopy()
-	volName, mountPath := restoredVolume, spec.RestoredVolumes[0].MountPath
 
-	volumes := []corev1.Volume{pvcVolume(volName, restoredClaim)}
-	mounts := []corev1.VolumeMount{{Name: volName, MountPath: mountPath}}
+	volumes := make([]corev1.Volume, 0, len(spec.RestoredVolumes)+len(spec.ScratchVolumes))
+	mounts := make([]corev1.VolumeMount, 0, cap(volumes))
+
+	for _, rv := range spec.RestoredVolumes {
+		claim, ok := restoredClaims[rv.SourcePVC]
+		if !ok {
+			return nil, fmt.Errorf("no claim for restored volume %q", rv.SourcePVC)
+		}
+
+		name := restoredVolumeName(rv.SourcePVC)
+		volumes = append(volumes, pvcVolume(name, claim))
+		mounts = append(mounts, corev1.VolumeMount{Name: name, MountPath: rv.MountPath})
+	}
 
 	for _, sv := range spec.ScratchVolumes {
 		claim, ok := scratchClaims[sv.Name]
@@ -199,7 +228,7 @@ func boolPtr(b bool) *bool {
 func RenderCheck(
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreCheck,
-	restoredClaim string,
+	restoredClaims map[string]string,
 ) ([]client.Object, error) {
 	var objs []client.Object
 
@@ -211,7 +240,7 @@ func RenderCheck(
 		objs = append(objs, pvc)
 	}
 
-	pod, err := buildCheckPod(restore, bp, restoredClaim, scratch)
+	pod, err := buildCheckPod(restore, bp, restoredClaims, scratch)
 	if err != nil {
 		return nil, err
 	}

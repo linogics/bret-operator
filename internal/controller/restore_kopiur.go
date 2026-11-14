@@ -25,11 +25,6 @@ const (
 // kopiurRestoreGVK is the Kopiur Restore kind. It is used as unstructured. Kopiur is not a Go dependency.
 var kopiurRestoreGVK = schema.GroupVersionKind{Group: kopiurGroup, Version: apiVersionAlpha1, Kind: "Restore"}
 
-// kopiurName is the name of the Kopiur Restore of one attempt.
-func kopiurName(restore *restorev1alpha1.Restore) string {
-	return restore.Name + "-kopiur"
-}
-
 // backupNamespace is the namespace of the backup object. It is backupRef.namespace, or else the Restore namespace.
 func backupNamespace(restore *restorev1alpha1.Restore) string {
 	if ns := restore.Spec.Sources[0].BackupRef.Namespace; ns != "" {
@@ -37,16 +32,6 @@ func backupNamespace(restore *restorev1alpha1.Restore) string {
 	}
 
 	return restore.Namespace
-}
-
-// restoredClaimName is the PVC that receives the restored data.
-func restoredClaimName(restore *restorev1alpha1.Restore) string {
-	return restore.Name + "-scratch"
-}
-
-// scratchClaimName is the PVC of one check scratch volume.
-func scratchClaimName(restore *restorev1alpha1.Restore, volume string) string {
-	return restore.Name + "-scratch-" + dnsLabel(volume)
 }
 
 // restoreLabels labels every object that an attempt creates. Cleanup uses them to find the objects.
@@ -59,7 +44,7 @@ func kopiurStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{}
 	obj.SetGroupVersionKind(kopiurRestoreGVK)
 	obj.SetNamespace(restore.Namespace)
-	obj.SetName(kopiurName(restore))
+	obj.SetName(kopiurName(restore, restore.Spec.Sources[0].SourcePVC))
 
 	return obj
 }
@@ -87,7 +72,7 @@ func kopiurRestoreObject(restore *restorev1alpha1.Restore, uid *int64) *unstruct
 		"apiVersion": kopiurRestoreGVK.GroupVersion().String(),
 		fieldKind:    kopiurRestoreGVK.Kind,
 		"metadata": map[string]any{
-			keyName:      kopiurName(restore),
+			keyName:      kopiurName(restore, restore.Spec.Sources[0].SourcePVC),
 			keyNamespace: restore.Namespace,
 			"labels":     map[string]any{restoreLabel: restore.Name},
 		},
@@ -102,10 +87,10 @@ func kopiurPhase(obj *unstructured.Unstructured) string {
 	return phase
 }
 
-// MoverUID is the UID that the mover writes the restored volume as.
-// The check annotation wins. Then the runAsUser of the first main container applies.
+// MoverUID is the UID that the mover writes the restored volume of sourcePVC as.
+// The check annotation, keyed by sourcePVC, wins. Then the runAsUser of the first main container applies.
 // Nil means unset.
-func MoverUID(bp *restorev1alpha1.RestoreCheck) (*int64, error) {
+func MoverUID(bp *restorev1alpha1.RestoreCheck, sourcePVC string) (*int64, error) {
 	if raw := bp.Annotations[moverUIDAnnotation]; raw != "" {
 		var mapping map[string]int64
 
@@ -114,7 +99,7 @@ func MoverUID(bp *restorev1alpha1.RestoreCheck) (*int64, error) {
 			return nil, fmt.Errorf("parse %s annotation: %w", moverUIDAnnotation, err)
 		}
 
-		if uid, ok := mapping["data"]; ok {
+		if uid, ok := mapping[sourcePVC]; ok {
 			return &uid, nil
 		}
 	}
@@ -136,7 +121,7 @@ func restoredPVC(restore *restorev1alpha1.Restore, size resource.Quantity) *core
 
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      restoredClaimName(restore),
+			Name:      restoredClaimName(restore, restore.Spec.Sources[0].SourcePVC),
 			Namespace: restore.Namespace,
 			Labels:    restoreLabels(restore),
 		},
@@ -147,7 +132,7 @@ func restoredPVC(restore *restorev1alpha1.Restore, size resource.Quantity) *core
 			DataSourceRef: &corev1.TypedObjectReference{
 				APIGroup: &apiGroup,
 				Kind:     kopiurRestoreGVK.Kind,
-				Name:     kopiurName(restore),
+				Name:     kopiurName(restore, restore.Spec.Sources[0].SourcePVC),
 			},
 		},
 	}
