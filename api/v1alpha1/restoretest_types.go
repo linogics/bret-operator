@@ -141,10 +141,10 @@ type RestoreTestStatus struct {
 	LastSuccess *metav1.Time `json:"lastSuccess,omitempty"`
 	// NextRun is when the next cron run is scheduled.
 	NextRun *metav1.Time `json:"nextRun,omitempty"`
-	// LastHandled is the newest backup that an afterBackup trigger used. Only newer backups start a run.
+	// LastHandledBackups is the newest backup that an afterBackup trigger used. Only newer backups start a run.
 	// +listType=map
 	// +listMapKey=sourcePVC
-	LastHandled []HandledBackup `json:"lastHandled,omitempty"`
+	LastHandledBackups []HandledBackup `json:"lastHandledBackups,omitempty"`
 	// RetainedResources lists objects kept after a failed run. They help debugging.
 	RetainedResources []string `json:"retainedResources,omitempty"`
 	// CurrentRestore is the Restore of the run in progress. It is empty when no run is in progress.

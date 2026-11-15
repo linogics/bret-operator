@@ -287,8 +287,8 @@ spec:
                 description: CurrentRestore is the Restore of the run in progress.
                   It is empty when no run is in progress.
                 type: string
-              lastHandled:
-                description: LastHandled is the newest backup that an afterBackup
+              lastHandledBackups:
+                description: LastHandledBackups is the newest backup that an afterBackup
                   trigger used. Only newer backups start a run.
                 items:
                   description: HandledBackup identifies the backup an afterBackup

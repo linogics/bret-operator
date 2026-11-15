@@ -45,7 +45,9 @@ const (
 	reasonRunning        = "Running"
 	reasonBackupNotFound = "BackupNotFound"
 	reasonWaitingBackups = "WaitingForBackups"
-	reasonInvalidCron    = "InvalidCron"
+
+	conditionBackupsPending = "BackupsPending"
+	reasonInvalidCron       = "InvalidCron"
 )
 
 // snapshotGVK is the Kopiur Snapshot kind. It is used as unstructured, so Kopiur is not a Go dependency.
@@ -140,6 +142,12 @@ func (r *RestoreTestReconciler) advance(ctx context.Context, test *restorev1alph
 	// Tests read Kopiur snapshots. They need the kopiur provider and its rights.
 	if r.EnabledProviders != nil && !r.EnabledProviders[restorev1alpha1.ProviderKopiur] {
 		r.blockTest(test, reasonProviderUnsupported, "provider kopiur is disabled")
+
+		return ctrl.Result{}, nil
+	}
+
+	if len(test.Spec.Sources) == 0 {
+		r.blockTest(test, reasonSourceMissing, "the RestoreTest has no sources; recreate it in the new shape")
 
 		return ctrl.Result{}, nil
 	}
@@ -412,9 +420,9 @@ func (r *RestoreTestReconciler) nextTrigger(ctx context.Context, test *restorev1
 
 // handledFor returns the last handled backup of a source, or nil.
 func handledFor(test *restorev1alpha1.RestoreTest, sourcePVC string) *restorev1alpha1.HandledBackup {
-	for i := range test.Status.LastHandled {
-		if test.Status.LastHandled[i].SourcePVC == sourcePVC {
-			return &test.Status.LastHandled[i]
+	for i := range test.Status.LastHandledBackups {
+		if test.Status.LastHandledBackups[i].SourcePVC == sourcePVC {
+			return &test.Status.LastHandledBackups[i]
 		}
 	}
 
@@ -423,15 +431,15 @@ func handledFor(test *restorev1alpha1.RestoreTest, sourcePVC string) *restorev1a
 
 // setHandled stores the last handled backup of its source.
 func setHandled(test *restorev1alpha1.RestoreTest, h restorev1alpha1.HandledBackup) {
-	for i := range test.Status.LastHandled {
-		if test.Status.LastHandled[i].SourcePVC == h.SourcePVC {
-			test.Status.LastHandled[i] = h
+	for i := range test.Status.LastHandledBackups {
+		if test.Status.LastHandledBackups[i].SourcePVC == h.SourcePVC {
+			test.Status.LastHandledBackups[i] = h
 
 			return
 		}
 	}
 
-	test.Status.LastHandled = append(test.Status.LastHandled, h)
+	test.Status.LastHandledBackups = append(test.Status.LastHandledBackups, h)
 }
 
 // isNewerThanWatermark reports whether b is strictly newer than the last handled backup.
@@ -446,6 +454,30 @@ func isNewerThanWatermark(b completedBackup, wm *restorev1alpha1.HandledBackup) 
 	}
 
 	return b.name > wm.Name
+}
+
+// setBackupsPending reports sources that wait for a new backup while others have one.
+// It leaves Ready alone, because staggered backups would flap it daily. With no new backup at all, there is nothing to report.
+func (r *RestoreTestReconciler) setBackupsPending(test *restorev1alpha1.RestoreTest, waiting []string) {
+	if len(waiting) == 0 || len(waiting) == len(test.Spec.Sources) {
+		meta.RemoveStatusCondition(&test.Status.Conditions, conditionBackupsPending)
+
+		return
+	}
+
+	msg := "waiting for a new backup of source(s) " + strings.Join(waiting, ", ")
+
+	if c := meta.FindStatusCondition(test.Status.Conditions, conditionBackupsPending); c == nil || c.Message != msg {
+		r.Recorder.Event(test, corev1.EventTypeNormal, reasonWaitingBackups, msg)
+	}
+
+	meta.SetStatusCondition(&test.Status.Conditions, metav1.Condition{
+		Type:               conditionBackupsPending,
+		Status:             metav1.ConditionTrue,
+		Reason:             reasonWaitingBackups,
+		Message:            msg,
+		ObservedGeneration: test.Generation,
+	})
 }
 
 // afterBackupTrigger fires when every source has a backup that no run handled and whose delay has passed.
@@ -498,12 +530,9 @@ func (r *RestoreTestReconciler) afterBackupTrigger(
 		used = append(used, restorev1alpha1.HandledBackup{SourcePVC: src.SourcePVC, Name: newest.name, CreatedAt: metav1.NewTime(newest.completed)})
 	}
 
-	if len(waiting) > 0 {
-		// Show a stalled test. With no new backup at all, there is nothing to report yet.
-		if len(waiting) < len(test.Spec.Sources) {
-			r.blockTest(test, reasonWaitingBackups, "waiting for a new backup of source(s) "+strings.Join(waiting, ", "))
-		}
+	r.setBackupsPending(test, waiting)
 
+	if len(waiting) > 0 {
 		return nil, 0, nil
 	}
 

@@ -151,6 +151,13 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		return ctrl.Result{}, nil
 	}
 
+	if len(restore.Spec.Sources) == 0 {
+		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+		r.block(restore, reasonSourceMissing, "the Restore has no sources; recreate it in the new shape")
+
+		return ctrl.Result{}, nil
+	}
+
 	if restore.Status.StartTime == nil {
 		startAttempt(restore, time.Now())
 

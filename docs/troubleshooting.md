@@ -88,7 +88,6 @@ These three reasons end the `Restore` as `Failed` (`Ready` is `False`, a Warning
 no check pod runs). A `RestoreTest` retries it like any failed attempt, until `retries` run out.
 Fix the cause first, or every retry fails the same way.
 
-
 - **`SourceMissing`:** the `sourcePVC` values of the check (`restoredVolumes`) and of the
   `Restore` or `RestoreTest` (`sources`) differ. Add the missing entry on either side. See
   [concepts.md](concepts.md#which-pvc-gets-restored).
@@ -113,9 +112,12 @@ Fix the cause first, or every retry fails the same way.
   - `BackupNotFound`: a source has no `Succeeded` backup that matches its `backupSelector`. The
     message names those sources. Check the labels, and that the backups are in the namespace of
     the `RestoreTest`.
-  - `WaitingForBackups`: with `afterBackup`, some sources have a new backup and others do not yet.
-    The run starts when every source has one.
-  - `SourceMissing`: see above.
+  - A source mismatch is not a `Ready` reason of the `RestoreTest`. The run ends `Failed` and
+    `status.lastRun.reason` carries the `SourceMissing` message of the `Restore` (see above).
+
+  The `BackupsPending` condition is separate from `Ready`. With `afterBackup`, it is `True`
+  (reason `WaitingForBackups`) while some sources have a new backup and others do not yet. The
+  run starts when every source has one.
 - A `Restore` exists but does not progress: read its `Ready` condition. `ProviderUnsupported`
   means that its provider is disabled (`providers.<name>.enabled`). `CheckNotFound` means that the
   `RestoreCheck` of `restoreCheckRef` is not in the namespace of the `Restore`.

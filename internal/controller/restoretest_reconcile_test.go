@@ -285,9 +285,9 @@ func TestRestoreTestAfterBackupOneRunPerSnapshot(t *testing.T) {
 		t.Fatalf("restores after idle reconcile = %d, want 1", n)
 	}
 
-	last := f.test().Status.LastHandled
+	last := f.test().Status.LastHandledBackups
 	if len(last) != 1 || last[0].Name != "b" || last[0].SourcePVC != testDataName {
-		t.Errorf("lastHandled = %v, want b", last)
+		t.Errorf("lastHandledBackups = %v, want b", last)
 	}
 }
 
@@ -836,7 +836,7 @@ func TestAfterBackupWaitsForAllSources(t *testing.T) {
 	test := twoSourceTest()
 	test.CreationTimestamp = metav1.NewTime(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC))
 	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
-	test.Status.LastHandled = []restorev1alpha1.HandledBackup{
+	test.Status.LastHandledBackups = []restorev1alpha1.HandledBackup{
 		{SourcePVC: testHTML, Name: "h1", CreatedAt: metav1.NewTime(time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC))},
 		{SourcePVC: testPGData, Name: "p1", CreatedAt: metav1.NewTime(time.Date(2026, 11, 15, 10, 5, 0, 0, time.UTC))},
 	}
@@ -861,9 +861,9 @@ func TestAfterBackupWaitsForAllSources(t *testing.T) {
 		t.Fatalf("restores = %d, want 1", len(restores))
 	}
 
-	last := f.test().Status.LastHandled
+	last := f.test().Status.LastHandledBackups
 	if len(last) != 2 || handledFor(f.test(), testHTML).Name != "h2" || handledFor(f.test(), testPGData).Name != "p2" {
-		t.Errorf("lastHandled = %v, want h2 and p2", last)
+		t.Errorf("lastHandledBackups = %v, want h2 and p2", last)
 	}
 }
 
@@ -927,10 +927,14 @@ func TestAfterBackupShowsWaitingSources(t *testing.T) {
 		t.Fatalf("restores = %d, want 0", n)
 	}
 
-	condition := apimeta.FindStatusCondition(f.test().Status.Conditions, readyConditionType)
-	if condition == nil || condition.Reason != reasonWaitingBackups ||
+	condition := apimeta.FindStatusCondition(f.test().Status.Conditions, conditionBackupsPending)
+	if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != reasonWaitingBackups ||
 		!strings.Contains(condition.Message, testPGData) || strings.Contains(condition.Message, testHTML) {
 		t.Fatalf("condition = %+v, want %s naming only %s", condition, reasonWaitingBackups, testPGData)
+	}
+
+	if apimeta.FindStatusCondition(f.test().Status.Conditions, readyConditionType) != nil && testReadyReason(f.test()) == reasonWaitingBackups {
+		t.Error("Ready must not carry WaitingForBackups")
 	}
 
 	f.events()
@@ -948,6 +952,10 @@ func TestAfterBackupShowsWaitingSources(t *testing.T) {
 
 	if got := testReadyReason(f.test()); got != reasonRunning {
 		t.Errorf("reason after start = %q, want %s", got, reasonRunning)
+	}
+
+	if apimeta.FindStatusCondition(f.test().Status.Conditions, conditionBackupsPending) != nil {
+		t.Error("BackupsPending still set after every source has a backup")
 	}
 }
 

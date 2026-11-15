@@ -114,7 +114,7 @@ Use any combination of three triggers. A run starts when any one of them fires.
 | Field | Example | Behavior |
 |---|---|---|
 | `cron` | `"17 3 * * *"` | 5-field cron in UTC. The API checks the pattern. Each tick starts a run unless `overlapPolicy` says otherwise. |
-| `afterBackup.delay` | `30m` | Every source needs a new matching backup. When the last of them completes at time `T`, a run starts at `T + delay`. The newest handled backup of each source is recorded in `status.lastHandled`. A backup counts as new only if it is newer than that (completion time, then name). Older backups never trigger. Backups that completed before the `RestoreTest` was created never trigger either. While some sources have a new backup and others do not, the reason is `WaitingForBackups`. |
+| `afterBackup.delay` | `30m` | Every source needs a new matching backup. When the last of them completes at time `T`, a run starts at `T + delay`. The newest handled backup of each source is recorded in `status.lastHandledBackups`. A backup counts as new only if it is newer than that (completion time, then name). Older backups never trigger. Backups that completed before the `RestoreTest` was created never trigger either. While some sources have a new backup and others do not, the `BackupsPending` condition is `True` with reason `WaitingForBackups`. `Ready` does not change. |
 | `manual` | `true` | Enables the run-now annotation. Any changed value on `bret.linogics.io/run-now` starts one run. Setting the same value again while it is still set does nothing. |
 
 A manual run needs no CLI:
@@ -191,9 +191,9 @@ Use `Replace` only when the newest backup must win.
 | `status.lastRun.result` | `Succeeded` or `Failed`. |
 | `status.lastRun.reason` | Free text. It copies the message of the `Restore` that ended the run. |
 | `status.nextRun` | Next cron tick. |
-| `status.lastHandled` | Per source: name and time of the newest backup that `afterBackup` ran for. |
+| `status.lastHandledBackups` | Per source: name and time of the newest backup that `afterBackup` ran for. |
 | `status.retainedResources` | Names of kept objects when `keepOnFailure` kept a failed run. |
-| `status.conditions` | Standard conditions. The `Ready` reason is the run result (`Succeeded` or `Failed`), `Running`, or a blocking reason: `BackupNotFound` (names the sources without a backup), `WaitingForBackups` (`afterBackup` waits for sources that have no new backup yet), or `SourceMissing` (the sources and the check volumes differ). |
+| `status.conditions` | Standard conditions. The `Ready` reason is the run result (`Succeeded` or `Failed`), `Running`, or a blocking reason: `BackupNotFound` (names the sources without a backup). When the sources and the check volumes differ, the run ends `Failed` and `status.lastRun.reason` carries the `SourceMissing` message of the `Restore`. The `BackupsPending` condition is `True` (reason `WaitingForBackups`) while `afterBackup` waits for sources that have no new backup yet. |
 
 Read it with:
 

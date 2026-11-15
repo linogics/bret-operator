@@ -624,8 +624,8 @@ func (in *RestoreTestStatus) DeepCopyInto(out *RestoreTestStatus) {
 		in, out := &in.NextRun, &out.NextRun
 		*out = (*in).DeepCopy()
 	}
-	if in.LastHandled != nil {
-		in, out := &in.LastHandled, &out.LastHandled
+	if in.LastHandledBackups != nil {
+		in, out := &in.LastHandledBackups, &out.LastHandledBackups
 		*out = make([]HandledBackup, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
