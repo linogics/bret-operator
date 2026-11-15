@@ -10,8 +10,9 @@ not read logs.
 You may use any image and any language: bash, Python, a Go binary, `psql`, `php occ`, `mysqlcheck`,
 or anything else that exits with a code. The check runs in its own image, not in the application image.
 
-Start with [examples/restorecheck-minimal.yaml](../examples/restorecheck-minimal.yaml).
-It is the smallest check that works, and it is tested.
+Start with [examples/restorecheck-multi.yaml](../examples/restorecheck-multi.yaml): an app with
+two volumes. [examples/restorecheck-minimal.yaml](../examples/restorecheck-minimal.yaml) is the
+short form with one volume. Both work.
 
 ## Anatomy
 
@@ -19,32 +20,34 @@ It is the smallest check that works, and it is tested.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreCheck
 metadata:
-  name: orders-db-check
-  namespace: data
+  name: nextcloud
+  namespace: nextcloud
 spec:
-  restoreMount: /var/lib/postgresql/data     # one restored volume, mounted here
+  restoredVolumes:                           # one entry per restored PVC
+    - sourcePVC: html                        # PVC in the backed-up namespace
+      mountPath: /var/www/html
+    - sourcePVC: pgdata
+      mountPath: /var/lib/postgresql/data
   initContainers: []                         # run first, in order
   containers:                                # the checks; all must exit 0
     - name: check
-      image: postgres:17.12
-      command: ["/bin/sh", "-c", "pg_isready --version && ..."]
+      image: nextcloud:29-apache
+      command: ["/bin/sh", "-c", "php occ status && ..."]
   scratchVolumes: []                         # extra empty volumes, one per attempt
   volumes: []                                # ConfigMaps and Secrets the pod needs
 ```
 
 | Field | Required | Meaning |
 |---|---|---|
-| `restoreMount` | one of `restoreMount` or `restoredVolumes` | Mount path of the single restored volume. It is mounted in every init and check container. |
-| `restoredVolumes` | one of the two | List with one `{name, mountPath, sourcePVC}` entry in v1. See below. |
+| `restoredVolumes` | yes, at least one | List of `{sourcePVC, mountPath}`. Each restored volume is mounted in every init and check container. See below. |
 | `initContainers` | no | Run before the checks. A native sidecar (see below) also goes here. |
 | `containers` | yes, at least one | The check containers. Exit code 0 means pass. |
 | `scratchVolumes` | no | `{name, mountPath, storageClassName, size}`. Empty PVCs created per attempt. |
 | `volumes` | no | Extra pod volumes, for example a ConfigMap with a check script. |
 
-Set exactly one of `restoreMount` and `restoredVolumes`. The API rejects both or neither.
 
 The diagram shows the check pod that the operator builds from these fields. The example is a
-Postgres check with a `pgdata-perms` init container and a `postgres` sidecar.
+nextcloud check with a `pgdata-perms` init container and a `postgres` sidecar.
 
 ```text
 check pod <restore>-check
@@ -57,7 +60,7 @@ check pod <restore>-check
 │    check
 │
 └─ volumes
-     restored volume   at restoreMount, in every container
+     html, pgdata      at their mountPath, in every container
      scratchVolumes    one empty PVC per attempt
      volumes           your ConfigMaps and Secrets
 ```
@@ -69,29 +72,43 @@ check pod <restore>-check
 - A check that hangs is stopped by `restoreWindow` (see [restoretest-guide.md](restoretest-guide.md)).
 - Test each check with a broken input. Make the expected value wrong once, and confirm exit 1.
 
-## One volume: restoreMount
+## Restored volumes
 
-Use `restoreMount` when the application has one volume.
+Each `restoredVolumes` entry has two fields:
+
+- `sourcePVC`: the PVC in the backed-up namespace that this entry restores. It must be unique in
+  the check.
+- `mountPath`: where the restored volume is mounted.
+
+A `Restore` or `RestoreTest` must have one source with the same `sourcePVC` for every entry. If
+the sets differ, the run stops with `SourceMissing`. See
+[concepts.md](concepts.md#which-pvc-gets-restored).
 
 Key rule: the mount path must be the path the application used in production. Absolute paths in
 the application's config then still resolve on the restored copy.
 
-## One entry: restoredVolumes
-
-`restoredVolumes` takes one entry in v1. Each entry names the restored volume, the mount path,
-and the PVC in the backed-up namespace that it restores (`sourcePVC`):
+A single-volume app has one entry:
 
 ```yaml
 spec:
   restoredVolumes:
-    - name: data                 # the key for hack/check-test/check.sh
+    - sourcePVC: data
       mountPath: /var/lib/app
-      sourcePVC: app-data        # PVC in the backed-up namespace
 ```
 
-The operator rejects a check with two or more entries. The check then fails with
-`ProviderUnsupported`. Checks for apps with several volumes cannot run in the operator in v1. See
-[data-and-database.md](data-and-database.md). Multi-entry support is not in v1.
+All volumes come from the same backup point. For a database plus files this is the point: see
+[data-and-database.md](data-and-database.md).
+
+## Mover UID
+
+The restore mover writes the volume as some UID. The annotation `bret.linogics.io/mover-uid` sets it
+for each volume, keyed by `sourcePVC`. Without a key, the first container's `runAsUser` is used.
+
+```yaml
+metadata:
+  annotations:
+    bret.linogics.io/mover-uid: '{"html": 33, "pgdata": 999}'
+```
 
 ## Scratch volumes
 
@@ -191,20 +208,20 @@ Reference a Secret in the container:
 spec:
   containers:
     - name: check
-      image: postgres:17
+      image: postgres:17.12
       env:
         - name: PGPASSWORD              # one key
           valueFrom:
             secretKeyRef:
-              name: orders-db-check     # Secret in the RestoreTest namespace
+              name: nextcloud-db     # Secret in the RestoreTest namespace
               key: password
       envFrom:                          # or every key of the Secret
         - secretRef:
-            name: orders-db-check
+            name: nextcloud-db
 ```
 
 For a file, put the Secret in `spec.volumes` and mount it in the container with `volumeMounts`.
-The operator mounts only the restored volume and the scratch volumes for you.
+The operator mounts only the restored volumes and the scratch volumes for you.
 
 Rules:
 

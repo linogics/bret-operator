@@ -58,8 +58,8 @@ Do not commit this file.
 ### Back up with data movement
 
 ```bash
-velero backup create orders-db-2026-11-14 \
-  --include-namespaces data \
+velero backup create nextcloud-2026-11-14 \
+  --include-namespaces nextcloud \
   --snapshot-move-data \
   --wait
 ```
@@ -68,11 +68,31 @@ velero backup create orders-db-2026-11-14 \
 snapshot. A restore then works only while that snapshot exists. Off-cluster recovery does not
 work.
 
+Label every app PVC before the backup, so a restore can select it. Velero has no name filter. A
+selector matches the labels that are stored in the backup, so a label added after the backup does
+not count:
+
+```bash
+kubectl -n nextcloud label pvc html pgdata app.kubernetes.io/name=nextcloud
+```
+
+A Velero `Restore` source has no `sourcePVC` and no size. It takes one `backupRef` and one of two
+selectors, which are mutually exclusive:
+
+- `labelSelector`: a standard label selector. One selector matches all the PVCs.
+- `orLabelSelectors`: a list of selectors. A PVC matches if any one matches. Use it when the PVCs
+  carry different labels.
+
+Every `sourcePVC` of the check must be among the restored PVCs. Otherwise the run stops with
+`RestoredVolumeMissing`.
+
 Enable the provider in the chart with `providers.velero.enabled: true`. The Velero install
 namespace is `providers.velero.namespace`, default `velero`. The chart passes it to the operator
 as `VELERO_NAMESPACE`.
 
-A manual `Restore` for Velero: [examples/restore-velero.yaml](../examples/restore-velero.yaml).
+A manual `Restore` for Velero: [examples/restore-velero.yaml](../examples/restore-velero.yaml)
+(one selector) and [examples/restore-velero-multi.yaml](../examples/restore-velero-multi.yaml)
+(`orLabelSelectors`).
 
 ### What the operator drives
 
@@ -104,6 +124,9 @@ helm install volsync backube/volsync --namespace volsync-system --create-namespa
 
 ### Back up
 
+VolSync has one `ReplicationSource` per PVC. An app with two PVCs, such as nextcloud, needs two.
+Each `Restore` source then names one of them.
+
 Store the repository settings in a Secret in the application namespace:
 
 ```yaml
@@ -111,10 +134,10 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: restic-config
-  namespace: data
+  namespace: nextcloud
 type: Opaque
 stringData:
-  RESTIC_REPOSITORY: "s3:https://s3.example.internal/volsync/orders-db"
+  RESTIC_REPOSITORY: "s3:https://s3.example.internal/volsync/nextcloud"
   RESTIC_PASSWORD: "<a strong password you keep safe>"
   AWS_ACCESS_KEY_ID: "<access key>"
   AWS_SECRET_ACCESS_KEY: "<secret key>"
@@ -122,10 +145,27 @@ stringData:
 apiVersion: volsync.backube/v1alpha1
 kind: ReplicationSource
 metadata:
-  name: orders-db-backup
-  namespace: data
+  name: html-backup
+  namespace: nextcloud
 spec:
-  sourcePVC: orders-db-data
+  sourcePVC: html
+  trigger:
+    schedule: "0 2 * * *"
+  restic:
+    repository: restic-config
+    copyMethod: Snapshot
+    volumeSnapshotClassName: csi-snapclass
+    pruneIntervalDays: 7
+    retain:
+      daily: 7
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: pgdata-backup
+  namespace: nextcloud
+spec:
+  sourcePVC: pgdata
   trigger:
     schedule: "0 2 * * *"
   restic:
@@ -137,12 +177,16 @@ spec:
       daily: 7
 ```
 
+The operator reads `spec.sourcePVC` of each `ReplicationSource`. If it is not the `sourcePVC` of
+the `Restore` source, the run stops with `SourceMismatch`.
+
 For a database, set the mover's UID to the database's UID with `moverSecurityContext`.
-Postgres 17 uses 999. See [data-and-database.md](data-and-database.md).
+Postgres 17 uses 999. Set the UID per volume with the `mover-uid` annotation on the check, keyed by
+`sourcePVC` (see [checks.md](checks.md#mover-uid)). See [data-and-database.md](data-and-database.md).
 
 Enable the provider in the chart with `providers.volsync.enabled: true`.
 
-A manual `Restore` for VolSync: [examples/restore-volsync.yaml](../examples/restore-volsync.yaml).
+A manual `Restore` for VolSync, with one source per PVC: [examples/restore-volsync.yaml](../examples/restore-volsync.yaml).
 
 ### What the operator drives
 
@@ -173,7 +217,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: kopiur-repo-creds
-  namespace: data
+  namespace: nextcloud
 type: Opaque
 stringData:
   AWS_ACCESS_KEY_ID: "<access key>"
@@ -184,12 +228,12 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Repository
 metadata:
   name: primary
-  namespace: data
+  namespace: nextcloud
 spec:
   backend:
     s3:
       bucket: kopiur
-      prefix: orders-db/
+      prefix: nextcloud/
       endpoint: s3.example.internal
       region: us-east-1
       auth:
@@ -205,15 +249,15 @@ spec:
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
-  name: orders-db-data
-  namespace: data
+  name: pgdata
+  namespace: nextcloud
 spec:
   repository:
     kind: Repository
     name: primary
   sources:
     - pvc:
-        name: orders-db-data
+        name: pgdata
   copyMethod: Snapshot
   volumeSnapshotClassName: csi-snapclass
   retention:
@@ -225,6 +269,21 @@ spec:
       runAsNonRoot: true
 ```
 
+**Warning: one Snapshot holds one PVC.** A `SnapshotPolicy` with several `pvc:` sources backs up
+only the first one. The others are silently skipped. Use one policy per PVC (as `pgdata` above, and
+a second policy `html`), or a policy with `pvcSelector`, which makes one `Snapshot` per matching
+PVC:
+
+```yaml
+  sources:
+    - pvcSelector:
+        matchLabels:
+          app.kubernetes.io/name: nextcloud
+```
+
+Each `Restore` source names the `Snapshot` of one PVC. If the `Snapshot` holds another PVC than the
+`sourcePVC` of the source, the run stops with `SourceMismatch`.
+
 The `mover` block is needed for databases. Without it, the mover reads the data directory as
 UID 65532 and fails with `permission denied`. Set the UID to the database's UID.
 
@@ -234,19 +293,22 @@ Take a snapshot by hand:
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
-  name: orders-db-data-1
-  namespace: data
+  name: pgdata-1
+  namespace: nextcloud
 spec:
   policyRef:
-    name: orders-db-data
+    name: pgdata
   deletionPolicy: Retain
 ```
 
-Wait until `status.phase` is `Succeeded`.
+Wait until `status.phase` is `Succeeded`. Repeat for `html`.
 
-A manual `Restore` for Kopiur: [examples/restore-kopiur.yaml](../examples/restore-kopiur.yaml).
+A manual `Restore` for Kopiur, with one source per PVC: [examples/restore-kopiur.yaml](../examples/restore-kopiur.yaml).
 
 ### Restore
+
+This is the Kopiur-native restore of one PVC, as the tool does it. The operator creates these
+objects for you, one per source.
 
 A Kopiur restore runs in a namespace. Copy the repository credentials Secret into that
 namespace first. Kopiur did not find the Secret in another namespace. Without it, the restore
@@ -256,13 +318,13 @@ fails with `MissingCredentialsSecret`.
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Restore
 metadata:
-  name: orders-db-restore
+  name: nextcloud-pgdata-restore
   namespace: restore-test
 spec:
   source:
     snapshotRef:
-      name: orders-db-data-1
-      namespace: data
+      name: pgdata-1
+      namespace: nextcloud
   target:
     populator: {}
   mover:
@@ -277,7 +339,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: orders-db-restored
+  name: nextcloud-pgdata-restored
   namespace: restore-test
 spec:
   storageClassName: <your-storage-class>
@@ -288,7 +350,7 @@ spec:
   dataSourceRef:
     apiGroup: kopiur.home-operations.com
     kind: Restore
-    name: orders-db-restore
+    name: nextcloud-pgdata-restore
 ```
 
 Use your own `StorageClass` for the PVC. The tests used `csi-hostpath-sc`.

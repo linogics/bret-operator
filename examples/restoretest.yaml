@@ -1,28 +1,36 @@
-# RestoreTest: test the newest orders-db backup every night. Test it again after each new backup.
-# The backup selector matches Kopiur Snapshot objects in this namespace.
-# Check: examples/restorecheck-minimal.yaml. Or use your own check.
+# RestoreTest: test the newest nextcloud backups every night. Test again after each new backup.
+# One source per PVC. Each backup selector matches Kopiur Snapshot objects in this namespace.
+# Each run restores the newest Snapshot of every source. Check: examples/restorecheck-multi.yaml.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
-  name: orders-db-nightly
-  namespace: data
+  name: nextcloud-nightly
+  namespace: nextcloud
 spec:
   provider: kopiur
-  backupSelector:
-    labels:
-      app.kubernetes.io/name: orders-db
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-html
+      storageClassName: fast-ssd
+      size: 20Gi                # Optional. Default: the source size.
+    - sourcePVC: pgdata
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-pgdata
+      storageClassName: fast-ssd
+      size: 10Gi
   restoreCheckRef:
-    name: minimal
-  target:
-    size: 20Gi                  # Required in v1. Scratch volume size for each run.
+    name: nextcloud
   triggers:
     cron: "17 3 * * *"          # 03:17 UTC every day
     afterBackup:
-      delay: 30m                # Also run 30 minutes after each new backup completes.
+      delay: 30m                # Also run 30 minutes after every source has a new backup.
     manual: true                # Run on demand with the run-now annotation.
   restoreWindow: 45m            # Per attempt: restore, image pulls, and check.
   retries:
     count: 2                    # Up to 3 attempts in total.
     backoff: 10m                # Wait between attempts.
-  keepOnFailure: true           # Keep the pod, PVC, and restore after the last failed attempt.
+  keepOnFailure: true           # Keep the pod, PVCs, and restores after the last failed attempt.
   overlapPolicy: Skip           # A trigger during a run is dropped. This is the default.

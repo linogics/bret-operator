@@ -1,5 +1,3 @@
-# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. The operator
-# accepts one entry, so it rejects this check with ProviderUnsupported. It runs with hack/check-test.
 # TESTED: round trip PASS. Negative test FAIL, as expected.
 # Native sidecar: mariadb is an initContainer with restartPolicy: Always (k8s 1.29+).
 # The startupProbe gates it.
@@ -13,9 +11,9 @@ metadata:
     bret.linogics.io/mover-uid: '{"html": 33, "mysql": 999}'
 spec:
   restoredVolumes:
-    - name: html
+    - sourcePVC: html
       mountPath: /var/www/html
-    - name: mysql
+    - sourcePVC: mysql
       mountPath: /var/lib/mysql
 
   initContainers:

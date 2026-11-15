@@ -16,8 +16,8 @@ on a schedule, checks the restored data, and tells you when the check fails.
 | `RestoreTest` | `rtest` | The schedule and policy: which backups, which check, when, how many retries. | You. |
 | `Restore` | `restore` | One restore attempt run: the native restore object plus the check pod. You create it by hand, or a `RestoreTest` creates it. | You, or the operator. |
 
-A typical setup has one `RestoreCheck` per application. It also has one `RestoreTest` per backup
-source that feeds the check.
+A typical setup has one `RestoreCheck` per application. It also has one `RestoreTest` for that
+app, with one source per PVC.
 
 ## What the operator does, and what it does not do
 
@@ -55,17 +55,17 @@ reason `ProviderUnsupported`.
 ### Velero
 
 The diagram shows the three namespaces of a Velero restore and what lives in each. Here the
-`Restore` is in the namespace `data`.
+`Restore` is in the namespace `nextcloud`.
 
 ```text
-┌ velero ───────────────┐   ┌ data (your namespace) ─┐
+┌ velero ───────────────┐   ┌ nextcloud (your ns) ───┐
 │ Backup      (read)    │   │ RestoreTest            │
 │ Restore     (created) │◄──│ Restore                │
 └──────────┬────────────┘   │ RestoreCheck           │
            │                └───────────┬────────────┘
            ▼                            │ copies pod-security labels
 ┌ bret-scratch-<hash> ──────────────────▼────────────┐
-│ restored PVC + PV   (only those of "data")         │
+│ restored PVC + PV   (only those of "nextcloud")    │
 │ check pod           (no Secrets, no ConfigMaps)    │
 └────────────────────────────────────────────────────┘
   hash = first 12 hex of sha256("<namespace>/<name>")
@@ -78,7 +78,8 @@ The diagram shows the three namespaces of a Velero restore and what lives in eac
 - The hash covers the namespace. So equal `Restore` names in two namespaces never share data.
 - The operator copies the `pod-security.kubernetes.io/*` labels before the check pod starts. The
   pod then runs under the same Pod Security rules as in your namespace.
-- Velero restores at the original size. So `target.size` and `autoExpand` only gate the run.
+- Velero restores at the original size. A Velero source has no `size`, `autoExpand` or `storageClassName`.
+- Velero restores the PVCs that match the source's label selector. See [Which PVC gets restored](#which-pvc-gets-restored).
 
 A check for Velero must not set any of these. Such a check fails with `ProviderUnsupported`:
 
@@ -109,15 +110,46 @@ mover UID:  annotation bret.linogics.io/mover-uid ─► first container runAsUs
 - The reason `RepositoryMissing` is set when the `ReplicationSource` has no
   `spec.restic.repository`, or when the Secret is not in the `Restore` namespace.
 - The annotation and `runAsUser` are read from the check.
-- The annotation value is a JSON map of volume key to UID. The operator reads the key `data`.
-  A plain number such as `"999"` is a parse error. Example: `bret.linogics.io/mover-uid: '{"data": 999}'`.
+- The annotation value is a JSON map of `sourcePVC` to UID, one UID per restored volume.
+  A volume without a key uses the first container's `runAsUser`. A plain number such as `"999"` is a parse
+  error. Example: `bret.linogics.io/mover-uid: '{"html": 33, "pgdata": 999}'`.
 
-## Volumes per restore
+## Which PVC gets restored
 
-A `RestoreCheck` may list one entry in `restoredVolumes`, or use `restoreMount`. Each
-`restoredVolumes` entry has `name`, `mountPath` and `sourcePVC` (the PVC in the backed-up
-namespace). More than one entry fails with `ProviderUnsupported` in v1. Restoring several
-volumes per check is a follow-up.
+An app often has more than one PVC. The default example here is nextcloud with two: `html`
+(files) and `pgdata` (database). A `RestoreCheck` lists both in `restoredVolumes`. A `Restore`
+(or `RestoreTest`) has one source for each. `sourcePVC` is the key that ties them together.
+
+```text
+RestoreCheck.restoredVolumes[].sourcePVC ◄──── same set ────► Restore.sources[].sourcePVC
+        html    -> /var/www/html                                    html    (backupRef: html-1)
+        pgdata  -> /var/lib/postgresql/data                         pgdata  (backupRef: pgdata-1)
+```
+
+| Provider | What a source restores | Restored claim | Namespace |
+|---|---|---|---|
+| `kopiur` | The PVC in one `Snapshot`. One `Snapshot` holds one PVC. | `<restore>-<sourcePVC>` | The `Restore` namespace. |
+| `volsync` | The PVC of one `ReplicationSource`. | `<restore>-<sourcePVC>` | The `Restore` namespace. |
+| `velero` | Every PVC of the `Backup` that the label selector matches. One source only. | The source PVC name, for example `html` and `pgdata`. | `bret-scratch-<hash>`. |
+
+- A Kopiur or VolSync claim name is `<restore>-<sourcePVC>`. When that is longer than 63
+  characters, the operator shortens it and adds a hash.
+- Velero has no name filter. It matches the labels that are stored in the backup, so label each
+  app PVC before the backup. `labelSelector` and `orLabelSelectors` are exclusive.
+- One restore reads all sources. The check pod mounts every restored claim at the `mountPath` of
+  its `sourcePVC`.
+
+The operator checks that the pieces fit. Each one sets the `Ready` condition to `False` with that
+reason, writes a Warning Event, and runs no check pod:
+
+- `SourceMissing`: the `sourcePVC` set of the check and of the `Restore` differ. A volume of the
+  check has no source, or a source has no volume.
+- `SourceMismatch` (Kopiur and VolSync): the backup holds another PVC than the `sourcePVC` of its
+  source. For example, `html` points at the `Snapshot` of `pgdata`.
+- `RestoredVolumeMissing` (Velero): a `sourcePVC` of the check was not restored. The selector did
+  not match it, or the backup does not contain it.
+
+A one-volume app has one entry on each side. It works the same way.
 
 ## The scratch-volume rule
 
@@ -133,7 +165,7 @@ The diagram shows how a `Restore` picks the size of its scratch volume, and whic
 when it cannot.
 
 ```text
-target.size set? ──yes─► use it ───────────────────────────┐
+size set?        ──yes─► use it ───────────────────────────┐
       │ no                                                 │
       ▼                                                    │
 source size known? ──no─► SizeUnknown                      │
@@ -149,16 +181,15 @@ source size known, and size below it? ──yes─► InsufficientCapacity
 status.resolvedSize   (resolved once)
 ```
 
-`target.size` on a `Restore` is optional. A `RestoreTest` needs it, see
-[restoretest-guide.md](restoretest-guide.md#target). With an unknown source size, a set
-`target.size` is used without the capacity check.
+`size` is optional on every source (Kopiur and VolSync). The size is resolved for each source. With
+an unknown source size, a set `size` is used without the capacity check.
 
 Two failures are reported as reasons on the `Restore`. Both end it as `Failed`, and nothing is
 created:
 
-- `SizeUnknown`: the source size is unknown and `target.size` is not set. It is also set for a
+- `SizeUnknown`: the source size is unknown and `size` is not set. It is also set for a
   running `Restore` from an older operator version that has no `status.resolvedSize`.
-- `InsufficientCapacity`: `target.size`, or the `autoExpand` result, is smaller than the source
+- `InsufficientCapacity`: `size`, or the `autoExpand` result, is smaller than the source
   size.
 
 The source size comes from the provider:
@@ -167,12 +198,12 @@ The source size comes from the provider:
 - Velero: the PVC request in the backup.
 - VolSync: the request of the source PVC.
 
-`target.autoExpand` has these fields:
+`autoExpand` has these fields:
 
 - `percentage`: headroom on top of the source. Above 0, at most 1000.
 - `min` and `max`: optional bounds. `min` must not exceed `max`.
 
-Example: a 20Gi source with the default gives 22Gi. For a fixed size, set `target.size`. Or use
+Example: a 20Gi source with the default gives 22Gi. For a fixed size, set `size`. Or use
 `percentage: 100, min: X, max: X` with X at least the source size.
 
 ## The restore test lifecycle
@@ -206,10 +237,10 @@ Retries, set on the RestoreTest. Only Failed is retried.
 One attempt, in order. The list has only what the diagram does not show:
 
 1. Resolve the scratch size (see [Scratch volume size](#scratch-volume-size)).
-2. Create the scratch volume, owned by the `Restore`. Then create the native restore object,
-   targeting the scratch volume.
+2. Create one scratch volume per source, owned by the `Restore`. Then create the native restore
+   objects, targeting the scratch volumes.
 3. When the native restore is done, create the check pod from the `RestoreCheck`. The restored
-   volume is mounted at the check's `restoreMount` (or at the `restoredVolumes` path).
+   volumes are mounted at the `restoredVolumes` paths.
 4. Every check container must exit 0 for `Succeeded`. `restoreWindow` covers both waits: the
    native restore and the check pod.
 5. A retry is a new `Restore`. It starts again at step 1, after `retries.backoff`.

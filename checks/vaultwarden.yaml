@@ -9,7 +9,9 @@ metadata:
   name: vaultwarden
   namespace: default
 spec:
-  restoreMount: /data
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /data
 
   initContainers:
   # The restored mount root comes back owned by root. Vaultwarden runs as nobody (65534) and

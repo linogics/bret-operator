@@ -9,7 +9,9 @@ metadata:
   name: home-assistant
   namespace: default
 spec:
-  restoreMount: /config
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /config
 
   initContainers:
   # The restored mount root comes back owned by root. Home Assistant (uid 1000) creates its

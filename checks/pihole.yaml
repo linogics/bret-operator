@@ -1,5 +1,3 @@
-# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. The operator
-# accepts one entry, so it rejects this check with ProviderUnsupported. It runs with hack/check-test.
 # TESTED: round trip PASS. Negative test FAIL, as expected.
 # Two volumes: /etc/pihole (gravity.db, setupVars, custom.list) and /etc/dnsmasq.d.
 # Canary contract: the adlist https://bret-canary.invalid/list.txt is in gravity.db.
@@ -11,9 +9,9 @@ metadata:
   namespace: default
 spec:
   restoredVolumes:
-    - name: etc-pihole
+    - sourcePVC: etc-pihole
       mountPath: /etc/pihole
-    - name: dnsmasq
+    - sourcePVC: dnsmasq
       mountPath: /etc/dnsmasq.d
 
   initContainers: []

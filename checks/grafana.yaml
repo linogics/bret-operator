@@ -8,7 +8,9 @@ metadata:
   name: grafana
   namespace: default
 spec:
-  restoreMount: /var/lib/grafana
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /var/lib/grafana
 
   initContainers:
   # The restored mount root comes back owned by root. Grafana must create its own directories there.

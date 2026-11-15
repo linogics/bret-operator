@@ -11,7 +11,8 @@
 **bret** stands for **b**ackup **re**store **T**est.
 
 bret tests your Kubernetes backups. It restores a backup from Velero, VolSync or
-Kopiur into a scratch volume. It runs your check in a throwaway pod. Then it records the result.
+Kopiur into a scratch volume. It runs your check in a throwaway pod. Then it records the result. An app with several volumes, such as nextcloud with `html` and
+`pgdata`, is restored and checked as one unit.
 
 ## Quick links
 

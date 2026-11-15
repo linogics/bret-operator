@@ -7,12 +7,18 @@ metadata:
   name: restoretest-sample
 spec:
   provider: kopiur
-  backupSelector:
-    labels:
-      app.kubernetes.io/name: orders-db
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-html
+      size: 20Gi
+    - sourcePVC: pgdata
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-pgdata
+      size: 10Gi
   restoreCheckRef:
     name: restorecheck-sample
-  target:
-    size: 20Gi
   triggers:
     manual: true

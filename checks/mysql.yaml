@@ -10,7 +10,9 @@ metadata:
   name: mysql
   namespace: default
 spec:
-  restoreMount: /var/lib/mysql
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /var/lib/mysql
 
   initContainers: []
 

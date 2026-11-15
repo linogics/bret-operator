@@ -1,5 +1,5 @@
-# The smallest working RestoreCheck. It has one volume and one check container.
-# The volume is restored to /data. The check recomputes the SHA-256 of the canary file.
+# The smallest working RestoreCheck: the short form with one volume. For two or more volumes see
+# examples/restorecheck-multi.yaml. The volume is restored to /data. The check recomputes the SHA-256 of the canary file.
 # Canary contract: /data/canary.txt holds the payload. /data/canary.sha256 holds its hash.
 # The seed for this check is hack/check-test/seeds/minimal.yaml.
 apiVersion: bret.linogics.io/v1alpha1
@@ -8,7 +8,9 @@ metadata:
   name: minimal
   namespace: data
 spec:
-  restoreMount: /data
+  restoredVolumes:
+    - sourcePVC: data           # The PVC in the backed-up namespace.
+      mountPath: /data
   containers:
     - name: check
       image: busybox:1.37

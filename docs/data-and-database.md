@@ -3,19 +3,14 @@
 Some apps keep state in two places: files and a database, or a database plus a separate file
 store. Both parts must come from the same backup point. This page explains why, and how to do it.
 
-## Current limit (v1)
+## Several volumes
 
-A `RestoreCheck` accepts one restored volume. The operator restores one PVC per `Restore`. A check
-with two or more `restoredVolumes` entries is rejected with `ProviderUnsupported`.
+A `RestoreCheck` lists every volume in `restoredVolumes`. A `Restore` or `RestoreTest` restores
+one source per volume in one attempt, and the check pod mounts them all. The `sourcePVC` values tie
+the two together. See [concepts.md](concepts.md#which-pvc-gets-restored).
 
-These checks have several volumes and are not runnable by the operator in v1:
-`checks/nextcloud.yaml`, `checks/wordpress.yaml`, `checks/jellyfin.yaml` and `checks/pihole.yaml`.
-They run with `hack/check-test/check.sh`, which accepts several `KEY=PVC` pairs.
-
-Not in v1:
-
-- Restoring several volumes of one app in one attempt.
-- A group key that ties several restores together.
+The checks for apps with several volumes are `checks/nextcloud.yaml`, `checks/wordpress.yaml`,
+`checks/jellyfin.yaml` and `checks/pihole.yaml`.
 
 ## The problem
 
@@ -44,10 +39,10 @@ Symptoms seen in the apps:
 
 1. **Restore the whole app group from one backup point.**
    - A Velero namespace backup is one point. Restoring it gives one consistent set.
-   - VolSync and Kopiur work per PVC. Group the PVCs of one app with a shared trigger time,
-     or accept the skew and check it.
-2. **Test one volume per operator check in v1.** Use `hack/check-test` for a run that mounts
-   several volumes.
+   - VolSync and Kopiur work per PVC. List every PVC of the app as a source of one `Restore` or
+     `RestoreTest`. Take the backups at the same time, or accept the skew and check it. A
+     `RestoreTest` with `afterBackup` waits until every source has a new backup.
+2. **Restore all volumes of the app in one attempt.** One source per PVC, one check that mounts them all.
 3. **Quiesce the database, or rely on crash recovery.** Pick one:
    - **Crash-consistent copy, WAL recovery on boot.** Tested with Postgres 17. The copy of a
      live database recovered on boot, and the SQL check passed. Not tested under heavy write load.
@@ -68,8 +63,8 @@ Files plus Postgres, two PVCs.
 - Volumes: `html` at `/var/www/html`, `pgdata` at `/var/lib/postgresql/data`.
 - Files: `/var/www/html/data`. The rows that say which files exist and their sizes are in
   `oc_filecache` in Postgres.
-- Restore: both PVCs from one backup selector. The operator cannot run this check in v1. Use
-  `hack/check-test`.
+- Restore: two sources, `html` and `pgdata`, in one `Restore` or `RestoreTest`. Example:
+  [examples/restoretest.yaml](../examples/restoretest.yaml).
 - Repair if drift happens: `occ files:scan` can fix listings but may drop or duplicate
   entries.
 - Check (`checks/nextcloud.yaml`): `occ status` shows installed, `occ integrity:check-core`
@@ -84,7 +79,7 @@ Files plus MariaDB, two PVCs.
 
 - Volumes: `html` at `/var/www/html`, `mysql` at `/var/lib/mysql`.
 - DB rows (`wp_posts`) reference uploads in `wp-content/uploads`.
-- Restore: both volumes from one backup point. Run with `hack/check-test` in v1.
+- Restore: two sources, `html` and `mysql`, in one attempt.
 - Check: MariaDB ping. The canary post's content equals the sha256 of the uploaded canary file.
 - Not checked: front-end render, plugin-generated tables.
 

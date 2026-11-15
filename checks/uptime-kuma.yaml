@@ -7,7 +7,9 @@ metadata:
   name: uptime-kuma
   namespace: default
 spec:
-  restoreMount: /app/data
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /app/data
 
   initContainers:
   # The restored mount root comes back owned by root. Uptime Kuma runs as node (1000) and writes

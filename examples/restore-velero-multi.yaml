@@ -1,0 +1,22 @@
+# Restore: one manual restore attempt. A RestoreTest usually creates these.
+# The check in restoreCheckRef runs after the restore. Check: examples/restorecheck-multi.yaml.
+# Velero, PVCs with different labels. orLabelSelectors: a PVC matches if any selector matches.
+# labelSelector and orLabelSelectors are mutually exclusive. Velero has no name filter,
+# so label each app PVC before the backup. Selectors match the labels stored in the backup.
+apiVersion: bret.linogics.io/v1alpha1
+kind: Restore
+metadata:
+  name: nextcloud-manual
+  namespace: nextcloud
+spec:
+  provider: velero
+  sources:
+    - backupRef:
+        name: nextcloud-2026-11-14
+      orLabelSelectors:
+        - matchLabels:
+            bret.linogics.io/volume: html
+        - matchLabels:
+            bret.linogics.io/volume: pgdata
+  restoreCheckRef:
+    name: nextcloud

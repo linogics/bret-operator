@@ -8,7 +8,9 @@ metadata:
   name: mariadb
   namespace: default
 spec:
-  restoreMount: /var/lib/mysql
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /var/lib/mysql
 
   initContainers: []
 

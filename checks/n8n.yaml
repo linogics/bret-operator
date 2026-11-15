@@ -9,7 +9,9 @@ metadata:
   name: n8n
   namespace: default
 spec:
-  restoreMount: /home/node/.n8n
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /home/node/.n8n
 
   initContainers:
   # The restored mount root comes back owned by root. n8n (uid 1000) writes its SQLite DB and

@@ -10,7 +10,9 @@ metadata:
   name: postgres
   namespace: default
 spec:
-  restoreMount: /var/lib/postgresql/data
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /var/lib/postgresql/data
 
   initContainers:
     - name: pgdata-perms

@@ -1,18 +1,26 @@
-# Restore: one manual restore attempt of a named backup. A RestoreTest usually creates these.
-# The check in restoreCheckRef runs after the restore. Check: examples/restorecheck-minimal.yaml.
+# Restore: one manual restore attempt. A RestoreTest usually creates these.
+# The check in restoreCheckRef runs after the restore. Check: examples/restorecheck-multi.yaml.
+# One source per PVC. Each source names one Kopiur Snapshot (a Snapshot holds one PVC).
+# Restored claims: <restore>-<sourcePVC>, here nextcloud-manual-html and nextcloud-manual-pgdata.
 apiVersion: bret.linogics.io/v1alpha1
 kind: Restore
 metadata:
-  name: orders-db-manual
-  namespace: data
+  name: nextcloud-manual
+  namespace: nextcloud
 spec:
   provider: kopiur
-  source:
-    backupRef:
-      name: orders-db-data-1     # A Kopiur Snapshot.
-      namespace: data            # Optional. Where the Snapshot is. Default: the Restore namespace.
-  target:
-    storageClassName: fast-ssd   # Storage class for the scratch volume.
-    size: 20Gi                   # Scratch volume size. It must be at least the source size.
+  sources:
+    - sourcePVC: html
+      backupRef:
+        name: html-1             # A Kopiur Snapshot of the html PVC.
+        namespace: nextcloud     # Optional. Default: the Restore namespace.
+      storageClassName: fast-ssd # Storage class for the scratch volume.
+      size: 20Gi                 # Optional. At least the source size. Default: the source size.
+    - sourcePVC: pgdata
+      backupRef:
+        name: pgdata-1
+      storageClassName: fast-ssd
+      autoExpand:                # Alternative to size: source size plus 25 percent.
+        percentage: 25
   restoreCheckRef:
-    name: minimal                # A RestoreCheck in the same namespace as this Restore.
+    name: nextcloud              # A RestoreCheck in the same namespace as this Restore.

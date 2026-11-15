@@ -8,7 +8,9 @@ metadata:
   name: elasticsearch
   namespace: default
 spec:
-  restoreMount: /usr/share/elasticsearch/data
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /usr/share/elasticsearch/data
 
   initContainers: []
 

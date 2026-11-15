@@ -1,5 +1,5 @@
 # TESTED: round trip PASS. Negative test FAIL, as expected.
-# Postgres data dir: PGDATA is <mount>/pgdata. 
+# Postgres data dir: PGDATA is <mount>/pgdata.
 # The pgdata-perms init container sets 0700. Postgres refuses 2770 after a restore.
 # RestoreCheck for keycloak 26.0. Database only. The state lives in an external PostgreSQL,
 # restored to /var/lib/postgresql/data.
@@ -12,7 +12,9 @@ metadata:
   name: keycloak
   namespace: default
 spec:
-  restoreMount: /var/lib/postgresql/data
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /var/lib/postgresql/data
 
   initContainers:
     - name: pgdata-perms

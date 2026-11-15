@@ -7,10 +7,14 @@ metadata:
   name: restore-sample
 spec:
   provider: kopiur
-  source:
-    backupRef:
-      name: orders-db-backup
-  target:
-    size: 20Gi
+  sources:
+    - sourcePVC: html
+      backupRef:
+        name: html-backup
+      size: 20Gi
+    - sourcePVC: pgdata
+      backupRef:
+        name: pgdata-backup
+      size: 10Gi
   restoreCheckRef:
     name: restorecheck-sample

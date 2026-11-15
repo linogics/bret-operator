@@ -31,7 +31,7 @@ controllers, so you can test today.
 Use this when you already have restored PVCs and only want to run the check:
 
 ```bash
-hack/check-test/check.sh checks/postgres.yaml bpt-postgres check-postgres data=r-data
+hack/check-test/check.sh checks/nextcloud.yaml bpt-nextcloud check-nextcloud html=r-html pgdata=r-pgdata
 ```
 
 Arguments:
@@ -41,8 +41,9 @@ Arguments:
 3. the pod name,
 4. one `KEY=PVC` pair per restored volume.
 
-The KEY is `data` for a `restoreMount` check. For `restoredVolumes`, the KEY is the entry
-name. List the keys with:
+The KEY is the `sourcePVC` of a `restoredVolumes` entry. Give a pair for every entry. A missing
+pair is an error. A one-volume check such as `checks/postgres.yaml` needs one pair, `data=r-data`.
+List the keys with:
 
 ```bash
 python3 hack/check-test/render.py checks/nextcloud.yaml --list
@@ -60,13 +61,13 @@ The output ends with `VERDICT: PASS` or `VERDICT: FAIL`. The script exits 0 on p
 ## Run the full round trip for one app
 
 ```bash
-hack/check-test/roundtrip.sh postgres
+hack/check-test/roundtrip.sh nextcloud
 ```
 
-This runs these steps in namespace `bpt-postgres`:
+This runs these steps in namespace `bpt-nextcloud`:
 
 1. Create a Kopiur `Repository` and a `SnapshotPolicy` for each volume the check needs.
-2. Apply `hack/check-test/seeds/postgres.yaml`. Wait for the `seed` pod to succeed.
+2. Apply `hack/check-test/seeds/nextcloud.yaml`. Wait for the `seed` pod to succeed.
 3. For each volume: create a `Snapshot`, wait for `Succeeded`, create a `Restore` and a PVC
    named `r-<volume>`, wait for `Completed` and `Bound`.
 4. Run the check against the `r-<volume>` PVCs.
@@ -75,7 +76,8 @@ This runs these steps in namespace `bpt-postgres`:
 When every step succeeds, the exit code of `roundtrip.sh` is the exit code of the check. A
 failed step before the check exits with 1.
 
-The mover UID for the restore and the source snapshot comes from the check's first
+The mover UID for the restore and the source snapshot comes from the `mover-uid` annotation of the
+check, keyed by `sourcePVC` (`--uid KEY` prints it). Without a key, it is the first container's
 `runAsUser`. That is why every check must set `runAsUser` on its containers.
 
 Environment variables: `TIMEOUT` (per wait, default 900 seconds) and `KEEP`.
@@ -92,8 +94,8 @@ hack/check-test/roundtrip.sh minimal \
 
 A seed is the only per-app work. It must satisfy this contract:
 
-- One `PersistentVolumeClaim` per volume key. `restoreMount` checks use the key `data`.
-  `restoredVolumes` checks use the entry names. The PVC names match the keys exactly.
+- One `PersistentVolumeClaim` per `restoredVolumes` entry. The PVC name is the entry's `sourcePVC`
+  (`html` and `pgdata` for nextcloud, `data` for one-volume apps).
 - One `Pod` named `seed` that writes the data and the canary, then exits 0. The harness
   waits for `Succeeded`.
 - A crash-consistent end state is good. The seed may kill the database hard, as the Postgres
@@ -101,7 +103,7 @@ A seed is the only per-app work. It must satisfy this contract:
 - Use the same UID the check uses. If the PVC starts owned by root, add a root init
   container that runs `chown <uid>:<gid>` on the mount, as the seeds do.
 
-Start from `seeds/postgres.yaml` or `seeds/minimal.yaml`.
+Start from `seeds/nextcloud.yaml` (two volumes) or `seeds/minimal.yaml` (one volume).
 
 ## Negative test
 

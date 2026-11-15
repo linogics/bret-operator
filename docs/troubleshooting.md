@@ -82,10 +82,16 @@ Kubernetes 1.37, Velero 1.18.4, VolSync 0.17.0, Kopiur 0.10.21 and PostgreSQL 17
 
 ## Operator
 
-### `kubectl apply` of a `RestoreCheck` is rejected: `exactly one of restoreMount or restoredVolumes must be set`
+### A `Restore` or `RestoreTest` stops with a source reason
 
-- **Cause:** both fields are set, or neither is.
-- **Fix:** keep exactly one. See [checks.md](checks.md#anatomy).
+- **`SourceMissing`:** the `sourcePVC` values of the check (`restoredVolumes`) and of the
+  `Restore` or `RestoreTest` (`sources`) differ. Add the missing entry on either side. See
+  [concepts.md](concepts.md#which-pvc-gets-restored).
+- **`SourceMismatch`** (Kopiur, VolSync): the backup holds another PVC than the `sourcePVC` of its
+  source. Point the source at the backup of that PVC. A Kopiur `SnapshotPolicy` with several `pvc:`
+  entries backs up only the first one. Use one policy per PVC or `pvcSelector`.
+- **`RestoredVolumeMissing`** (Velero): a `sourcePVC` of the check was not restored. The selector
+  did not match the PVC, or the backup lacks it. Label the PVC and take a new backup.
 
 ### Nothing happens after a `RestoreTest` is created
 
@@ -99,9 +105,12 @@ Kubernetes 1.37, Velero 1.18.4, VolSync 0.17.0, Kopiur 0.10.21 and PostgreSQL 17
   - `ProviderUnsupported`: `spec.provider` is not `kopiur`, or the Kopiur provider is disabled in
     the chart. The `RestoreTest` controller runs for Kopiur only. For Velero and VolSync, create a
     `Restore` by hand.
-  - `TargetMissing`: `spec.target.size` is not set, or it is zero. Set it.
-  - `BackupNotFound`: no `Succeeded` backup matches `backupSelector.labels`. Check the labels, and
-    that the backup is in the namespace of the `RestoreTest`.
+  - `BackupNotFound`: a source has no `Succeeded` backup that matches its `backupSelector`. The
+    message names those sources. Check the labels, and that the backups are in the namespace of
+    the `RestoreTest`.
+  - `WaitingForBackups`: with `afterBackup`, some sources have a new backup and others do not yet.
+    The run starts when every source has one.
+  - `SourceMissing`: see above.
 - A `Restore` exists but does not progress: read its `Ready` condition. `ProviderUnsupported`
   means that its provider is disabled (`providers.<name>.enabled`). `CheckNotFound` means that the
   `RestoreCheck` of `restoreCheckRef` is not in the namespace of the `Restore`.

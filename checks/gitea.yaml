@@ -8,7 +8,9 @@ metadata:
   name: gitea
   namespace: default
 spec:
-  restoreMount: /data
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /data
 
   initContainers: []
 

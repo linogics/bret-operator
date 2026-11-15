@@ -22,10 +22,11 @@ Images were checked against public registries where noted. A `TAG UNVERIFIED` ma
 
 ## Conventions
 
-- **restoreMount vs restoredVolumes.** Single-PVC apps must use `restoreMount`. Apps with two or more
-  PVCs must use `restoredVolumes`. Each restored volume is a separate PVC. All volumes are restored
-  from the same backup point. In v1 the operator accepts one `restoredVolumes` entry, so these checks
-  run with `hack/check-test` only.
+- **restoredVolumes.** Every check lists its volumes as `{sourcePVC, mountPath}`. `sourcePVC` is the
+  name of the PVC in the backed-up namespace. The Restore needs one source with the same `sourcePVC`
+  for each entry. Single-PVC apps have one entry. Apps with two or more PVCs have one entry per PVC
+  (nextcloud, wordpress, jellyfin, pihole). The table uses the seed PVC names. Rename `sourcePVC` to
+  your PVC names.
 - **Mount path = original mount path.** Restored volumes must mount at the path that the app used in
   production. For example: `/var/lib/postgresql/data` or `/data`. Absolute paths in the app config then
   still resolve. The example uses `/restore`. This is not required.
@@ -47,27 +48,27 @@ Images were checked against public registries where noted. A `TAG UNVERIFIED` ma
 
 ## Index
 
-| app | data kind | volumes (PVC -> mount) | restore field used | check summary | open issues |
+| app | data kind | volumes (PVC -> mount) | 2 volumes | check summary | open issues |
 |---|---|---|---|---|---|
-| postgres | database-only | data -> /var/lib/postgresql/data | restoreMount | start with crash recovery, `pg_amcheck --heapallindexed` on every DB, canary row sha256 | Canary table `bret_canary` must exist in db `app`. The backup must be crash-consistent. The PGDATA owner must be uid 999. |
-| mysql | database-only | data -> /var/lib/mysql | restoreMount | start mysqld on restored datadir, `mysqlcheck --check` on all DBs, canary row | UID 999 is assumed. performance_schema may print CHECK notes. |
-| mariadb | database-only | data -> /var/lib/mysql | restoreMount | start mariadbd, `mariadb-check` on all DBs, canary row | The restore must use the same MariaDB major version as the source. |
-| redis | database-only (RDB or AOF in /data) | data -> /data | restoreMount | server load (refuses corrupt RDB/AOF), canary key sha256 | The AOF multipart format needs the same redis major version. Write the canary keys before the backup. |
-| mongodb | database-only (WiredTiger) | data -> /data/db | restoreMount | `mongod --fork` on restored dbpath, `validate full` on canary collection, canary sha256 | TAG OK (mongo:7.0 probed). `mongosh` presence in the image NOT confirmed. Replica-set DBs are not covered. |
-| elasticsearch | files-only (Lucene in path.data) | data -> /usr/share/elasticsearch/data | restoreMount | single-node start, cluster yellow, canary doc sha256 | The tag was pulled OK in the test. `cluster.name` and `node.name` must match the source. The host needs `vm.max_map_count`. UID 1000. |
-| rabbitmq | files-only (mnesia dir + message store) | data -> /var/lib/rabbitmq | restoreMount | server boot, `await_startup`, `check_running`, `check_local_alarms`, canary queue message count | The node name is tied to mnesia (`RABBITMQ_NODENAME`). `.erlang.cookie` must survive the restore with mode 400. |
-| nextcloud | database + files | html -> /var/www/html; pgdata -> /var/lib/postgresql/data | restoredVolumes + native sidecar postgres | `occ status` (DB reachable), `occ integrity:check-core`, canary: `oc_filecache.size` equals the file size on disk | pdo_pgsql in the image is assumed. The canary path assumes one storage. `dbhost` is rewritten to localhost in the config. |
-| wordpress | database + files | html -> /var/www/html; mysql -> /var/lib/mysql | restoredVolumes + native sidecar mariadb | mariadb ping, canary post content == sha256 of uploaded file | The front-end render is not checked. Plugin-generated tables are not covered. |
-| gitea | sqlite-in-volume (gitea.db + git repos) | data -> /data | restoreMount (/data) | `gitea web` boot, `/api/healthz` pass, canary repo raw file sha256 | Only SQLite is covered. Postgres-backed installs need a separate DB restore, which is not covered. The repo and DB share one PVC, so one snapshot covers both. |
-| grafana | sqlite-in-volume (grafana.db) | data -> /var/lib/grafana | restoreMount | server boot, `/api/health` database ok, canary dashboard via admin API | The admin password must match the source. Provisioning files from the ConfigMap are not included. |
-| prometheus | files-only (TSDB blocks + WAL) | data -> /prometheus | restoreMount | `promtool tsdb list`, server ready, `max_over_time(bret_canary_seq[3650d])` equals seeded value | The canary metric must be ingested before the backup. Watch WAL replay time on large data. |
-| vaultwarden | sqlite-in-volume (db.sqlite3, attachments, icons) | data -> /data | restoreMount | python `integrity_check` (read-only), canary user row, app boots and `/alive` 200 | The tag was pulled OK in the test. Attachments are large. Migrations run on a restored DB. |
-| home-assistant | sqlite-in-volume (home-assistant_v2.db) + .storage files | config -> /config | restoreMount | recorder DB integrity (read-only), canary file sha256, HTTP 401 from `/api/` | Start can exceed the time budget on slow nodes. The recorder DB can be large. |
-| jellyfin | sqlite-in-volume (library.db, jellyfin.db) + media files | config -> /config; media -> /media | restoredVolumes | `/health` Healthy, canary media file sha256 | The media PVC can be very large. Option: restore the config only. The image has no sqlite3, so the DB integrity is not checked. |
-| uptime-kuma | sqlite-in-volume (kuma.db) | data -> /app/data | restoreMount | read-only `integrity_check` and canary monitor row via the app's own sqlite3 module, server boot, entry-page | The schema is for 1.x only. 2.x differs. UID 1000 is assumed. The entry-page grep is weak. |
-| keycloak | database-only (external PostgreSQL) | pgdata -> /var/lib/postgresql/data (sidecar) | restoreMount + native sidecar postgres | `kc.sh start` against restored DB (Liquibase), `/health/ready` UP, canary realm OIDC discovery | The tag was pulled OK in the test. Start can be slow. There is no separate realm export. |
-| n8n | sqlite-in-volume (database.sqlite) | data -> /home/node/.n8n | restoreMount | decrypted credential and workflow export contain the canary (proves `N8N_ENCRYPTION_KEY`), app `/healthz` ok | The encryption key is in a Secret, not in the volume. Postgres installs are not covered. |
-| pihole | sqlite-in-volume (gravity.db) + config files | etc-pihole -> /etc/pihole; dnsmasq -> /etc/dnsmasq.d | restoredVolumes | gravity.db integrity and canary adlist, canary DNS line in custom.list, `pihole-FTL dnsmasq-test` | The `dnsmasq-test` subcommand is not confirmed in 2024.07. The FTL DB schema is tied to the image version. |
+| postgres | database-only | data -> /var/lib/postgresql/data | 1 volume | start with crash recovery, `pg_amcheck --heapallindexed` on every DB, canary row sha256 | Canary table `bret_canary` must exist in db `app`. The backup must be crash-consistent. The PGDATA owner must be uid 999. |
+| mysql | database-only | data -> /var/lib/mysql | 1 volume | start mysqld on restored datadir, `mysqlcheck --check` on all DBs, canary row | UID 999 is assumed. performance_schema may print CHECK notes. |
+| mariadb | database-only | data -> /var/lib/mysql | 1 volume | start mariadbd, `mariadb-check` on all DBs, canary row | The restore must use the same MariaDB major version as the source. |
+| redis | database-only (RDB or AOF in /data) | data -> /data | 1 volume | server load (refuses corrupt RDB/AOF), canary key sha256 | The AOF multipart format needs the same redis major version. Write the canary keys before the backup. |
+| mongodb | database-only (WiredTiger) | data -> /data/db | 1 volume | `mongod --fork` on restored dbpath, `validate full` on canary collection, canary sha256 | TAG OK (mongo:7.0 probed). `mongosh` presence in the image NOT confirmed. Replica-set DBs are not covered. |
+| elasticsearch | files-only (Lucene in path.data) | data -> /usr/share/elasticsearch/data | 1 volume | single-node start, cluster yellow, canary doc sha256 | The tag was pulled OK in the test. `cluster.name` and `node.name` must match the source. The host needs `vm.max_map_count`. UID 1000. |
+| rabbitmq | files-only (mnesia dir + message store) | data -> /var/lib/rabbitmq | 1 volume | server boot, `await_startup`, `check_running`, `check_local_alarms`, canary queue message count | The node name is tied to mnesia (`RABBITMQ_NODENAME`). `.erlang.cookie` must survive the restore with mode 400. |
+| nextcloud | database + files | html -> /var/www/html; pgdata -> /var/lib/postgresql/data | 2 volumes + native sidecar postgres | `occ status` (DB reachable), `occ integrity:check-core`, canary: `oc_filecache.size` equals the file size on disk | pdo_pgsql in the image is assumed. The canary path assumes one storage. `dbhost` is rewritten to localhost in the config. |
+| wordpress | database + files | html -> /var/www/html; mysql -> /var/lib/mysql | 2 volumes + native sidecar mariadb | mariadb ping, canary post content == sha256 of uploaded file | The front-end render is not checked. Plugin-generated tables are not covered. |
+| gitea | sqlite-in-volume (gitea.db + git repos) | data -> /data | 1 volume | `gitea web` boot, `/api/healthz` pass, canary repo raw file sha256 | Only SQLite is covered. Postgres-backed installs need a separate DB restore, which is not covered. The repo and DB share one PVC, so one snapshot covers both. |
+| grafana | sqlite-in-volume (grafana.db) | data -> /var/lib/grafana | 1 volume | server boot, `/api/health` database ok, canary dashboard via admin API | The admin password must match the source. Provisioning files from the ConfigMap are not included. |
+| prometheus | files-only (TSDB blocks + WAL) | data -> /prometheus | 1 volume | `promtool tsdb list`, server ready, `max_over_time(bret_canary_seq[3650d])` equals seeded value | The canary metric must be ingested before the backup. Watch WAL replay time on large data. |
+| vaultwarden | sqlite-in-volume (db.sqlite3, attachments, icons) | data -> /data | 1 volume | python `integrity_check` (read-only), canary user row, app boots and `/alive` 200 | The tag was pulled OK in the test. Attachments are large. Migrations run on a restored DB. |
+| home-assistant | sqlite-in-volume (home-assistant_v2.db) + .storage files | config -> /config | 1 volume | recorder DB integrity (read-only), canary file sha256, HTTP 401 from `/api/` | Start can exceed the time budget on slow nodes. The recorder DB can be large. |
+| jellyfin | sqlite-in-volume (library.db, jellyfin.db) + media files | config -> /config; media -> /media | 2 volumes | `/health` Healthy, canary media file sha256 | The media PVC can be very large. Option: restore the config only. The image has no sqlite3, so the DB integrity is not checked. |
+| uptime-kuma | sqlite-in-volume (kuma.db) | data -> /app/data | 1 volume | read-only `integrity_check` and canary monitor row via the app's own sqlite3 module, server boot, entry-page | The schema is for 1.x only. 2.x differs. UID 1000 is assumed. The entry-page grep is weak. |
+| keycloak | database-only (external PostgreSQL) | pgdata -> /var/lib/postgresql/data (sidecar) | 1 volume + native sidecar postgres | `kc.sh start` against restored DB (Liquibase), `/health/ready` UP, canary realm OIDC discovery | The tag was pulled OK in the test. Start can be slow. There is no separate realm export. |
+| n8n | sqlite-in-volume (database.sqlite) | data -> /home/node/.n8n | 1 volume | decrypted credential and workflow export contain the canary (proves `N8N_ENCRYPTION_KEY`), app `/healthz` ok | The encryption key is in a Secret, not in the volume. Postgres installs are not covered. |
+| pihole | sqlite-in-volume (gravity.db) + config files | etc-pihole -> /etc/pihole; dnsmasq -> /etc/dnsmasq.d | 2 volumes | gravity.db integrity and canary adlist, canary DNS line in custom.list, `pihole-FTL dnsmasq-test` | The `dnsmasq-test` subcommand is not confirmed in 2024.07. The FTL DB schema is tied to the image version. |
 
 Tag status: these tags were probed OK on Docker Hub or quay:
 postgres:16.4, mysql:8.4, mariadb:11.4, redis:7.4,
@@ -85,28 +86,28 @@ usage were not checked.
 These apps keep state in two places: files and a DB, or a DB with a separate file store. Both
 must come from the same backup point.
 
-- **nextcloud** (files + postgres, two PVCs, restoredVolumes). `/var/www/html/data` holds the
+- **nextcloud** (files + postgres, two PVCs). `/var/www/html/data` holds the
   files. The `oc_filecache` table in postgres holds the rows that list the files and their sizes.
   If the DB comes from 10:00 and the files come from 10:05, rows point at missing files, or files have
   no rows. Symptoms: broken file lists and "file not found" in the UI. `occ files:scan` can repair
   listings. It may drop or duplicate entries. Handling: restore both PVCs from one backup selector in
   one attempt. Check: the canary `oc_filecache.size` must equal the file size on disk.
-- **wordpress** (files + mariadb, two PVCs, restoredVolumes). `wp_posts` rows reference uploads in
+- **wordpress** (files + mariadb, two PVCs). `wp_posts` rows reference uploads in
   `wp-content/uploads`. A DB newer than the files causes broken images. A DB older than the files
   causes orphan uploads. Handling: same as nextcloud. Use one attempt and both volumes. Check: the
   canary post content must equal the sha256 of the uploaded canary file.
-- **jellyfin** (config sqlite + media files, two PVCs, restoredVolumes). `library.db` stores the media
+- **jellyfin** (config sqlite + media files, two PVCs). `library.db` stores the media
   item paths and IDs. If the media comes from a different point, items show as missing or unavailable,
   and the metadata is wrong. Handling: restore config and media in one attempt. Mount media at its
   original path. Check: the canary media file hash and `/health`. Option: restore the config only if
   the media is too large. In that case, the check covers the DB only.
-- **pihole** (gravity.db + dnsmasq.d, two PVCs, restoredVolumes). Adlists and custom DNS live in
+- **pihole** (gravity.db + dnsmasq.d, two PVCs). Adlists and custom DNS live in
   `gravity.db` and `custom.list`. The config files in `/etc/dnsmasq.d` must match the FTL version. A
   mix causes lists that are in the DB but not applied. It can also cause missing DNS records. Check:
   the canary adlist row in gravity.db, the canary line in custom.list, and that the dnsmasq config
   parses.
 - **keycloak** (postgres only, one PVC, native sidecar). This check has no file store. If themes or
-  providers live on a second PVC, they must be restored with the DB. Add restoredVolumes. Check: the
+  providers live on a second PVC, they must be restored with the DB. Add a second restoredVolumes entry. Check: the
   realm OIDC discovery and `/health/ready`.
 - **n8n** (sqlite, one PVC, encryption key in a Secret). The DB stores credentials encrypted with
   `N8N_ENCRYPTION_KEY`. A DB restored with a different key cannot decrypt the credentials. Workflows

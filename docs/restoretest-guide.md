@@ -17,17 +17,25 @@ Taken from [examples/restoretest.yaml](../examples/restoretest.yaml):
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
-  name: orders-db-nightly
-  namespace: data
+  name: nextcloud-nightly
+  namespace: nextcloud
 spec:
   provider: kopiur
-  backupSelector:
-    labels:
-      app.kubernetes.io/name: orders-db
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-html
+      storageClassName: fast-ssd
+      size: 20Gi
+    - sourcePVC: pgdata
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-pgdata
+      storageClassName: fast-ssd
+      size: 10Gi
   restoreCheckRef:
-    name: minimal
-  target:
-    size: 20Gi
+    name: nextcloud
   triggers:
     cron: "17 3 * * *"
     afterBackup:
@@ -52,9 +60,27 @@ The `RestoreTest` controller runs for `kopiur` only. A test with another provide
 condition reason `ProviderUnsupported` and starts no run. A `Restore` that you create by hand works
 with all three providers.
 
+### sources
+
+One entry per PVC that the app has. Each run restores all of them together. The `sourcePVC` values
+must be exactly the `sourcePVC` values of the `restoredVolumes` in the `RestoreCheck`, or the run
+stops with `SourceMissing`. See [concepts.md](concepts.md#which-pvc-gets-restored).
+
+Each source has a `sourcePVC`, a `backupSelector` and the scratch volume fields (below).
+
+A one-volume app has one entry:
+
+```yaml
+sources:
+  - sourcePVC: data
+    backupSelector:
+      labels:
+        app.kubernetes.io/name: orders-db
+```
+
 ### backupSelector
 
-Picks which backups the test uses. Set either:
+Picks which backups one source uses. Set either:
 
 - `name`: one backup by name, or
 - `labels`: all backups with these labels. The test uses the newest one.
@@ -63,21 +89,23 @@ Set at least one. The API rejects an empty selector.
 
 The operator looks up Kopiur `Snapshot` objects in the namespace of the `RestoreTest`. Only
 `Snapshot` objects in phase `Succeeded` count. `name` matches the `Snapshot` name. `labels` must all
-match the `Snapshot` labels.
+match the `Snapshot` labels. One `Snapshot` holds one PVC, so use one selector per source. Each run
+restores the newest backup of every source.
+
+If a source has no matching backup, the test sets the reason `BackupNotFound`. The message names
+the sources without a backup.
 
 ### restoreCheckRef
 
 `name` of a `RestoreCheck` in the same namespace as the `RestoreTest`. The `RestoreCheck` is the
 pod template that checks the restored data. See [checks.md](checks.md).
 
-### target
+### Scratch volume per source
 
-`target` is the scratch volume that each run restores into. It has the same fields as
-`Restore.spec.target`: `size`, `storageClassName` and `autoExpand`. The API does not require
-`target.size`, but the `RestoreTest` controller does. Without it, or with a size of zero, the test
-sets the condition reason `TargetMissing` and starts no run. `autoExpand` alone is not enough for a
-`RestoreTest`. Only a `Restore` that you create by hand may omit `target.size`. The size rules for
-a `Restore` are in [concepts.md](concepts.md#scratch-volume-size).
+Each source is restored into its own scratch volume. The fields are in the source itself, next to
+`backupSelector`: `size`, `storageClassName` and `autoExpand`. All are optional. Without `size`
+and `autoExpand`, the source size and the default headroom decide. The size rules are in
+[concepts.md](concepts.md#scratch-volume-size).
 
 ### triggers
 
@@ -86,13 +114,13 @@ Use any combination of three triggers. A run starts when any one of them fires.
 | Field | Example | Behavior |
 |---|---|---|
 | `cron` | `"17 3 * * *"` | 5-field cron in UTC. The API checks the pattern. Each tick starts a run unless `overlapPolicy` says otherwise. |
-| `afterBackup.delay` | `30m` | After a new matching backup completes at time `T`, a run starts at `T + delay`. The newest handled backup is recorded in `status.lastHandled`. A backup triggers a run only if it is newer than that (completion time, then name). Older backups never trigger. Backups that completed before the `RestoreTest` was created never trigger either. |
+| `afterBackup.delay` | `30m` | Every source needs a new matching backup. When the last of them completes at time `T`, a run starts at `T + delay`. The newest handled backup of each source is recorded in `status.lastHandled`. A backup counts as new only if it is newer than that (completion time, then name). Older backups never trigger. Backups that completed before the `RestoreTest` was created never trigger either. While some sources have a new backup and others do not, the reason is `WaitingForBackups`. |
 | `manual` | `true` | Enables the run-now annotation. Any changed value on `bret.linogics.io/run-now` starts one run. Setting the same value again while it is still set does nothing. |
 
 A manual run needs no CLI:
 
 ```bash
-kubectl annotate restoretest orders-db bret.linogics.io/run-now="$(date +%s)" --overwrite
+kubectl annotate restoretest nextcloud-nightly bret.linogics.io/run-now="$(date +%s)" --overwrite
 ```
 
 The flow from a trigger to a run result is in [concepts.md](concepts.md#trigger-flow).
@@ -163,30 +191,36 @@ Use `Replace` only when the newest backup must win.
 | `status.lastRun.result` | `Succeeded` or `Failed`. |
 | `status.lastRun.reason` | Free text. It copies the message of the `Restore` that ended the run. |
 | `status.nextRun` | Next cron tick. |
-| `status.lastHandled` | Name and time of the newest backup that `afterBackup` ran for. |
+| `status.lastHandled` | Per source: name and time of the newest backup that `afterBackup` ran for. |
 | `status.retainedResources` | Names of kept objects when `keepOnFailure` kept a failed run. |
-| `status.conditions` | Standard conditions. The `Ready` reason is the run result (`Succeeded` or `Failed`), `Running`, or a blocking reason such as `TargetMissing` or `BackupNotFound`. |
+| `status.conditions` | Standard conditions. The `Ready` reason is the run result (`Succeeded` or `Failed`), `Running`, or a blocking reason: `BackupNotFound` (names the sources without a backup), `WaitingForBackups` (`afterBackup` waits for sources that have no new backup yet), or `SourceMissing` (the sources and the check volumes differ). |
 
 Read it with:
 
 ```bash
-kubectl -n data get restoretest orders-db-nightly -o jsonpath='{.status.lastRun}{"\n"}'
+kubectl -n nextcloud get restoretest nextcloud-nightly -o jsonpath='{.status.lastRun}{"\n"}'
 ```
 
 ## Recipes
 
-### Test only the newest backup of one app, nightly
+The recipes show `sources`. The rest of the spec is as above.
+
+### Test only the newest backups of one app, nightly
 
 ```yaml
 spec:
   provider: kopiur
-  backupSelector:
-    labels:
-      app.kubernetes.io/name: orders-db
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-html
+    - sourcePVC: pgdata
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-pgdata
   restoreCheckRef:
-    name: orders-db-check
-  target:
-    size: 20Gi
+    name: nextcloud
   triggers:
     cron: "30 4 * * *"
   restoreWindow: 60m
@@ -200,30 +234,53 @@ spec:
 ```yaml
 spec:
   provider: kopiur
-  backupSelector:
-    labels:
-      app.kubernetes.io/name: orders-db
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-html
+    - sourcePVC: pgdata
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-pgdata
   restoreCheckRef:
-    name: orders-db-check
-  target:
-    size: 20Gi
+    name: nextcloud
   triggers:
     afterBackup:
       delay: 20m
   keepOnFailure: true
 ```
 
-### Run on demand only
+### Run on demand only, with named backups
 
 ```yaml
 spec:
   provider: kopiur
-  backupSelector:
-    name: orders-db-data-1
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        name: html-1
+    - sourcePVC: pgdata
+      backupSelector:
+        name: pgdata-1
   restoreCheckRef:
-    name: orders-db-check
-  target:
-    size: 20Gi
+    name: nextcloud
+  triggers:
+    manual: true
+```
+
+### One volume
+
+```yaml
+spec:
+  provider: kopiur
+  sources:
+    - sourcePVC: data
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: orders-db
+  restoreCheckRef:
+    name: minimal
   triggers:
     manual: true
 ```

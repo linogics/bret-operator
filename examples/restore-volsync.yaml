@@ -1,18 +1,25 @@
-# Restore: one manual restore attempt of a named backup. A RestoreTest usually creates these.
-# The check in restoreCheckRef runs after the restore. Check: examples/restorecheck-minimal.yaml.
+# Restore: one manual restore attempt. A RestoreTest usually creates these.
+# The check in restoreCheckRef runs after the restore. Check: examples/restorecheck-multi.yaml.
+# One source per PVC. Each source names one VolSync ReplicationSource (one per PVC).
+# Restored claims: <restore>-<sourcePVC>, here nextcloud-manual-html and nextcloud-manual-pgdata.
 apiVersion: bret.linogics.io/v1alpha1
 kind: Restore
 metadata:
-  name: orders-db-manual
-  namespace: data
+  name: nextcloud-manual
+  namespace: nextcloud
 spec:
   provider: volsync
-  source:
-    backupRef:
-      name: orders-db-backup     # A VolSync ReplicationSource.
-      namespace: data            # Optional. Where the ReplicationSource is. Default: the Restore namespace.
-  target:
-    storageClassName: fast-ssd   # Storage class for the scratch volume.
-    size: 20Gi                   # Scratch volume size. It must be at least the source size.
+  sources:
+    - sourcePVC: html
+      backupRef:
+        name: html-backup        # A VolSync ReplicationSource for the html PVC.
+        namespace: nextcloud     # Optional. Default: the Restore namespace.
+      storageClassName: fast-ssd
+      size: 20Gi
+    - sourcePVC: pgdata
+      backupRef:
+        name: pgdata-backup
+      storageClassName: fast-ssd
+      size: 10Gi
   restoreCheckRef:
-    name: minimal                # A RestoreCheck in the same namespace as this Restore.
+    name: nextcloud

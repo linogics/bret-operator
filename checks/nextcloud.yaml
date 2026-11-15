@@ -1,7 +1,5 @@
-# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. The operator
-# accepts one entry, so it rejects this check with ProviderUnsupported. It runs with hack/check-test.
 # TESTED: round trip PASS. Negative test FAIL, as expected.
-# Postgres data dir: PGDATA is <mount>/pgdata. 
+# Postgres data dir: PGDATA is <mount>/pgdata.
 # The pgdata-perms init container sets 0700. Postgres refuses 2770 after a restore.
 # Native sidecar: postgres is an initContainer with restartPolicy: Always (k8s 1.29+).
 # The startupProbe gates it. It keeps running during the checks.
@@ -15,12 +13,10 @@ metadata:
     bret.linogics.io/mover-uid: '{"html": 33, "pgdata": 999}'
 spec:
   restoredVolumes:
-    - name: html
+    - sourcePVC: html
       mountPath: /var/www/html
-      sourcePVC: html
-    - name: pgdata
+    - sourcePVC: pgdata
       mountPath: /var/lib/postgresql/data
-      sourcePVC: pgdata
 
   initContainers:
   # The restored mount roots come back owned by root. Nextcloud (uid 33) needs its html root.

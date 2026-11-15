@@ -1,5 +1,3 @@
-# NOT RUNNABLE BY THE OPERATOR IN V1. This check has two restoredVolumes entries. The operator
-# accepts one entry, so it rejects this check with ProviderUnsupported. It runs with hack/check-test.
 # TESTED: round trip PASS. Negative test FAIL, as expected.
 # Two volumes: config (library.db, jellyfin.db) and media. The mount paths equal the image paths,
 # so library paths stored in the DB still resolve. Media may be very large.
@@ -12,9 +10,9 @@ metadata:
   namespace: default
 spec:
   restoredVolumes:
-    - name: config
+    - sourcePVC: config
       mountPath: /config
-    - name: media
+    - sourcePVC: media
       mountPath: /media
 
   initContainers:

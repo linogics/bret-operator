@@ -6,8 +6,15 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: restorecheck-sample
 spec:
-  restoreMount: /data
+  restoredVolumes:
+    - sourcePVC: html
+      mountPath: /var/www/html
+    - sourcePVC: pgdata
+      mountPath: /var/lib/postgresql/data
   containers:
     - name: check
       image: busybox:1.37
-      command: ["/bin/sh", "-c", "test -f /data/canary.txt"]
+      command:
+        - /bin/sh
+        - -c
+        - test -d /var/www/html && test -d /var/lib/postgresql/data

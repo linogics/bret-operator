@@ -10,7 +10,9 @@ metadata:
   name: rabbitmq
   namespace: default
 spec:
-  restoreMount: /var/lib/rabbitmq
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /var/lib/rabbitmq
 
   initContainers: []
 

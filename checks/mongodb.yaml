@@ -8,7 +8,9 @@ metadata:
   name: mongodb
   namespace: default
 spec:
-  restoreMount: /data/db
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /data/db
 
   initContainers: []
 

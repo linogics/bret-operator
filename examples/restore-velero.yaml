@@ -1,17 +1,21 @@
-# Restore: one manual restore attempt of a named backup. A RestoreTest usually creates these.
-# The check in restoreCheckRef runs after the restore. Check: examples/restorecheck-minimal.yaml.
+# Restore: one manual restore attempt. A RestoreTest usually creates these.
+# The check in restoreCheckRef runs after the restore. Check: examples/restorecheck-multi.yaml.
+# Velero has one source, no sourcePVC and no size. One Velero Backup holds the whole namespace.
+# The selector picks the objects that were labeled before the backup. Label every app PVC.
+# PVCs are restored under their source names (html, pgdata) into a bret-scratch-<hash> namespace.
+# Several PVCs: see examples/restore-velero-multi.yaml.
 apiVersion: bret.linogics.io/v1alpha1
 kind: Restore
 metadata:
-  name: orders-db-manual
-  namespace: data
+  name: nextcloud-manual
+  namespace: nextcloud
 spec:
   provider: velero
-  source:
-    backupRef:
-      name: orders-db-2026-11-14 # A Velero Backup in the Velero namespace (providers.velero.namespace).
-  target:
-    storageClassName: fast-ssd   # Storage class for the scratch volume.
-    size: 20Gi                   # Scratch volume size. It must be at least the source size.
+  sources:
+    - backupRef:
+        name: nextcloud-2026-11-14 # A Velero Backup in the Velero namespace (providers.velero.namespace).
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: nextcloud # Matches html and pgdata, both labeled.
   restoreCheckRef:
-    name: minimal                # A RestoreCheck in the same namespace as this Restore.
+    name: nextcloud
