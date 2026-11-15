@@ -129,6 +129,15 @@ helm upgrade bret-operator oci://ghcr.io/linogics/charts/bret-operator --version
 
 Server-side apply avoids the size limit on the `last-applied` annotation for large CRDs.
 
+### Upgrading to multi-volume sources
+
+- Recreate every existing `Restore`, `RestoreTest` and `RestoreCheck` in the new shape. Old
+  objects have no `sources`: a `Restore` ends `Failed` with `SourceMissing`, and a `RestoreTest`
+  blocks and starts no runs.
+- The keys of the `bret.linogics.io/mover-uid` annotation are now `sourcePVC` values. Old keys
+  are ignored without an error, and the mover falls back to the `runAsUser` of the container.
+- `RestoreTest` `afterBackup` watermarks reset once. They moved to `status.lastHandledBackups`.
+
 ## Uninstalling
 
 ```bash
