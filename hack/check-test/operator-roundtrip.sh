@@ -158,13 +158,14 @@ kopiur_backup() {
 }
 
 volsync_repo() {
+	# args: pvc. One repository per PVC: a shared one races on init and mixes snapshots.
 	cat <<-YAML
 		apiVersion: v1
 		kind: Secret
-		metadata: {name: restic-config}
+		metadata: {name: restic-config-$1}
 		type: Opaque
 		stringData:
-		  RESTIC_REPOSITORY: "s3:http://$s3/volsync/bpo/$provider-$app"
+		  RESTIC_REPOSITORY: "s3:http://$s3/volsync/bpo/$provider-$app/$1"
 		  RESTIC_PASSWORD: "spike-restic-pass"
 		  AWS_ACCESS_KEY_ID: "AKIDSPIKE"
 		  AWS_SECRET_ACCESS_KEY: "SECRETSPIKE12345"
@@ -181,7 +182,7 @@ volsync_backup() {
 		  sourcePVC: $1
 		  trigger: {manual: once}
 		  restic:
-		    repository: restic-config
+		    repository: restic-config-$1
 		    copyMethod: Snapshot
 		    volumeSnapshotClassName: $snapclass
 		    retain: {daily: 1}
@@ -255,8 +256,8 @@ backup() {
 		done
 		;;
 	volsync)
-		volsync_repo | apply_yaml
 		for k in "$@"; do
+			volsync_repo "$k" | apply_yaml
 			uid=$(python3 "$here/render.py" "$bp" --uid "$k")
 			volsync_backup "$k" "$uid" | apply_yaml
 		done
