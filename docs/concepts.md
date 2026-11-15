@@ -139,8 +139,9 @@ RestoreCheck.restoredVolumes[].sourcePVC ◄──── same set ────�
 - One restore reads all sources. The check pod mounts every restored claim at the `mountPath` of
   its `sourcePVC`.
 
-The operator checks that the pieces fit. Each one sets the `Ready` condition to `False` with that
-reason, writes a Warning Event, and runs no check pod:
+The operator checks that the pieces fit. Each one ends the `Restore` as `Failed`: the `Ready`
+condition is `False` with that reason, a Warning Event is written, and no check pod runs. A
+`RestoreTest` retries it like any failed attempt, until `retries` run out:
 
 - `SourceMissing`: the `sourcePVC` set of the check and of the `Restore` differ. A volume of the
   check has no source, or a source has no volume.
@@ -184,7 +185,7 @@ status.resolvedSize   (resolved once)
 `size` is optional on every source (Kopiur and VolSync). The size is resolved for each source. With
 an unknown source size, a set `size` is used without the capacity check.
 
-Two failures are reported as reasons on the `Restore`. Both end it as `Failed`, and nothing is
+Two more failures are reported as reasons on the `Restore`. Both end it as `Failed`, and nothing is
 created:
 
 - `SizeUnknown`: the source size is unknown and `size` is not set. It is also set for a

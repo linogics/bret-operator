@@ -81,7 +81,7 @@ Each `restoredVolumes` entry has two fields:
 - `mountPath`: where the restored volume is mounted.
 
 A `Restore` or `RestoreTest` must have one source with the same `sourcePVC` for every entry. If
-the sets differ, the run stops with `SourceMissing`. See
+the sets differ, the `Restore` ends Failed with `SourceMissing`. See
 [concepts.md](concepts.md#which-pvc-gets-restored).
 
 Key rule: the mount path must be the path the application used in production. Absolute paths in

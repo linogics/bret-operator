@@ -16,6 +16,7 @@ var _ = Describe("shipped YAML", func() {
 	for _, glob := range []string{"checks/*.yaml", "examples/*.yaml", "config/samples/*.yaml"} {
 		files, err := filepath.Glob(filepath.Join("..", "..", glob))
 		Expect(err).NotTo(HaveOccurred())
+		Expect(files).NotTo(BeEmpty())
 
 		for _, f := range files {
 			if filepath.Base(f) == "kustomization.yaml" {

@@ -63,8 +63,8 @@ with all three providers.
 ### sources
 
 One entry per PVC that the app has. Each run restores all of them together. The `sourcePVC` values
-must be exactly the `sourcePVC` values of the `restoredVolumes` in the `RestoreCheck`, or the run
-stops with `SourceMissing`. See [concepts.md](concepts.md#which-pvc-gets-restored).
+must be exactly the `sourcePVC` values of the `restoredVolumes` in the `RestoreCheck`, or the `Restore`
+ends Failed with `SourceMissing`. See [concepts.md](concepts.md#which-pvc-gets-restored).
 
 Each source has a `sourcePVC`, a `backupSelector` and the scratch volume fields (below).
 

@@ -82,7 +82,12 @@ Kubernetes 1.37, Velero 1.18.4, VolSync 0.17.0, Kopiur 0.10.21 and PostgreSQL 17
 
 ## Operator
 
-### A `Restore` or `RestoreTest` stops with a source reason
+### A `Restore` ends Failed with a source reason
+
+These three reasons end the `Restore` as `Failed` (`Ready` is `False`, a Warning Event is written,
+no check pod runs). A `RestoreTest` retries it like any failed attempt, until `retries` run out.
+Fix the cause first, or every retry fails the same way.
+
 
 - **`SourceMissing`:** the `sourcePVC` values of the check (`restoredVolumes`) and of the
   `Restore` or `RestoreTest` (`sources`) differ. Add the missing entry on either side. See

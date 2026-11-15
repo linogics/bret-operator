@@ -83,7 +83,7 @@ selectors, which are mutually exclusive:
 - `orLabelSelectors`: a list of selectors. A PVC matches if any one matches. Use it when the PVCs
   carry different labels.
 
-Every `sourcePVC` of the check must be among the restored PVCs. Otherwise the run stops with
+Every `sourcePVC` of the check must be among the restored PVCs. Otherwise the `Restore` ends Failed with
 `RestoredVolumeMissing`.
 
 Enable the provider in the chart with `providers.velero.enabled: true`. The Velero install
@@ -178,7 +178,7 @@ spec:
 ```
 
 The operator reads `spec.sourcePVC` of each `ReplicationSource`. If it is not the `sourcePVC` of
-the `Restore` source, the run stops with `SourceMismatch`.
+the `Restore` source, the `Restore` ends Failed with `SourceMismatch`.
 
 For a database, set the mover's UID to the database's UID with `moverSecurityContext`.
 Postgres 17 uses 999. Set the UID per volume with the `mover-uid` annotation on the check, keyed by
@@ -282,7 +282,7 @@ PVC:
 ```
 
 Each `Restore` source names the `Snapshot` of one PVC. If the `Snapshot` holds another PVC than the
-`sourcePVC` of the source, the run stops with `SourceMismatch`.
+`sourcePVC` of the source, the `Restore` ends Failed with `SourceMismatch`.
 
 The `mover` block is needed for databases. Without it, the mover reads the data directory as
 UID 65532 and fails with `permission denied`. Set the UID to the database's UID.
