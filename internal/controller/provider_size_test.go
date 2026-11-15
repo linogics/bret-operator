@@ -53,7 +53,7 @@ func TestSourceSize(t *testing.T) {
 		}},
 	}
 	volsyncSource := unstructuredObj("volsync.backube", "ReplicationSource", testBackupName,
-		map[string]any{"spec": map[string]any{"sourcePVC": testDataName}})
+		map[string]any{testSpecKey: map[string]any{"sourcePVC": testDataName}})
 	snapshot := func(stats map[string]any) *unstructured.Unstructured {
 		return unstructuredObj(kopiurGroup, "Snapshot", testBackupName, map[string]any{testStatusKey: map[string]any{"stats": stats}})
 	}
@@ -76,7 +76,7 @@ func TestSourceSize(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &RestoreReconciler{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.objs...).Build()}
 
-			got, err := r.sourceSize(context.Background(), sizeTestRestore(tt.provider))
+			got, err := r.sourceSize(context.Background(), sizeTestRestore(tt.provider), sizeTestRestore(tt.provider).Spec.Sources[0])
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -84,6 +84,12 @@ rules:
 - apiGroups:
   - kopiur.home-operations.com
   resources:
+  - snapshotpolicies
+  verbs:
+  - get
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
   - snapshots
   verbs:
   - get

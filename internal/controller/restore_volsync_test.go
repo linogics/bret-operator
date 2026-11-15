@@ -169,7 +169,7 @@ func TestVolSyncSourceInBackupNamespace(t *testing.T) {
 
 	_, r := fakeRestoreClient(t, restore, src, pvc, volsyncSecret())
 
-	size, err := r.sourceSize(context.Background(), restore)
+	size, err := r.sourceSize(context.Background(), restore, restore.Spec.Sources[0])
 	if err != nil || size == nil || size.Cmp(resource.MustParse("2Gi")) != 0 {
 		t.Fatalf("sourceSize = %v, %v; want 2Gi", size, err)
 	}

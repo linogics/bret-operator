@@ -197,7 +197,7 @@ func newSnapshot(name string, labels map[string]string, phase string, ready time
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "kopiur.home-operations.com/v1alpha1",
 		"kind":       "Snapshot",
-		"metadata":   map[string]any{"name": name, "namespace": testNamespace},
+		"metadata":   map[string]any{keyName: name, "namespace": testNamespace},
 		testStatusKey: map[string]any{
 			"phase": phase,
 			"conditions": []any{map[string]any{
@@ -265,7 +265,7 @@ func TestRestoreTestAfterBackupOneRunPerSnapshot(t *testing.T) {
 		newSnapshot("a", pg, "Succeeded", time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)),
 		newSnapshot("b", pg, "Succeeded", time.Date(2026, 11, 15, 10, 10, 0, 0, time.UTC)),
 		newSnapshot("c", pg, "Failed", time.Date(2026, 11, 15, 10, 12, 0, 0, time.UTC)),
-		newSnapshot("d", map[string]string{testLabelKey: "other"}, "Succeeded", time.Date(2026, 11, 15, 10, 13, 0, 0, time.UTC)),
+		newSnapshot("d", map[string]string{testLabelKey: testOther}, "Succeeded", time.Date(2026, 11, 15, 10, 13, 0, 0, time.UTC)),
 	}
 
 	f := newRestoreTestFixture(t, test, objs...)

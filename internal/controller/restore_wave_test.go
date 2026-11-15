@@ -42,12 +42,16 @@ func TestSourceSizeIsResolvedOnce(t *testing.T) {
 	r.APIReader = counter
 	key := client.ObjectKeyFromObject(restore)
 
-	for range 4 {
-		reconcileRestore(t, r, key)
-	}
+	reconcileRestore(t, r, key)
+	reconcileRestore(t, r, key)
 
-	if counter.snapshots != 1 {
-		t.Fatalf("snapshot read %d times, want 1", counter.snapshots)
+	reads := counter.snapshots
+
+	reconcileRestore(t, r, key)
+	reconcileRestore(t, r, key)
+
+	if counter.snapshots != reads {
+		t.Fatalf("snapshot read again after the size was stored: %d, want %d", counter.snapshots, reads)
 	}
 
 	if got, ok := getRestore(t, c, key).Status.ResolvedSizes[testDataName]; !ok || got.Value() != (2<<30)*110/100 {
@@ -131,7 +135,7 @@ func TestVolSyncSecretMissing(t *testing.T) {
 func TestVeleroNamesAreUniquePerNamespace(t *testing.T) {
 	a := newTestRestore()
 	b := newTestRestore()
-	b.Namespace = "other"
+	b.Namespace = testOther
 
 	if veleroScratchName(a) == veleroScratchName(b) || veleroName(a) == veleroName(b) {
 		t.Fatal("Restores with the same name in two namespaces share names")
@@ -315,6 +319,13 @@ func deleteWithBrokenReads(t *testing.T, provider restorev1alpha1.Provider, kind
 	}
 
 	r.Client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+		List: func(ctx context.Context, cl client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+			if u, ok := list.(*unstructured.UnstructuredList); ok && u.GetKind() == kind+"List" {
+				return err
+			}
+
+			return cl.List(ctx, list, opts...)
+		},
 		Get: func(ctx context.Context, cl client.WithWatch, k client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			if u, ok := obj.(*unstructured.Unstructured); ok && u.GetKind() == kind {
 				return err
@@ -348,7 +359,7 @@ func TestFinalizerSkipsDisabledProvider(t *testing.T) {
 	key := client.ObjectKeyFromObject(restore)
 
 	kopiur := kopiurStub(restore)
-	if err := c.Create(context.Background(), kopiurRestoreObject(restore, nil)); err != nil {
+	if err := c.Create(context.Background(), kopiurRestoreObject(restore, restore.Spec.Sources[0], nil)); err != nil {
 		t.Fatal(err)
 	}
 

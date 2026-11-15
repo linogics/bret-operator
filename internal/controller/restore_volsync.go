@@ -67,7 +67,7 @@ func volsyncDestinationObject(restore *restorev1alpha1.Restore, repository strin
 func (r *RestoreReconciler) volsyncRepository(ctx context.Context, restore *restorev1alpha1.Restore) (string, error) {
 	src := &unstructured.Unstructured{}
 	src.SetGroupVersionKind(replicationSourceGVK)
-	src.SetNamespace(backupNamespace(restore))
+	src.SetNamespace(backupNamespace(restore, restore.Spec.Sources[0]))
 	src.SetName(restore.Spec.Sources[0].BackupRef.Name)
 
 	if err := r.getObject(ctx, src); err != nil {

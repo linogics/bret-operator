@@ -522,3 +522,13 @@ func TestRestoreRunCountedOnce(t *testing.T) {
 		t.Errorf("runs counted = %v, want 1", got)
 	}
 }
+
+// kopiurStub names the Kopiur Restore of the first source.
+func kopiurStub(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(kopiurRestoreGVK)
+	obj.SetNamespace(restore.Namespace)
+	obj.SetName(kopiurName(restore, restore.Spec.Sources[0].SourcePVC))
+
+	return obj
+}

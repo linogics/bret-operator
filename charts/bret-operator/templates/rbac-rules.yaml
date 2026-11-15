@@ -98,6 +98,14 @@ rules:
 - apiGroups:
   - kopiur.home-operations.com
   resources:
+  - snapshotpolicies
+  verbs:
+  - get
+{{- end }}
+{{- if $.Values.providers.kopiur.enabled }}
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
   - snapshots
   verbs:
   - get
@@ -226,6 +234,14 @@ rules:
   - patch
   - update
   - watch
+{{- end }}
+{{- if $.Values.providers.kopiur.enabled }}
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
+  - snapshotpolicies
+  verbs:
+  - get
 {{- end }}
 {{- if $.Values.providers.kopiur.enabled }}
 - apiGroups:

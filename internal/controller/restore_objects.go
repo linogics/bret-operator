@@ -8,6 +8,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -68,7 +70,12 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 
 	// Objects of a disabled provider are not read. The operator has no rights for them.
 	if r.providerEnabled(restorev1alpha1.ProviderKopiur) {
-		objs = append(objs, kopiurStub(restore))
+		found, listErr := r.labelled(ctx, restore, kopiurRestoreGVK)
+		if listErr != nil {
+			return listErr
+		}
+
+		objs = append(objs, found...)
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVelero && r.providerEnabled(restorev1alpha1.ProviderVelero) {
@@ -76,7 +83,12 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVolSync && r.providerEnabled(restorev1alpha1.ProviderVolSync) {
-		objs = append(objs, volsyncStub(restore))
+		found, listErr := r.labelled(ctx, restore, replicationDestinationGVK)
+		if listErr != nil {
+			return listErr
+		}
+
+		objs = append(objs, found...)
 	}
 
 	for i := range pvcs.Items {
@@ -140,4 +152,33 @@ func (r *RestoreReconciler) getObject(ctx context.Context, obj client.Object) er
 	}
 
 	return r.Get(ctx, client.ObjectKeyFromObject(obj), obj)
+}
+
+// listObjects lists through the API reader when one is set. Provider objects use it.
+// No informer is started for them.
+func (r *RestoreReconciler) listObjects(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	if r.APIReader != nil {
+		return r.APIReader.List(ctx, list, opts...)
+	}
+
+	return r.List(ctx, list, opts...)
+}
+
+// labelled returns the objects of a kind in the Restore namespace that carry the label of the Restore.
+// A kind that is not installed or not readable has none.
+func (r *RestoreReconciler) labelled(ctx context.Context, restore *restorev1alpha1.Restore, gvk schema.GroupVersionKind) ([]client.Object, error) {
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(gvk.GroupVersion().WithKind(gvk.Kind + "List"))
+
+	err := r.listObjects(ctx, list, client.InNamespace(restore.Namespace), client.MatchingLabels(restoreLabels(restore)))
+	if err != nil {
+		return nil, ignoreUncleanable(err)
+	}
+
+	objs := make([]client.Object, 0, len(list.Items))
+	for i := range list.Items {
+		objs = append(objs, &list.Items[i])
+	}
+
+	return objs, nil
 }

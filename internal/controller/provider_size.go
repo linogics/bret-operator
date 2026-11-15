@@ -17,9 +17,13 @@ import (
 var replicationSourceGVK = schema.GroupVersionKind{Group: "volsync.backube", Version: apiVersionAlpha1, Kind: "ReplicationSource"}
 
 // sourceSize returns the size of the backed-up source, or nil when the provider cannot tell.
-func (r *RestoreReconciler) sourceSize(ctx context.Context, restore *restorev1alpha1.Restore) (*resource.Quantity, error) {
-	backup := restore.Spec.Sources[0].BackupRef
-	namespace := backupNamespace(restore)
+func (r *RestoreReconciler) sourceSize(
+	ctx context.Context,
+	restore *restorev1alpha1.Restore,
+	src restorev1alpha1.RestoreSource,
+) (*resource.Quantity, error) {
+	backup := src.BackupRef
+	namespace := backupNamespace(restore, src)
 
 	switch restore.Spec.Provider {
 	case restorev1alpha1.ProviderKopiur:
@@ -34,16 +38,16 @@ func (r *RestoreReconciler) sourceSize(ctx context.Context, restore *restorev1al
 
 		return kopiurSnapshotSize(snap), nil
 	case restorev1alpha1.ProviderVolSync:
-		src := &unstructured.Unstructured{}
-		src.SetGroupVersionKind(replicationSourceGVK)
-		src.SetNamespace(namespace)
-		src.SetName(backup.Name)
+		rs := &unstructured.Unstructured{}
+		rs.SetGroupVersionKind(replicationSourceGVK)
+		rs.SetNamespace(namespace)
+		rs.SetName(backup.Name)
 
-		if err := r.getObject(ctx, src); err != nil {
+		if err := r.getObject(ctx, rs); err != nil {
 			return nil, client.IgnoreNotFound(err)
 		}
 
-		pvcName, _, _ := unstructured.NestedString(src.Object, "spec", "sourcePVC")
+		pvcName, _, _ := unstructured.NestedString(rs.Object, "spec", "sourcePVC")
 		if pvcName == "" {
 			return nil, nil
 		}

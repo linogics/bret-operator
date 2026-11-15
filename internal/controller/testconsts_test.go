@@ -28,6 +28,9 @@ const (
 	testTrue          = "true"
 	testVolumes       = "volumes"
 	testHourlyCron    = "0 * * * *"
+	testOther         = "other"
+	testSpecKey       = "spec"
+	testPVCKey        = "pvc"
 )
 
 func quantityPtr(s string) *resource.Quantity {

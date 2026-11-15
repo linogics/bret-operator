@@ -183,6 +183,13 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
 
+	if err = matchSources(restore, bp); err != nil {
+		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+		r.block(restore, reasonSourceMissing, err.Error())
+
+		return ctrl.Result{}, nil
+	}
+
 	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
 		if err = validateVeleroCheck(bp); err != nil {
 			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
@@ -192,24 +199,41 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 		}
 	}
 
-	uid, err := MoverUID(bp, restore.Spec.Sources[0].SourcePVC)
-	if err != nil {
-		r.block(restore, reasonCheckUnsupported, err.Error())
+	uids := make(map[string]*int64, len(restore.Spec.Sources))
 
-		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
+	for _, src := range restore.Spec.Sources {
+		uids[src.SourcePVC], err = MoverUID(bp, src.SourcePVC)
+		if err != nil {
+			r.block(restore, reasonCheckUnsupported, err.Error())
+
+			return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
+		}
 	}
 
-	return r.progress(ctx, restore, bp, uid)
+	return r.progress(ctx, restore, bp, uids)
 }
 
-// progress creates the claims and the provider restore (Kopiur, Velero or VolSync), then runs the check once it completes.
+// progress resolves the sizes, then runs the provider (Kopiur, Velero or VolSync) and the check once it completes.
 func (r *RestoreReconciler) progress(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreCheck,
-	uid *int64,
+	uids map[string]*int64,
 ) (ctrl.Result, error) {
-	size, err := r.scratchSize(ctx, restore)
+	if restore.Spec.Provider == restorev1alpha1.ProviderKopiur && len(restore.Status.ProviderRefs) == 0 {
+		if err := r.verifyKopiurSources(ctx, restore); err != nil {
+			if !errors.Is(err, errSourceMismatch) {
+				return ctrl.Result{}, err
+			}
+
+			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+			r.block(restore, reasonSourceMismatch, err.Error())
+
+			return ctrl.Result{}, nil
+		}
+	}
+
+	sizes, err := r.sourceSizes(ctx, restore)
 	if err != nil {
 		if !errors.Is(err, ErrSizeUnknown) && !errors.Is(err, ErrInsufficientCapacity) {
 			return ctrl.Result{}, err
@@ -227,95 +251,81 @@ func (r *RestoreReconciler) progress(
 		return ctrl.Result{}, nil
 	}
 
-	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
+	first := restore.Spec.Sources[0]
+
+	switch restore.Spec.Provider {
+	case restorev1alpha1.ProviderVelero:
 		return r.reconcileVelero(ctx, restore, bp)
-	}
-
-	if restore.Spec.Provider == restorev1alpha1.ProviderVolSync {
-		return r.reconcileVolSync(ctx, restore, bp, size, uid)
-	}
-
-	claims, err := r.ensureClaims(ctx, restore, bp, size)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	kopiur := kopiurRestoreObject(restore, uid)
-
-	created, err := r.ensure(ctx, restore, kopiur)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if created {
-		r.Recorder.Event(restore, corev1.EventTypeNormal, reasonRestoreStarted, "started Kopiur restore "+kopiur.GetName())
-	}
-
-	restore.Status.ProviderRefs = []restorev1alpha1.ProviderRef{{
-		Kind:      kopiurRestoreGVK.Kind,
-		Name:      kopiur.GetName(),
-		Namespace: kopiur.GetNamespace(),
-	}}
-	setRunning(restore)
-
-	switch kopiurPhase(kopiur) {
-	case kopiurPhaseFailed:
-		r.finish(restore, restorev1alpha1.RestorePhaseFailed, reasonRestoreFailed, "Kopiur restore failed")
-
-		return ctrl.Result{}, nil
-	case kopiurPhaseCompleted:
-		src := restore.Spec.Sources[0].SourcePVC
-
-		return r.check(ctx, restore, bp, map[string]string{src: restoredClaimName(restore, src)}, restore.Namespace, claims)
+	case restorev1alpha1.ProviderVolSync:
+		return r.reconcileVolSync(ctx, restore, bp, sizes[first.SourcePVC], uids[first.SourcePVC])
 	default:
-		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
+		return r.reconcileKopiur(ctx, restore, bp, sizes, uids)
 	}
 }
 
-// scratchSize resolves the scratch size once and stores it in the status.
-// Later reconciles reuse it, so the source is read once.
-func (r *RestoreReconciler) scratchSize(ctx context.Context, restore *restorev1alpha1.Restore) (resource.Quantity, error) {
-	key := restore.Spec.Sources[0].SourcePVC // Velero has no sourcePVC, so its key is empty.
-	if size, ok := restore.Status.ResolvedSizes[key]; ok {
-		return size, nil
-	}
-
-	// A Restore from before the size was stored has no size to create objects with.
-	if len(restore.Status.ProviderRefs) > 0 {
-		return resource.Quantity{}, ErrSizeUnknown
-	}
-
-	source, err := r.sourceSize(ctx, restore)
-	if err != nil {
-		return resource.Quantity{}, err
-	}
-
-	size, err := resolveSize(restore.Spec.Sources[0].RestoreTarget, source)
-	if err != nil {
-		return resource.Quantity{}, err
-	}
-
-	if restore.Status.ResolvedSizes == nil {
-		restore.Status.ResolvedSizes = map[string]resource.Quantity{}
-	}
-
-	restore.Status.ResolvedSizes[key] = size
-
-	return size, nil
-}
-
-// ensureClaims creates the restored PVC and the check scratch PVCs. It returns the scratch claims by volume name.
-func (r *RestoreReconciler) ensureClaims(
+// reconcileKopiur creates one PVC and one Kopiur Restore per source, then runs the check once all complete.
+// A failed Kopiur Restore fails the attempt.
+func (r *RestoreReconciler) reconcileKopiur(
 	ctx context.Context,
 	restore *restorev1alpha1.Restore,
 	bp *restorev1alpha1.RestoreCheck,
-	size resource.Quantity,
-) (map[string]string, error) {
-	if _, err := r.ensure(ctx, restore, restoredPVC(restore, size)); err != nil {
-		return nil, err
+	sizes map[string]resource.Quantity,
+	uids map[string]*int64,
+) (ctrl.Result, error) {
+	for _, src := range restore.Spec.Sources {
+		if _, err := r.ensure(ctx, restore, restoredPVC(restore, src, sizes[src.SourcePVC])); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
-	return r.ensureScratchClaims(ctx, restore, bp)
+	claims, err := r.ensureScratchClaims(ctx, restore, bp)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	var (
+		refs      []restorev1alpha1.ProviderRef
+		restored  = make(map[string]string, len(restore.Spec.Sources))
+		completed int
+		failed    bool
+	)
+
+	for _, src := range restore.Spec.Sources {
+		kopiur := kopiurRestoreObject(restore, src, uids[src.SourcePVC])
+
+		created, err := r.ensure(ctx, restore, kopiur)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if created {
+			r.Recorder.Event(restore, corev1.EventTypeNormal, reasonRestoreStarted, "started Kopiur restore "+kopiur.GetName())
+		}
+
+		refs = append(refs, restorev1alpha1.ProviderRef{Kind: kopiurRestoreGVK.Kind, Name: kopiur.GetName(), Namespace: kopiur.GetNamespace()})
+		restored[src.SourcePVC] = restoredClaimName(restore, src.SourcePVC)
+
+		switch kopiurPhase(kopiur) {
+		case kopiurPhaseFailed:
+			failed = true
+		case kopiurPhaseCompleted:
+			completed++
+		}
+	}
+
+	restore.Status.ProviderRefs = refs
+	setRunning(restore)
+
+	switch {
+	case failed:
+		r.finish(restore, restorev1alpha1.RestorePhaseFailed, reasonRestoreFailed, "Kopiur restore failed")
+
+		return ctrl.Result{}, nil
+	case completed == len(restore.Spec.Sources):
+		return r.check(ctx, restore, bp, restored, restore.Namespace, claims)
+	default:
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
+	}
 }
 
 // ensureScratchClaims creates the check scratch PVCs. It returns them by volume name.
