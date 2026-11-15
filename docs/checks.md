@@ -180,18 +180,20 @@ namespace is `data`.
 ```text
 Kopiur, VolSync: one namespace         Velero: two namespaces
 
-┌ data ───────────────────────┐        ┌ data ───────────────┐
-│ RestoreTest                 │        │ RestoreTest         │
-│ RestoreCheck                │        │ RestoreCheck        │
-│ Restore                     │        │ Restore             │
-│ check pod ──reads─► Secret  │        └─────────────────────┘
-└─────────────────────────────┘        ┌ bret-scratch-<hash> ┐
-                                       │ check pod           │  Secrets are rejected:
-                                       └─────────────────────┘  ProviderUnsupported
+┌ data ───────────────────────┐        ┌ data ───────────────────────┐
+│ RestoreTest                 │        │ RestoreTest                 │
+│ RestoreCheck                │        │ RestoreCheck                │
+│ Restore                     │        │ Restore                     │
+│ check pod ──reads─► Secret  │        │ Secret ──copied by operator─┼─┐
+└─────────────────────────────┘        └─────────────────────────────┘ │
+                                       ┌ bret-scratch-<hash> ────────┐ │
+                                       │ check pod ──reads─► Secret ◄┼─┘
+                                       └─────────────────────────────┘
 ```
 
-For Kopiur and VolSync, create the Secret in the namespace of your `RestoreTest`. You do not need
-to know a target namespace in advance.
+For every provider, create the Secret in the namespace of your `RestoreTest`. You do not need
+to know a target namespace in advance. With Velero, the operator copies the Secrets and ConfigMaps
+that `imagePullSecrets`, `env` and `envFrom` name into the scratch namespace.
 
 Find the Secrets a check needs before you apply it:
 
@@ -225,14 +227,16 @@ The operator mounts only the restored volumes and the scratch volumes for you.
 
 Rules:
 
-- The operator does not check that the Secret exists. A missing Secret keeps the check pod from
-  starting. When the `restoreWindow` expires, the attempt ends as `Canceled`.
+- With Kopiur and VolSync, the operator does not check that the Secret exists. A missing Secret
+  keeps the check pod from starting. When the `restoreWindow` expires, the attempt ends as
+  `Canceled`. With Velero, a missing Secret ends the attempt as `Failed` with `CheckRefMissing`.
 - Values must match the source. An encryption key or admin password that differs makes the check
   fail for a reason unrelated to the backup. Copy the Secret from the source namespace and keep
   its values. Keep one Secret per application, and make the backup and the check read the same one.
-- Velero does not support Secrets in checks. The operator rejects the check with
-  `ProviderUnsupported`. The full list of what a Velero check must not set is in
-  [concepts.md](concepts.md#velero).
+- With Velero, the operator copies only Secrets and ConfigMaps named in `imagePullSecrets`, `env`
+  and `envFrom`. Secret and ConfigMap volumes are rejected with `ProviderUnsupported`, and so are
+  pull secrets that only the `default` ServiceAccount lists. The full list of what a Velero check
+  must not set is in [concepts.md](concepts.md#velero).
 
 ## Pod security
 

@@ -64,4 +64,10 @@ grep -q 'secrets' <<<"$cr" && fail "secrets in ClusterRole with watchNamespaces 
 for ns in a b; do
 	awk 'BEGIN{RS="---\n"} /kind: Role\n/ && /namespace: '$ns'\n/ && /secrets/' <<<"$out" | grep -q . || fail "no secrets get in Role of $ns"
 done
+grep -q 'configmaps' <<<"$cr" && fail "velero copy rights rendered with velero off"
+
+# Velero copies check Secrets into the unwatched scratch namespace, so the copy rights stay cluster-wide.
+out=$(helm template bret "$CHART" --set providers.velero.enabled=true --set 'watchNamespaces={a}')
+cr=$(awk 'BEGIN{RS="---\n"} /kind: ClusterRole\n/ && /-manager\n/' <<<"$out")
+grep -A8 'configmaps' <<<"$cr" | grep -q -- '- create' || fail "velero copy rights missing from ClusterRole"
 echo OK

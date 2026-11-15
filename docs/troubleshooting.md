@@ -96,6 +96,9 @@ Fix the cause first, or every retry fails the same way.
   entries backs up only the first one. Use one policy per PVC or `pvcSelector`.
 - **`RestoredVolumeMissing`** (Velero): a `sourcePVC` of the check was not restored. The selector
   did not match the PVC, or the backup lacks it. Label the PVC and take a new backup.
+- **`CheckRefMissing`** (Velero): a Secret or ConfigMap that the check names in
+  `imagePullSecrets`, `env` or `envFrom` is not in the `Restore` namespace. Create it there, or
+  mark an env reference `optional: true`.
 
 ### Nothing happens after a `RestoreTest` is created
 

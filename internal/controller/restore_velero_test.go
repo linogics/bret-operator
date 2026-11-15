@@ -145,9 +145,6 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 		field  string
 	}{
 		{"service account", func(bp *restorev1alpha1.RestoreCheck) { bp.Spec.ServiceAccountName = "sa" }, "serviceAccountName"},
-		{"pull secrets", func(bp *restorev1alpha1.RestoreCheck) {
-			bp.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: "s"}}
-		}, "imagePullSecrets"},
 		{"configmap volume", func(bp *restorev1alpha1.RestoreCheck) {
 			bp.Spec.Volumes = []corev1.Volume{{Name: "v", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{}}}}
 		}, testVolumes},
@@ -214,39 +211,104 @@ func TestVeleroRejectsHostPath(t *testing.T) {
 	}
 }
 
-func TestVeleroRejectsSecretAndConfigMapRefs(t *testing.T) {
-	tests := []struct {
-		name    string
-		mutate  func(*restorev1alpha1.RestoreCheck)
-		wantErr bool
-	}{
-		{"secretKeyRef env", func(bp *restorev1alpha1.RestoreCheck) {
-			bp.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "P", ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "s"}, Key: "k"},
-			}}}
-		}, true},
-		{"configMapRef envFrom", func(bp *restorev1alpha1.RestoreCheck) {
-			bp.Spec.Containers[0].EnvFrom = []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{}}}
-		}, true},
-		{"plain env", func(bp *restorev1alpha1.RestoreCheck) {
-			bp.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "P", Value: "v"}}
-		}, false},
+const (
+	testPullSecret = "pull"
+	testConfigMap  = "conf"
+)
+
+// refCheck reads a pull secret, an env secret, an optional env secret and an envFrom configMap.
+func refCheck() *restorev1alpha1.RestoreCheck {
+	bp := veleroTwoVolumeCheck()
+	bp.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: testPullSecret}}
+	bp.Spec.Containers[0].Env = []corev1.EnvVar{
+		{Name: "P", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: "db"}, Key: "password",
+		}}},
+		{Name: "O", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: "absent"}, Key: "k", Optional: boolPtr(true),
+		}}},
+	}
+	bp.Spec.Containers[0].EnvFrom = []corev1.EnvFromSource{
+		{ConfigMapRef: &corev1.ConfigMapEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: testConfigMap}}},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			bp := newTestCheck()
-			tt.mutate(bp)
+	return bp
+}
 
-			err := validateVeleroCheck(bp)
-			if tt.wantErr && (err == nil || !strings.Contains(err.Error(), "secret or configMap reference")) {
-				t.Fatalf("err = %v, want a secret or configMap rejection", err)
-			}
+func TestVeleroAcceptsSecretAndConfigMapRefs(t *testing.T) {
+	if err := validateVeleroCheck(refCheck()); err != nil {
+		t.Fatalf("unexpected err = %v", err)
+	}
+}
 
-			if !tt.wantErr && err != nil {
-				t.Fatalf("unexpected err = %v", err)
-			}
-		})
+func TestVeleroCopiesCheckRefs(t *testing.T) {
+	ctx := context.Background()
+	c, r, restore := completedVelero(t, refCheck(), htmlName, testPGData)
+	key := client.ObjectKeyFromObject(restore)
+
+	srcs := []client.Object{
+		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: testPullSecret, Namespace: testNamespace}, Type: corev1.SecretTypeDockerConfigJson,
+			Data: map[string][]byte{corev1.DockerConfigJsonKey: []byte("{}")}},
+		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: testNamespace}, Data: map[string][]byte{"password": []byte("pw")}},
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: testConfigMap, Namespace: testNamespace}, Data: map[string]string{"A": "b"}},
+	}
+	for _, o := range srcs {
+		if err := c.Create(ctx, o); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	reconcileRestore(t, r, key)
+
+	scratch := veleroScratchName(restore)
+
+	pull := &corev1.Secret{}
+	if err := c.Get(ctx, client.ObjectKey{Name: testPullSecret, Namespace: scratch}, pull); err != nil {
+		t.Fatal(err)
+	}
+
+	if pull.Type != corev1.SecretTypeDockerConfigJson || pull.Labels[restoreLabel] != restore.Name {
+		t.Fatalf("pull secret copy: type %q labels %v", pull.Type, pull.Labels)
+	}
+
+	db := &corev1.Secret{}
+	if err := c.Get(ctx, client.ObjectKey{Name: "db", Namespace: scratch}, db); err != nil || string(db.Data["password"]) != "pw" {
+		t.Fatalf("db secret copy: %v %v", err, db.Data)
+	}
+
+	conf := &corev1.ConfigMap{}
+	if err := c.Get(ctx, client.ObjectKey{Name: testConfigMap, Namespace: scratch}, conf); err != nil || conf.Data["A"] != "b" {
+		t.Fatalf("configMap copy: %v %v", err, conf.Data)
+	}
+
+	pod := &corev1.Pod{}
+	if err := c.Get(ctx, client.ObjectKey{Name: checkPodName(restore), Namespace: scratch}, pod); err != nil {
+		t.Fatalf("check pod not created after the optional secret was skipped: %v", err)
+	}
+}
+
+func TestVeleroMissingCheckRefFails(t *testing.T) {
+	c, r, restore := completedVelero(t, refCheck(), htmlName, testPGData)
+	key := client.ObjectKeyFromObject(restore)
+
+	res, err := r.Reconcile(context.Background(), reconcile.Request{NamespacedName: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := getRestore(t, c, key)
+	if got.Status.Phase != restorev1alpha1.RestorePhaseFailed || readyReason(got) != reasonCheckRefMissing ||
+		!strings.Contains(got.Status.Message, "secret pull") {
+		t.Fatalf("phase %q reason %q message %q", got.Status.Phase, readyReason(got), got.Status.Message)
+	}
+
+	if res.RequeueAfter != 0 {
+		t.Fatalf("failed restore requeued: %v", res)
+	}
+
+	err = c.Get(context.Background(), client.ObjectKey{Name: checkPodName(restore), Namespace: veleroScratchName(restore)}, &corev1.Pod{})
+	if !errors.IsNotFound(err) {
+		t.Fatalf("check pod created without its secret: %v", err)
 	}
 }
 

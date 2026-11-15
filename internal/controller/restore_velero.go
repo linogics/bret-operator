@@ -20,12 +20,14 @@ import (
 )
 
 // +kubebuilder:rbac:groups=velero.io,resources=restores,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="",resources=secrets;configmaps,verbs=get;create
 
 const (
 	defaultVeleroNamespace = "velero"
 	podSecurityPrefix      = "pod-security.kubernetes.io/"
 
 	reasonRestoredVolumeMissing = "RestoredVolumeMissing"
+	reasonCheckRefMissing       = "CheckRefMissing"
 )
 
 var (
@@ -105,14 +107,11 @@ func setSelector(obj *unstructured.Unstructured, field string, sel *metav1.Label
 	_ = unstructured.SetNestedMap(obj.Object, selectorMap(sel), "spec", field)
 }
 
-// validateVeleroCheck rejects checks that point at objects of the Restore namespace.
-// The Velero check pod runs in the scratch namespace.
+// validateVeleroCheck rejects checks that point at objects of the Restore namespace that the operator does not copy.
+// The Velero check pod runs in the scratch namespace. checkRefs lists the objects that are copied.
 func validateVeleroCheck(bp *restorev1alpha1.RestoreCheck) error {
-	switch {
-	case bp.Spec.ServiceAccountName != "":
+	if bp.Spec.ServiceAccountName != "" {
 		return fmt.Errorf("check %s: serviceAccountName is not supported with Velero", bp.Name)
-	case len(bp.Spec.ImagePullSecrets) > 0:
-		return fmt.Errorf("check %s: imagePullSecrets is not supported with Velero", bp.Name)
 	}
 
 	for i := range bp.Spec.Volumes {
@@ -127,32 +126,123 @@ func validateVeleroCheck(bp *restorev1alpha1.RestoreCheck) error {
 		}
 	}
 
-	for _, containers := range [][]corev1.Container{bp.Spec.InitContainers, bp.Spec.Containers} {
-		for i := range containers {
-			if usesSecretOrConfigMap(&containers[i]) {
-				return fmt.Errorf("check %s: container %q uses a secret or configMap reference, not supported with Velero", bp.Name, containers[i].Name)
-			}
-		}
-	}
-
 	return nil
 }
 
-// usesSecretOrConfigMap reports whether a container reads env or envFrom from a Secret or ConfigMap.
-func usesSecretOrConfigMap(c *corev1.Container) bool {
+// checkRef is a Secret or ConfigMap of the Restore namespace that the check pod reads.
+type checkRef struct {
+	secret   bool
+	name     string
+	optional bool
+}
+
+func (c checkRef) String() string {
+	if c.secret {
+		return "secret " + c.name
+	}
+
+	return "configMap " + c.name
+}
+
+// checkRefs lists the Secrets and ConfigMaps named by imagePullSecrets, env and envFrom of a check.
+// A name can appear more than once.
+func checkRefs(bp *restorev1alpha1.RestoreCheck) []checkRef {
+	refs := make([]checkRef, 0, len(bp.Spec.ImagePullSecrets))
+
+	for _, s := range bp.Spec.ImagePullSecrets {
+		refs = append(refs, checkRef{secret: true, name: s.Name})
+	}
+
+	for _, containers := range [][]corev1.Container{bp.Spec.InitContainers, bp.Spec.Containers} {
+		for i := range containers {
+			refs = append(refs, containerRefs(&containers[i])...)
+		}
+	}
+
+	return refs
+}
+
+func containerRefs(c *corev1.Container) []checkRef {
+	var refs []checkRef
+
 	for _, e := range c.Env {
-		if e.ValueFrom != nil && (e.ValueFrom.SecretKeyRef != nil || e.ValueFrom.ConfigMapKeyRef != nil) {
-			return true
+		switch {
+		case e.ValueFrom == nil:
+		case e.ValueFrom.SecretKeyRef != nil:
+			refs = append(refs, checkRef{secret: true, name: e.ValueFrom.SecretKeyRef.Name, optional: isTrue(e.ValueFrom.SecretKeyRef.Optional)})
+		case e.ValueFrom.ConfigMapKeyRef != nil:
+			refs = append(refs, checkRef{name: e.ValueFrom.ConfigMapKeyRef.Name, optional: isTrue(e.ValueFrom.ConfigMapKeyRef.Optional)})
 		}
 	}
 
 	for _, ef := range c.EnvFrom {
-		if ef.SecretRef != nil || ef.ConfigMapRef != nil {
-			return true
+		switch {
+		case ef.SecretRef != nil:
+			refs = append(refs, checkRef{secret: true, name: ef.SecretRef.Name, optional: isTrue(ef.SecretRef.Optional)})
+		case ef.ConfigMapRef != nil:
+			refs = append(refs, checkRef{name: ef.ConfigMapRef.Name, optional: isTrue(ef.ConfigMapRef.Optional)})
 		}
 	}
 
-	return false
+	return refs
+}
+
+func isTrue(b *bool) bool {
+	return b != nil && *b
+}
+
+// copyCheckRefs copies the Secrets and ConfigMaps of the check from the Restore namespace into the scratch namespace.
+// The copies carry the restore label and go with the scratch namespace. missing names the first required object
+// that is not in the Restore namespace.
+func (r *RestoreReconciler) copyCheckRefs(
+	ctx context.Context,
+	restore *restorev1alpha1.Restore,
+	bp *restorev1alpha1.RestoreCheck,
+	ns string,
+) (missing string, err error) {
+	for _, ref := range checkRefs(bp) {
+		// Kubernetes creates this ConfigMap in every namespace.
+		if !ref.secret && ref.name == "kube-root-ca.crt" {
+			continue
+		}
+
+		found, err := r.copyCheckRef(ctx, restore, ref, ns)
+		if err != nil {
+			return "", err
+		}
+
+		if !found && !ref.optional {
+			return ref.String(), nil
+		}
+	}
+
+	return "", nil
+}
+
+// copyCheckRef copies one object. found is false when the Restore namespace does not have it.
+func (r *RestoreReconciler) copyCheckRef(ctx context.Context, restore *restorev1alpha1.Restore, ref checkRef, ns string) (found bool, err error) {
+	src := metav1.ObjectMeta{Name: ref.name, Namespace: restore.Namespace}
+	dst := metav1.ObjectMeta{Name: ref.name, Namespace: ns, Labels: restoreLabels(restore)}
+
+	if ref.secret {
+		s := &corev1.Secret{ObjectMeta: src}
+		if err := r.getObject(ctx, s); err != nil {
+			return false, client.IgnoreNotFound(err)
+		}
+
+		_, err = r.ensure(ctx, restore, &corev1.Secret{ObjectMeta: dst, Type: s.Type, Data: s.Data})
+
+		return true, err
+	}
+
+	cm := &corev1.ConfigMap{ObjectMeta: src}
+	if err := r.getObject(ctx, cm); err != nil {
+		return false, client.IgnoreNotFound(err)
+	}
+
+	_, err = r.ensure(ctx, restore, &corev1.ConfigMap{ObjectMeta: dst, Data: cm.Data, BinaryData: cm.BinaryData})
+
+	return true, err
 }
 
 func veleroScratchName(restore *restorev1alpha1.Restore) string {
@@ -221,6 +311,19 @@ func (r *RestoreReconciler) checkVelero(
 
 	if err := r.copyPodSecurity(ctx, restore, ns); err != nil {
 		return ctrl.Result{}, err
+	}
+
+	missingRef, err := r.copyCheckRefs(ctx, restore, bp, ns.Name)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if missingRef != "" {
+		// Without the object the check pod never starts.
+		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+		r.block(restore, reasonCheckRefMissing, "check needs "+missingRef+", not found in namespace "+restore.Namespace)
+
+		return ctrl.Result{}, nil
 	}
 
 	pvcs := &corev1.PersistentVolumeClaimList{}

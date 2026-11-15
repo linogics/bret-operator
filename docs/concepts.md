@@ -66,7 +66,7 @@ The diagram shows the three namespaces of a Velero restore and what lives in eac
            ▼                            │ copies pod-security labels
 ┌ bret-scratch-<hash> ──────────────────▼────────────┐
 │ restored PVC + PV   (only those of "nextcloud")    │
-│ check pod           (no Secrets, no ConfigMaps)    │
+│ check pod           + copied Secrets, ConfigMaps   │
 └────────────────────────────────────────────────────┘
   hash = first 12 hex of sha256("<namespace>/<name>")
 ```
@@ -80,14 +80,19 @@ The diagram shows the three namespaces of a Velero restore and what lives in eac
   pod then runs under the same Pod Security rules as in your namespace.
 - Velero restores at the original size. A Velero source has no `size`, `autoExpand` or `storageClassName`.
 - Velero restores the PVCs that match the source's label selector. See [Which PVC gets restored](#which-pvc-gets-restored).
+- The operator copies the Secrets and ConfigMaps that the check names in `imagePullSecrets`, `env`
+  and `envFrom` from your namespace into the scratch namespace, before the check pod starts. The
+  check then reads the same values as with Kopiur and VolSync. The copies go when the scratch
+  namespace is deleted. A required one that is missing ends the `Restore` as `Failed` with
+  `CheckRefMissing`. An `optional: true` reference that is missing is skipped.
+- Pull secrets of the `default` ServiceAccount are not copied. With Velero, list the pull secret
+  in the check's `imagePullSecrets`.
 
 A check for Velero must not set any of these. Such a check fails with `ProviderUnsupported`:
 
 - `serviceAccountName`
-- `imagePullSecrets`
 - a configMap, secret, projected or persistentVolumeClaim volume
 - a hostPath volume
-- an env or envFrom reference to a Secret or ConfigMap
 
 ### VolSync
 
@@ -149,6 +154,8 @@ condition is `False` with that reason, a Warning Event is written, and no check 
   source. For example, `html` points at the `Snapshot` of `pgdata`.
 - `RestoredVolumeMissing` (Velero): a `sourcePVC` of the check was not restored. The selector did
   not match it, or the backup does not contain it.
+- `CheckRefMissing` (Velero): a Secret or ConfigMap that the check needs is not in the `Restore`
+  namespace, so the operator cannot copy it into the scratch namespace.
 
 A one-volume app has one entry on each side. It works the same way.
 
@@ -326,5 +333,7 @@ Namespaces:
 - A `RestoreTest` in a namespace that is not watched is ignored. The operator writes nothing to it.
 - Pods and volumes live in the namespace of the `Restore` or `RestoreTest`. For Velero, they live
   in the scratch namespace.
+- With Velero on, the operator can read and create Secrets and ConfigMaps in every namespace. It
+  copies the ones a check names into the scratch namespace, which is not watched.
 - **Planned:** Velero backups live in the Velero namespace (`velero` by default). The operator reads
   backup objects there. In namespaced mode, this is the one cross-namespace read it needs.

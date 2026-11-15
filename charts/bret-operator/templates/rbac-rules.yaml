@@ -8,6 +8,16 @@ metadata:
   labels:
     {{- include "bret-operator.labels" . | nindent 4 }}
 rules:
+{{- if $.Values.providers.velero.enabled }}
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  - secrets
+  verbs:
+  - create
+  - get
+{{- end }}
 - apiGroups:
   - ''
   resources:

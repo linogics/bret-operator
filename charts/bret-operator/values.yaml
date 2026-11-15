@@ -75,7 +75,8 @@ providers:
   velero:
     # -- Enable the Velero provider. Adds the velero.io rights and the cluster-wide namespace rights
     # for the scratch namespace. Pod and PVC rights are cluster-wide with Velero on, otherwise they
-    # are bound per watched namespace.
+    # are bound per watched namespace. Also adds cluster-wide get and create on Secrets and
+    # ConfigMaps: the operator copies those a check names into the scratch namespace.
     enabled: false
     # -- Velero install namespace. The operator creates its Velero objects here (env VELERO_NAMESPACE).
     # With watchNamespaces set, the velero.io rights are bound here even if it is not listed.

@@ -7,6 +7,14 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  - secrets
+  verbs:
+  - create
+  - get
+- apiGroups:
+  - ""
+  resources:
   - events
   verbs:
   - create
@@ -31,12 +39,6 @@ rules:
   - list
   - patch
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
 - apiGroups:
   - bret.linogics.io
   resources:

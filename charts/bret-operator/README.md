@@ -47,7 +47,7 @@ Kubernetes: `>=1.29.0-0`
 | podSecurityContext | object | `{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}` | Pod security context. The default follows the restricted Pod Security Standard. |
 | pollInterval | string | `"30s"` | How often a running attempt is checked again, for example 30s. Minimum 5s. Lower values show results sooner, but cost one API read per running attempt per poll. |
 | providers.kopiur.enabled | bool | `true` | Enable the Kopiur provider. |
-| providers.velero.enabled | bool | `false` | Enable the Velero provider. Adds the velero.io rights and the cluster-wide namespace rights for the scratch namespace. Pod and PVC rights are cluster-wide with Velero on, otherwise they are bound per watched namespace. |
+| providers.velero.enabled | bool | `false` | Enable the Velero provider. Adds the velero.io rights and the cluster-wide namespace rights for the scratch namespace. Pod and PVC rights are cluster-wide with Velero on, otherwise they are bound per watched namespace. Also adds cluster-wide get and create on Secrets and ConfigMaps: the operator copies those a check names into the scratch namespace. |
 | providers.velero.namespace | string | `"velero"` | Velero install namespace. The operator creates its Velero objects here (env VELERO_NAMESPACE). With watchNamespaces set, the velero.io rights are bound here even if it is not listed. |
 | providers.volsync.enabled | bool | `false` | Enable the VolSync provider. |
 | replicaCount | int | `1` | Number of manager replicas. Leader election keeps one replica active. |
