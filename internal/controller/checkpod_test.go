@@ -258,3 +258,40 @@ func TestMoverUIDPerVolume(t *testing.T) {
 		t.Fatalf("html: got %v, %v; want container runAsUser 999", uid, err)
 	}
 }
+
+func TestValidateCheckClaimClash(t *testing.T) {
+	t.Parallel()
+
+	bp := checkPodCheck()
+	bp.Spec.RestoredVolumes[0].SourcePVC = "scratch-work-area"
+
+	err := validateCheck(bp)
+	if err == nil || !strings.Contains(err.Error(), "scratch-work-area") || !strings.Contains(err.Error(), testWorkArea) {
+		t.Errorf("err = %v, want a clash naming both", err)
+	}
+}
+
+func TestValidateCheckBadSourcePVC(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"data.db", "Data"} {
+		bp := checkPodCheck()
+		bp.Spec.RestoredVolumes[0].SourcePVC = name
+
+		if err := validateCheck(bp); err == nil {
+			t.Errorf("sourcePVC %q: want error", name)
+		}
+	}
+}
+
+func TestValidateCheckDuplicateSourcePVC(t *testing.T) {
+	t.Parallel()
+
+	bp := twoVolumeCheck()
+	bp.Spec.RestoredVolumes[1].SourcePVC = htmlName
+	bp.Spec.RestoredVolumes[1].MountPath = "/other"
+
+	if err := validateCheck(bp); err == nil {
+		t.Error("duplicate sourcePVC: want error")
+	}
+}

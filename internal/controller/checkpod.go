@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
@@ -35,6 +36,26 @@ func dnsLabel(s string) string {
 func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
 	if len(bp.Spec.RestoredVolumes) == 0 {
 		return fmt.Errorf("check %s: restoredVolumes is required", bp.Name)
+	}
+
+	seen := map[string]bool{}
+
+	for _, rv := range bp.Spec.RestoredVolumes {
+		if errs := validation.IsDNS1123Label(rv.SourcePVC); len(errs) > 0 {
+			return fmt.Errorf("check %s: sourcePVC %q is not a DNS label: %s", bp.Name, rv.SourcePVC, errs[0])
+		}
+
+		if seen[rv.SourcePVC] {
+			return fmt.Errorf("check %s: sourcePVC %q is used twice", bp.Name, rv.SourcePVC)
+		}
+
+		seen[rv.SourcePVC] = true
+
+		for _, sv := range bp.Spec.ScratchVolumes {
+			if rv.SourcePVC == "scratch-"+dnsLabel(sv.Name) {
+				return fmt.Errorf("check %s: sourcePVC %q clashes with the claim of scratch volume %q", bp.Name, rv.SourcePVC, sv.Name)
+			}
+		}
 	}
 
 	mounts := map[string]bool{}
