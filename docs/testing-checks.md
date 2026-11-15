@@ -90,6 +90,28 @@ hack/check-test/roundtrip.sh minimal \
   examples/restorecheck-minimal.yaml
 ```
 
+## Round trip through the operator
+
+`roundtrip.sh` skips the operator. `operator-roundtrip.sh` drives it for real:
+
+```bash
+hack/check-test/operator-roundtrip.sh kopiur nextcloud
+NEGATIVE=1 hack/check-test/operator-roundtrip.sh velero nextcloud
+```
+
+Needs the operator running with the provider enabled, and Kopiur, VolSync or Velero (with data
+mover) installed. Namespace `bpo-<provider>-<app>`; Velero lives in `VELERO_NS` (default `velero`).
+
+1. Seed the PVCs. Wait for the `seed` pod.
+2. Back up every PVC: Kopiur one `SnapshotPolicy` and `Snapshot` each; VolSync one manual
+   `ReplicationSource` each, wait `lastSyncTime`; Velero label the PVCs
+   `bret.linogics.io/test=<app>` and `velero backup create --snapshot-move-data`.
+3. Apply the check and a `Restore` (one source per PVC; Velero one source with `labelSelector`).
+4. Wait for `Succeeded`, `Failed` or `Canceled`. Print the phase, the Ready reason and the logs.
+5. Exit 0 only when the result matches. `NEGATIVE=1` needs two or more PVCs. Kopiur and VolSync
+   omit the last source and expect `Failed` with `SourceMissing`. Velero labels only the first PVC
+   and expects `Failed` with `RestoredVolumeMissing`.
+
 ## Writing a seed
 
 A seed is the only per-app work. It must satisfy this contract:
