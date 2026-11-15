@@ -273,21 +273,16 @@ func TestRestoreTestAfterBackupOneRunPerSnapshot(t *testing.T) {
 
 	f.run()
 
-	if n := len(f.restores()); n != 1 {
-		t.Fatalf("restores after first run = %d, want 1 (oldest snapshot)", n)
+	restores := f.restores()
+	if len(restores) != 1 || restores[0].Spec.Sources[0].BackupRef.Name != "b" {
+		t.Fatalf("restores = %v, want one run on the newest snapshot b", restores)
 	}
 
 	f.finishRunning(restorev1alpha1.RestorePhaseSucceeded)
 	f.run()
 
-	if n := len(f.restores()); n != 2 {
-		t.Fatalf("restores after second run = %d, want 2", n)
-	}
-
-	f.run()
-
-	if n := len(f.restores()); n != 2 {
-		t.Fatalf("restores after idle reconcile = %d, want 2", n)
+	if n := len(f.restores()); n != 1 {
+		t.Fatalf("restores after idle reconcile = %d, want 1", n)
 	}
 
 	last := f.test().Status.LastHandled
@@ -453,7 +448,7 @@ func TestRestoreTestRetryAfterBackoffOnly(t *testing.T) {
 	}
 }
 
-func TestRestoreTestTargetMissing(t *testing.T) {
+func TestAfterBackupAutoSize(t *testing.T) {
 	test := newRestoreTestObject()
 	test.Spec.Sources[0].RestoreTarget = restorev1alpha1.RestoreTarget{}
 	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
@@ -462,13 +457,12 @@ func TestRestoreTestTargetMissing(t *testing.T) {
 	f.setRunNow("n1")
 	f.run()
 
-	if n := len(f.restores()); n != 0 {
-		t.Fatalf("restores = %d, want 0", n)
+	if n := len(f.restores()); n != 1 {
+		t.Fatalf("restores = %d, want 1", n)
 	}
 
-	condition := apimeta.FindStatusCondition(f.test().Status.Conditions, readyConditionType)
-	if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != reasonTargetMissing {
-		t.Errorf("Ready condition = %+v, want False %s", condition, reasonTargetMissing)
+	if got := testReadyReason(f.test()); got != reasonRunning {
+		t.Errorf("reason = %q, want %s", got, reasonRunning)
 	}
 }
 
@@ -774,5 +768,148 @@ func TestRestoreTestReusedNonceStartsNewRestore(t *testing.T) {
 
 	if got := f.test().Status.LastRun.Time; !got.Time.Equal(f.now) {
 		t.Errorf("lastRun time = %v, want %v", got, f.now)
+	}
+}
+
+func twoSourceTest() *restorev1alpha1.RestoreTest {
+	test := newRestoreTestObject()
+	test.Spec.Sources = []restorev1alpha1.RestoreTestSource{
+		{SourcePVC: testHTML, BackupSelector: restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testHTML}}},
+		{SourcePVC: testPGData, BackupSelector: restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testPGData}}},
+	}
+
+	return test
+}
+
+func snapAt(name, kind string, minute int) *unstructured.Unstructured {
+	return newSnapshot(name, map[string]string{testLabelKey: kind}, "Succeeded", time.Date(2026, 11, 15, 10, minute, 0, 0, time.UTC))
+}
+
+func restoreBackups(r restorev1alpha1.Restore) map[string]string {
+	out := map[string]string{}
+	for _, s := range r.Spec.Sources {
+		out[s.SourcePVC] = s.BackupRef.Name
+	}
+
+	return out
+}
+
+func TestRestoreTestTwoSourcesNewestEach(t *testing.T) {
+	test := twoSourceTest()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+
+	f := newRestoreTestFixture(t, test,
+		snapAt("h1", testHTML, 0), snapAt("h2", testHTML, 10), snapAt("p1", testPGData, 5))
+	f.setRunNow("n1")
+	f.run()
+
+	restores := f.restores()
+	if len(restores) != 1 {
+		t.Fatalf("restores = %d, want 1", len(restores))
+	}
+
+	got := restoreBackups(restores[0])
+	if got[testHTML] != "h2" || got[testPGData] != "p1" || len(got) != 2 {
+		t.Errorf("backups = %v, want html=h2 pgdata=p1", got)
+	}
+}
+
+func TestRestoreTestSourceWithoutBackup(t *testing.T) {
+	test := twoSourceTest()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+
+	f := newRestoreTestFixture(t, test, snapAt("h1", testHTML, 0))
+	f.setRunNow("n1")
+	f.run()
+
+	if n := len(f.restores()); n != 0 {
+		t.Fatalf("restores = %d, want 0", n)
+	}
+
+	condition := apimeta.FindStatusCondition(f.test().Status.Conditions, readyConditionType)
+	if condition == nil || condition.Reason != reasonBackupNotFound || !strings.Contains(condition.Message, testPGData) {
+		t.Errorf("condition = %+v, want %s naming %s", condition, reasonBackupNotFound, testPGData)
+	}
+}
+
+func TestAfterBackupWaitsForAllSources(t *testing.T) {
+	test := twoSourceTest()
+	test.CreationTimestamp = metav1.NewTime(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC))
+	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
+	test.Status.LastHandled = []restorev1alpha1.HandledBackup{
+		{SourcePVC: testHTML, Name: "h1", CreatedAt: metav1.NewTime(time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC))},
+		{SourcePVC: testPGData, Name: "p1", CreatedAt: metav1.NewTime(time.Date(2026, 11, 15, 10, 5, 0, 0, time.UTC))},
+	}
+
+	f := newRestoreTestFixture(t, test,
+		snapAt("h1", testHTML, 0), snapAt("p1", testPGData, 5), snapAt("h2", testHTML, 10))
+	f.now = time.Date(2026, 11, 15, 10, 20, 0, 0, time.UTC)
+	f.run()
+
+	if n := len(f.restores()); n != 0 {
+		t.Fatalf("restores with one new source = %d, want 0", n)
+	}
+
+	if err := f.c.Create(f.ctx, snapAt("p2", testPGData, 15)); err != nil {
+		t.Fatal(err)
+	}
+
+	f.run()
+
+	restores := f.restores()
+	if len(restores) != 1 {
+		t.Fatalf("restores = %d, want 1", len(restores))
+	}
+
+	last := f.test().Status.LastHandled
+	if len(last) != 2 || handledFor(f.test(), testHTML).Name != "h2" || handledFor(f.test(), testPGData).Name != "p2" {
+		t.Errorf("lastHandled = %v, want h2 and p2", last)
+	}
+}
+
+func TestRestoreTestRetryKeepsSources(t *testing.T) {
+	test := twoSourceTest()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+	test.Spec.Retries = restorev1alpha1.Retries{Count: 1, Backoff: metav1.Duration{Duration: time.Minute}}
+
+	f := newRestoreTestFixture(t, test, snapAt("h1", testHTML, 0), snapAt("p1", testPGData, 5))
+	f.setRunNow("n1")
+	f.run()
+	f.finishRunning(restorev1alpha1.RestorePhaseFailed)
+	f.run()
+
+	if err := f.c.Create(f.ctx, snapAt("h2", testHTML, 20)); err != nil {
+		t.Fatal(err)
+	}
+
+	f.now = f.now.Add(time.Minute)
+	f.run()
+
+	restores := f.restores()
+	if len(restores) != 2 {
+		t.Fatalf("restores = %d, want 2", len(restores))
+	}
+
+	for _, r := range restores {
+		if got := restoreBackups(r); got[testHTML] != "h1" || got[testPGData] != "p1" {
+			t.Errorf("%s backups = %v, want html=h1 pgdata=p1", r.Name, got)
+		}
+	}
+}
+
+func TestRestoreTestQueueStoresBackups(t *testing.T) {
+	test := twoSourceTest()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+	test.Spec.OverlapPolicy = restorev1alpha1.OverlapPolicyQueue
+
+	f := newRestoreTestFixture(t, test, snapAt("h1", testHTML, 0), snapAt("p1", testPGData, 5))
+	f.setRunNow("n1")
+	f.run()
+	f.setRunNow("n2")
+	f.run()
+
+	pending := f.test().Status.PendingBackups
+	if pending[testHTML] != "h1" || pending[testPGData] != "p1" || len(pending) != 2 {
+		t.Errorf("pendingBackups = %v, want both sources", pending)
 	}
 }

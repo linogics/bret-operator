@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -42,7 +43,6 @@ const (
 	reasonRunSkipped     = "RunSkipped"
 	reasonRunReplaced    = "RunReplaced"
 	reasonRunning        = "Running"
-	reasonTargetMissing  = "TargetMissing"
 	reasonBackupNotFound = "BackupNotFound"
 	reasonInvalidCron    = "InvalidCron"
 )
@@ -65,12 +65,13 @@ type RestoreTestReconciler struct {
 
 // trigger is one due request for a run. consume records in the status that the request was handled.
 type trigger struct {
-	source  string
-	backup  string
+	source string
+	// backups maps sourcePVC to a backup. Empty means every source takes its newest backup.
+	backups map[string]string
 	consume func()
 }
 
-// completedBackup is a Succeeded Kopiur Snapshot that matches the backup selector.
+// completedBackup is a Succeeded Kopiur Snapshot that matches a backup selector.
 type completedBackup struct {
 	name      string
 	completed time.Time
@@ -281,11 +282,13 @@ func (r *RestoreTestReconciler) retry(
 		return ctrl.Result{RequeueAfter: wait}, nil
 	}
 
-	if !r.requireTarget(test) {
-		return ctrl.Result{}, nil
+	// Keep the backups of the failed attempt, so a newer snapshot does not change the run.
+	backups := make(map[string]string, len(restore.Spec.Sources))
+	for _, src := range restore.Spec.Sources {
+		backups[src.SourcePVC] = src.BackupRef.Name
 	}
 
-	err := r.createRestore(ctx, test, restore.Labels[runLabel], restore.Spec.Sources[0].BackupRef.Name, attempt+1)
+	err := r.createRestore(ctx, test, restore.Labels[runLabel], backups, attempt+1)
 
 	return ctrl.Result{}, err
 }
@@ -293,7 +296,7 @@ func (r *RestoreTestReconciler) retry(
 // runTriggers starts the queued run when no run is in progress, then handles one due trigger.
 func (r *RestoreTestReconciler) runTriggers(ctx context.Context, test *restorev1alpha1.RestoreTest) (ctrl.Result, error) {
 	if test.Status.CurrentRestore == "" && len(test.Status.PendingBackups) > 0 {
-		started, err := r.start(ctx, test, test.Status.PendingRunSource, test.Status.PendingBackups[firstSourcePVC(test)])
+		started, err := r.start(ctx, test, test.Status.PendingRunSource, test.Status.PendingBackups)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -406,15 +409,10 @@ func (r *RestoreTestReconciler) nextTrigger(ctx context.Context, test *restorev1
 	return nil, wait, nil
 }
 
-// firstSourcePVC is the sourcePVC of the only source this round handles.
-func firstSourcePVC(test *restorev1alpha1.RestoreTest) string {
-	return test.Spec.Sources[0].SourcePVC
-}
-
-// handledFor returns the last handled backup of the first source, or nil.
-func handledFor(test *restorev1alpha1.RestoreTest) *restorev1alpha1.HandledBackup {
+// handledFor returns the last handled backup of a source, or nil.
+func handledFor(test *restorev1alpha1.RestoreTest, sourcePVC string) *restorev1alpha1.HandledBackup {
 	for i := range test.Status.LastHandled {
-		if test.Status.LastHandled[i].SourcePVC == firstSourcePVC(test) {
+		if test.Status.LastHandled[i].SourcePVC == sourcePVC {
 			return &test.Status.LastHandled[i]
 		}
 	}
@@ -449,51 +447,70 @@ func isNewerThanWatermark(b completedBackup, wm *restorev1alpha1.HandledBackup) 
 	return b.name > wm.Name
 }
 
-// afterBackupTrigger returns the oldest completed backup whose delay has passed and that no run handled.
-// Otherwise, it returns how long until the next such backup is due.
+// afterBackupTrigger fires when every source has a backup that no run handled and whose delay has passed.
+// The run uses the newest backup of each source. Otherwise, it returns how long until all sources are due.
 func (r *RestoreTestReconciler) afterBackupTrigger(
 	ctx context.Context,
 	test *restorev1alpha1.RestoreTest,
 	delay time.Duration,
 	now time.Time,
 ) (*trigger, time.Duration, error) {
-	backups, err := r.completedBackups(ctx, test)
-	if err != nil {
-		return nil, 0, err
+	backups := make(map[string]string, len(test.Spec.Sources))
+	used := make([]restorev1alpha1.HandledBackup, 0, len(test.Spec.Sources))
+	names := make([]string, 0, len(test.Spec.Sources))
+
+	var due time.Time
+
+	for _, src := range test.Spec.Sources {
+		list, err := r.completedBackups(ctx, test.Namespace, src.BackupSelector)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		oldest := -1
+
+		for i, b := range list {
+			// Backups that finished before this test existed are not new. Testing them all at once would surprise the user.
+			if isNewerThanWatermark(b, handledFor(test, src.SourcePVC)) && !b.completed.Before(test.CreationTimestamp.Time) {
+				oldest = i
+
+				break
+			}
+		}
+
+		if oldest < 0 {
+			return nil, 0, nil
+		}
+
+		if d := list[oldest].completed.Add(delay); d.After(due) {
+			due = d
+		}
+
+		newest := list[len(list)-1]
+		backups[src.SourcePVC] = newest.name
+		names = append(names, newest.name)
+		used = append(used, restorev1alpha1.HandledBackup{SourcePVC: src.SourcePVC, Name: newest.name, CreatedAt: metav1.NewTime(newest.completed)})
 	}
 
-	var wait time.Duration
-
-	for _, b := range backups {
-		if !isNewerThanWatermark(b, handledFor(test)) {
-			continue
-		}
-		// Backups that finished before this test existed are not new. Testing them all at once would surprise the user.
-		if b.completed.Before(test.CreationTimestamp.Time) {
-			continue
-		}
-
-		due := b.completed.Add(delay)
-		if !now.Before(due) {
-			return &trigger{
-				source: "backup-" + b.name,
-				backup: b.name,
-				consume: func() {
-					setHandled(test, restorev1alpha1.HandledBackup{SourcePVC: firstSourcePVC(test), Name: b.name, CreatedAt: metav1.NewTime(b.completed)})
-				},
-			}, 0, nil
-		}
-
-		wait = earliest(wait, due.Sub(now))
+	if now.Before(due) {
+		return nil, due.Sub(now), nil
 	}
 
-	return nil, wait, nil
+	return &trigger{
+		source:  "backup-" + strings.Join(names, "+"),
+		backups: backups,
+		consume: func() {
+			for _, h := range used {
+				setHandled(test, h)
+			}
+		},
+	}, 0, nil
 }
 
 // handle applies the overlap policy to a due trigger. It reports false when the trigger was not used and must wait.
 func (r *RestoreTestReconciler) handle(ctx context.Context, test *restorev1alpha1.RestoreTest, trig *trigger) (bool, error) {
 	if test.Status.CurrentRestore == "" {
-		started, err := r.start(ctx, test, trig.source, trig.backup)
+		started, err := r.start(ctx, test, trig.source, trig.backups)
 		if err != nil || !started {
 			return false, err
 		}
@@ -525,18 +542,12 @@ func (r *RestoreTestReconciler) queue(ctx context.Context, test *restorev1alpha1
 		return true, nil
 	}
 
-	backup, err := r.resolveBackup(ctx, test, trig.backup)
-	if err != nil {
+	backups, ok, err := r.resolveOrBlock(ctx, test, trig.backups)
+	if err != nil || !ok {
 		return false, err
 	}
 
-	if backup == "" {
-		r.blockTest(test, reasonBackupNotFound, "no Succeeded backup matches backupSelector")
-
-		return false, nil
-	}
-
-	test.Status.PendingBackups = map[string]string{firstSourcePVC(test): backup}
+	test.Status.PendingBackups = backups
 	test.Status.PendingRunSource = "queued-" + trig.source
 
 	trig.consume()
@@ -546,10 +557,6 @@ func (r *RestoreTestReconciler) queue(ctx context.Context, test *restorev1alpha1
 
 // replace deletes the run in progress and starts the trigger in its place.
 func (r *RestoreTestReconciler) replace(ctx context.Context, test *restorev1alpha1.RestoreTest, trig *trigger) (bool, error) {
-	if !r.requireTarget(test) {
-		return false, nil
-	}
-
 	old := &restorev1alpha1.Restore{}
 
 	err := r.Get(ctx, client.ObjectKey{Namespace: test.Namespace, Name: test.Status.CurrentRestore}, old)
@@ -574,7 +581,7 @@ func (r *RestoreTestReconciler) replace(ctx context.Context, test *restorev1alph
 	test.Status.PendingBackups = nil
 	test.Status.PendingRunSource = ""
 
-	started, err := r.start(ctx, test, trig.source, trig.backup)
+	started, err := r.start(ctx, test, trig.source, trig.backups)
 	if err != nil || !started {
 		return false, err
 	}
@@ -584,24 +591,14 @@ func (r *RestoreTestReconciler) replace(ctx context.Context, test *restorev1alph
 	return true, nil
 }
 
-// start creates the first attempt of a new run. An empty backup selects the newest matching backup.
-func (r *RestoreTestReconciler) start(ctx context.Context, test *restorev1alpha1.RestoreTest, source, backup string) (bool, error) {
-	if !r.requireTarget(test) {
-		return false, nil
-	}
-
-	name, err := r.resolveBackup(ctx, test, backup)
-	if err != nil {
+// start creates the first attempt of a new run. Sources without a preferred backup take their newest one.
+func (r *RestoreTestReconciler) start(ctx context.Context, test *restorev1alpha1.RestoreTest, source string, preferred map[string]string) (bool, error) {
+	backups, ok, err := r.resolveOrBlock(ctx, test, preferred)
+	if err != nil || !ok {
 		return false, err
 	}
 
-	if name == "" {
-		r.blockTest(test, reasonBackupNotFound, "no Succeeded backup matches backupSelector")
-
-		return false, nil
-	}
-
-	err = r.createRestore(ctx, test, startRunID(test, source), name, 1)
+	err = r.createRestore(ctx, test, startRunID(test, source), backups, 1)
 	if err != nil {
 		return false, err
 	}
@@ -609,9 +606,38 @@ func (r *RestoreTestReconciler) start(ctx context.Context, test *restorev1alpha1
 	return true, nil
 }
 
+// resolveOrBlock resolves the backups of every source. It reports false and sets BackupNotFound when a source has none.
+func (r *RestoreTestReconciler) resolveOrBlock(
+	ctx context.Context,
+	test *restorev1alpha1.RestoreTest,
+	preferred map[string]string,
+) (map[string]string, bool, error) {
+	backups, missing, err := r.resolveBackups(ctx, test, preferred)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if len(missing) > 0 {
+		r.blockTest(test, reasonBackupNotFound, "no Succeeded backup matches backupSelector for source(s) "+strings.Join(missing, ", "))
+
+		return nil, false, nil
+	}
+
+	return backups, true, nil
+}
+
 // createRestore creates the Restore of one attempt and makes it the run in progress.
 // An existing attempt is accepted. It can come from an earlier reconcile that did not store its status.
-func (r *RestoreTestReconciler) createRestore(ctx context.Context, test *restorev1alpha1.RestoreTest, run, backup string, attempt int) error {
+func (r *RestoreTestReconciler) createRestore(ctx context.Context, test *restorev1alpha1.RestoreTest, run string, backups map[string]string, attempt int) error {
+	sources := make([]restorev1alpha1.RestoreSource, 0, len(test.Spec.Sources))
+	for _, src := range test.Spec.Sources {
+		sources = append(sources, restorev1alpha1.RestoreSource{
+			SourcePVC:     src.SourcePVC,
+			BackupRef:     restorev1alpha1.BackupRef{Name: backups[src.SourcePVC], Namespace: test.Namespace},
+			RestoreTarget: src.RestoreTarget,
+		})
+	}
+
 	restore := &restorev1alpha1.Restore{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s-a%d", test.Name, run, attempt),
@@ -623,12 +649,8 @@ func (r *RestoreTestReconciler) createRestore(ctx context.Context, test *restore
 			},
 		},
 		Spec: restorev1alpha1.RestoreSpec{
-			Provider: test.Spec.Provider,
-			Sources: []restorev1alpha1.RestoreSource{{
-				SourcePVC:     test.Spec.Sources[0].SourcePVC,
-				BackupRef:     restorev1alpha1.BackupRef{Name: backup, Namespace: test.Namespace},
-				RestoreTarget: test.Spec.Sources[0].RestoreTarget,
-			}},
+			Provider:        test.Spec.Provider,
+			Sources:         sources,
 			RestoreCheckRef: test.Spec.RestoreCheckRef,
 			RestoreWindow:   test.Spec.RestoreWindow,
 			KeepOnFailure:   test.Spec.KeepOnFailure,
@@ -653,47 +675,48 @@ func (r *RestoreTestReconciler) createRestore(ctx context.Context, test *restore
 	return nil
 }
 
-// requireTarget reports whether the test can create Restore objects. Without a target it sets TargetMissing.
-func (r *RestoreTestReconciler) requireTarget(test *restorev1alpha1.RestoreTest) bool {
-	if size := test.Spec.Sources[0].Size; size != nil && !size.IsZero() {
-		return true
+// resolveBackups picks one backup per source: preferred, else the selector name, else the newest Succeeded one.
+// Sources without a backup are returned in missing.
+func (r *RestoreTestReconciler) resolveBackups(
+	ctx context.Context,
+	test *restorev1alpha1.RestoreTest,
+	preferred map[string]string,
+) (map[string]string, []string, error) {
+	backups := make(map[string]string, len(test.Spec.Sources))
+
+	var missing []string
+
+	for _, src := range test.Spec.Sources {
+		switch {
+		case preferred[src.SourcePVC] != "":
+			backups[src.SourcePVC] = preferred[src.SourcePVC]
+		case src.BackupSelector.Name != "":
+			backups[src.SourcePVC] = src.BackupSelector.Name
+		default:
+			list, err := r.completedBackups(ctx, test.Namespace, src.BackupSelector)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if len(list) == 0 {
+				missing = append(missing, src.SourcePVC)
+
+				continue
+			}
+
+			backups[src.SourcePVC] = list[len(list)-1].name
+		}
 	}
 
-	r.blockTest(test, reasonTargetMissing, "spec.sources[0].size is required to start a run")
-
-	return false
-}
-
-// resolveBackup returns preferred when set. Otherwise, it returns the backup name from the selector.
-// If the selector has no name, it returns the newest Succeeded backup that matches it.
-// An empty result means no backup matches.
-func (r *RestoreTestReconciler) resolveBackup(ctx context.Context, test *restorev1alpha1.RestoreTest, preferred string) (string, error) {
-	if preferred != "" {
-		return preferred, nil
-	}
-
-	if test.Spec.Sources[0].BackupSelector.Name != "" {
-		return test.Spec.Sources[0].BackupSelector.Name, nil
-	}
-
-	backups, err := r.completedBackups(ctx, test)
-	if err != nil {
-		return "", err
-	}
-
-	if len(backups) == 0 {
-		return "", nil
-	}
-
-	return backups[len(backups)-1].name, nil
+	return backups, missing, nil
 }
 
 // completedBackups lists the Succeeded Kopiur Snapshots that match the backup selector, oldest first.
-func (r *RestoreTestReconciler) completedBackups(ctx context.Context, test *restorev1alpha1.RestoreTest) ([]completedBackup, error) {
+func (r *RestoreTestReconciler) completedBackups(ctx context.Context, namespace string, sel restorev1alpha1.BackupSelector) ([]completedBackup, error) {
 	snapshots := &unstructured.UnstructuredList{}
 	snapshots.SetGroupVersionKind(snapshotGVK.GroupVersion().WithKind("SnapshotList"))
 
-	err := r.reader().List(ctx, snapshots, client.InNamespace(test.Namespace))
+	err := r.reader().List(ctx, snapshots, client.InNamespace(namespace))
 	if err != nil {
 		return nil, err
 	}
@@ -703,7 +726,7 @@ func (r *RestoreTestReconciler) completedBackups(ctx context.Context, test *rest
 	for i := range snapshots.Items {
 		obj := &snapshots.Items[i]
 
-		if kopiurPhase(obj) != snapshotPhaseSucceeded || !selects(test.Spec.Sources[0].BackupSelector, obj) {
+		if kopiurPhase(obj) != snapshotPhaseSucceeded || !selects(sel, obj) {
 			continue
 		}
 
