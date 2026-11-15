@@ -41,7 +41,7 @@ func volsyncSecret() *corev1.Secret {
 
 func TestVolSyncRestoreSpec(t *testing.T) {
 	restore := volsyncTestRestore()
-	obj := volsyncDestinationObject(restore, testRepoSecret, resource.MustParse("3Gi"), nil)
+	obj := volsyncDestinationObject(restore, restore.Spec.Sources[0], testRepoSecret, resource.MustParse("3Gi"), nil)
 
 	if obj.GetNamespace() != testNamespace || obj.GetAPIVersion() != "volsync.backube/v1alpha1" || obj.GetKind() != "ReplicationDestination" {
 		t.Fatalf("unexpected identity %s %s/%s", obj.GetAPIVersion(), obj.GetNamespace(), obj.GetKind())
@@ -63,10 +63,15 @@ func TestVolSyncRestoreSpec(t *testing.T) {
 	}
 }
 
-func volsyncDestination(t *testing.T, c client.Client, restore *restorev1alpha1.Restore) (*unstructured.Unstructured, error) {
+func volsyncDestination(t *testing.T, c client.Client, restore *restorev1alpha1.Restore, srcs ...restorev1alpha1.RestoreSource) (*unstructured.Unstructured, error) {
 	t.Helper()
 
-	rd := volsyncStub(restore)
+	src := restore.Spec.Sources[0]
+	if len(srcs) > 0 {
+		src = srcs[0]
+	}
+
+	rd := volsyncStub(restore, src)
 
 	return rd, c.Get(context.Background(), client.ObjectKeyFromObject(rd), rd)
 }
@@ -174,8 +179,149 @@ func TestVolSyncSourceInBackupNamespace(t *testing.T) {
 		t.Fatalf("sourceSize = %v, %v; want 2Gi", size, err)
 	}
 
-	repo, err := r.volsyncRepository(context.Background(), restore)
+	repo, _, err := r.volsyncRepository(context.Background(), restore, restore.Spec.Sources[0])
 	if err != nil || repo != testRepoSecret {
 		t.Fatalf("volsyncRepository = %q, %v; want repo-secret", repo, err)
+	}
+}
+
+func twoVolSyncSources() (restore *restorev1alpha1.Restore, objs []client.Object) {
+	restore = twoSourceRestore()
+	restore.Spec.Provider = restorev1alpha1.ProviderVolSync
+
+	for i, pvc := range []string{testHTML, testPGData} {
+		rs := volsyncSource()
+		rs.SetName(restore.Spec.Sources[i].BackupRef.Name)
+		_ = unstructured.SetNestedField(rs.Object, pvc, "spec", "sourcePVC")
+		objs = append(objs, rs)
+	}
+
+	return restore, append(objs, volsyncSecret())
+}
+
+func setLatestImage(t *testing.T, c client.Client, restore *restorev1alpha1.Restore, src restorev1alpha1.RestoreSource) {
+	t.Helper()
+
+	rd := volsyncStub(restore, src)
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(rd), rd); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := unstructured.SetNestedField(rd.Object, "PersistentVolumeClaim", "status", "latestImage", "kind"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Update(context.Background(), rd); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestVolSyncTwoSources(t *testing.T) {
+	ctx := context.Background()
+	restore, objs := twoVolSyncSources()
+	c, r := fakeRestoreClient(t, append(objs, restore, twoVolumeCheck())...)
+	key := client.ObjectKeyFromObject(restore)
+
+	reconcileToSizing(t, r, key)
+
+	for _, pvc := range []string{testHTML, testPGData} {
+		rd := &unstructured.Unstructured{}
+		rd.SetGroupVersionKind(replicationDestinationGVK)
+
+		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: "r1-volsync-" + pvc}, rd); err != nil {
+			t.Fatalf("RD of %s: %v", pvc, err)
+		}
+
+		if got, _, _ := unstructured.NestedString(rd.Object, "spec", "restic", "destinationPVC"); got != "r1-"+pvc {
+			t.Fatalf("destinationPVC = %q, want r1-%s", got, pvc)
+		}
+
+		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: "r1-" + pvc}, &corev1.PersistentVolumeClaim{}); err != nil {
+			t.Fatalf("PVC of %s: %v", pvc, err)
+		}
+	}
+
+	if refs := getRestore(t, c, key).Status.ProviderRefs; len(refs) != 2 {
+		t.Fatalf("providerRefs = %v, want 2", refs)
+	}
+
+	podKey := client.ObjectKey{Namespace: testNamespace, Name: checkPodName(restore)}
+
+	setLatestImage(t, c, restore, restore.Spec.Sources[0])
+	reconcileRestore(t, r, key)
+
+	if err := c.Get(ctx, podKey, &corev1.Pod{}); !errors.IsNotFound(err) {
+		t.Fatalf("check pod with one destination pending: %v", err)
+	}
+
+	setLatestImage(t, c, restore, restore.Spec.Sources[1])
+	reconcileRestore(t, r, key)
+
+	if err := c.Get(ctx, podKey, &corev1.Pod{}); err != nil {
+		t.Fatalf("check pod not created: %v", err)
+	}
+}
+
+func TestVolSyncSourcePVCMismatch(t *testing.T) {
+	restore, objs := twoVolSyncSources()
+	_ = unstructured.SetNestedField(objs[1].(*unstructured.Unstructured).Object, testOther, "spec", "sourcePVC")
+
+	c, r := fakeRestoreClient(t, append(objs, restore, twoVolumeCheck())...)
+	key := client.ObjectKeyFromObject(restore)
+
+	reconcileToSizing(t, r, key)
+
+	got := getRestore(t, c, key)
+	if got.Status.Phase != restorev1alpha1.RestorePhaseFailed || readyReason(got) != reasonSourceMismatch {
+		t.Fatalf("phase %q reason %q, want Failed %s", got.Status.Phase, readyReason(got), reasonSourceMismatch)
+	}
+
+	for _, src := range restore.Spec.Sources {
+		if _, err := volsyncDestination(t, c, restore, src); !errors.IsNotFound(err) {
+			t.Fatalf("ReplicationDestination of %s created: %v", src.SourcePVC, err)
+		}
+	}
+}
+
+func TestVolSyncMoverUIDPerSource(t *testing.T) {
+	restore, objs := twoVolSyncSources()
+	bp := twoVolumeCheck()
+	bp.Annotations = map[string]string{moverUIDAnnotation: `{"pgdata":999}`}
+	bp.Spec.Containers[0].SecurityContext = nil // no runAsUser fallback
+
+	c, r := fakeRestoreClient(t, append(objs, restore, bp)...)
+
+	reconcileToSizing(t, r, client.ObjectKeyFromObject(restore))
+
+	for i, want := range []int64{65534, 999} {
+		rd, err := volsyncDestination(t, c, restore, restore.Spec.Sources[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got, _, _ := unstructured.NestedInt64(rd.Object, "spec", "restic", "moverSecurityContext", "runAsUser"); got != want {
+			t.Fatalf("%s runAsUser = %d, want %d", restore.Spec.Sources[i].SourcePVC, got, want)
+		}
+	}
+}
+
+func TestCleanupDeletesAllVolSyncDestinations(t *testing.T) {
+	restore, objs := twoVolSyncSources()
+	c, r := fakeRestoreClient(t, append(objs, restore, twoVolumeCheck())...)
+
+	for _, src := range restore.Spec.Sources {
+		if err := c.Create(context.Background(), volsyncDestinationObject(restore, src, testRepoSecret, resource.MustParse("1Gi"), nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := r.cleanup(context.Background(), getRestore(t, c, client.ObjectKeyFromObject(restore))); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, src := range restore.Spec.Sources {
+		if _, err := volsyncDestination(t, c, restore, src); !errors.IsNotFound(err) {
+			t.Fatalf("ReplicationDestination of %s remains: %v", src.SourcePVC, err)
+		}
 	}
 }

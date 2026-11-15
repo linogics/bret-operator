@@ -251,13 +251,11 @@ func (r *RestoreReconciler) progress(
 		return ctrl.Result{}, nil
 	}
 
-	first := restore.Spec.Sources[0]
-
 	switch restore.Spec.Provider {
 	case restorev1alpha1.ProviderVelero:
 		return r.reconcileVelero(ctx, restore, bp)
 	case restorev1alpha1.ProviderVolSync:
-		return r.reconcileVolSync(ctx, restore, bp, sizes[first.SourcePVC], uids[first.SourcePVC])
+		return r.reconcileVolSync(ctx, restore, bp, sizes, uids)
 	default:
 		return r.reconcileKopiur(ctx, restore, bp, sizes, uids)
 	}

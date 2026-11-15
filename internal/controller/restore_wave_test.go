@@ -61,7 +61,7 @@ func TestSourceSizeIsResolvedOnce(t *testing.T) {
 
 func TestVolSyncMoverUIDFromCheck(t *testing.T) {
 	uid := int64(999)
-	obj := volsyncDestinationObject(volsyncTestRestore(), "repo", *quantityPtr(testSize1Gi), &uid)
+	obj := volsyncDestinationObject(volsyncTestRestore(), volsyncTestRestore().Spec.Sources[0], "repo", *quantityPtr(testSize1Gi), &uid)
 
 	got, _, _ := unstructured.NestedInt64(obj.Object, "spec", "restic", "moverSecurityContext", "runAsUser")
 	if got != 999 {
