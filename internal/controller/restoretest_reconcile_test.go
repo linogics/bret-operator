@@ -913,3 +913,99 @@ func TestRestoreTestQueueStoresBackups(t *testing.T) {
 		t.Errorf("pendingBackups = %v, want both sources", pending)
 	}
 }
+
+func TestAfterBackupShowsWaitingSources(t *testing.T) {
+	test := twoSourceTest()
+	test.CreationTimestamp = metav1.NewTime(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC))
+	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
+
+	f := newRestoreTestFixture(t, test, snapAt("h1", testHTML, 10))
+	f.now = time.Date(2026, 11, 15, 10, 20, 0, 0, time.UTC)
+	f.run()
+
+	if n := len(f.restores()); n != 0 {
+		t.Fatalf("restores = %d, want 0", n)
+	}
+
+	condition := apimeta.FindStatusCondition(f.test().Status.Conditions, readyConditionType)
+	if condition == nil || condition.Reason != reasonWaitingBackups ||
+		!strings.Contains(condition.Message, testPGData) || strings.Contains(condition.Message, testHTML) {
+		t.Fatalf("condition = %+v, want %s naming only %s", condition, reasonWaitingBackups, testPGData)
+	}
+
+	f.events()
+	f.run()
+
+	if hasEvent(f.events(), reasonWaitingBackups) {
+		t.Error("event repeated on an unchanged poll")
+	}
+
+	if err := f.c.Create(f.ctx, snapAt("p1", testPGData, 15)); err != nil {
+		t.Fatal(err)
+	}
+
+	f.run()
+
+	if got := testReadyReason(f.test()); got != reasonRunning {
+		t.Errorf("reason after start = %q, want %s", got, reasonRunning)
+	}
+}
+
+func TestAfterBackupDelayPerSource(t *testing.T) {
+	test := twoSourceTest()
+	test.CreationTimestamp = metav1.NewTime(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC))
+	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{Delay: metav1.Duration{Duration: 10 * time.Minute}}}
+
+	f := newRestoreTestFixture(t, test, snapAt("h1", testHTML, 0), snapAt("p1", testPGData, 15))
+	f.now = time.Date(2026, 11, 15, 10, 20, 0, 0, time.UTC) // html due 10:10, pgdata due 10:25
+
+	f.run()
+
+	if n := len(f.restores()); n != 0 {
+		t.Fatalf("restores before every source is due = %d, want 0", n)
+	}
+
+	f.now = time.Date(2026, 11, 15, 10, 25, 0, 0, time.UTC)
+	f.run()
+
+	if n := len(f.restores()); n != 1 {
+		t.Fatalf("restores once all are due = %d, want 1", n)
+	}
+}
+
+func TestRestoreTestQueuedRunUsesPendingBackups(t *testing.T) {
+	test := twoSourceTest()
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+	test.Spec.OverlapPolicy = restorev1alpha1.OverlapPolicyQueue
+
+	f := newRestoreTestFixture(t, test, snapAt("h1", testHTML, 0), snapAt("p1", testPGData, 5))
+	f.setRunNow("n1")
+	f.run()
+	f.setRunNow("n2")
+	f.run()
+
+	// Newer snapshots after queueing must not change the queued run.
+	if err := f.c.Create(f.ctx, snapAt("h2", testHTML, 30)); err != nil {
+		t.Fatal(err)
+	}
+
+	f.finishRunning(restorev1alpha1.RestorePhaseSucceeded)
+	f.run()
+
+	var queued *restorev1alpha1.Restore
+
+	restores := f.restores()
+	for i := range restores {
+		if !isTerminal(restores[i].Status.Phase) {
+			queued = &restores[i]
+		}
+	}
+
+	if queued == nil {
+		t.Fatal("queued run did not start")
+	}
+
+	if got := restoreBackups(*queued); len(got) != 2 || got[testHTML] != "h1" || got[testPGData] != "p1" {
+		t.Errorf("queued backups = %v, want html=h1 pgdata=p1", got)
+	}
+}

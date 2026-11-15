@@ -44,6 +44,7 @@ const (
 	reasonRunReplaced    = "RunReplaced"
 	reasonRunning        = "Running"
 	reasonBackupNotFound = "BackupNotFound"
+	reasonWaitingBackups = "WaitingForBackups"
 	reasonInvalidCron    = "InvalidCron"
 )
 
@@ -459,7 +460,10 @@ func (r *RestoreTestReconciler) afterBackupTrigger(
 	used := make([]restorev1alpha1.HandledBackup, 0, len(test.Spec.Sources))
 	names := make([]string, 0, len(test.Spec.Sources))
 
-	var due time.Time
+	var (
+		due     time.Time
+		waiting []string
+	)
 
 	for _, src := range test.Spec.Sources {
 		list, err := r.completedBackups(ctx, test.Namespace, src.BackupSelector)
@@ -479,7 +483,9 @@ func (r *RestoreTestReconciler) afterBackupTrigger(
 		}
 
 		if oldest < 0 {
-			return nil, 0, nil
+			waiting = append(waiting, src.SourcePVC)
+
+			continue
 		}
 
 		if d := list[oldest].completed.Add(delay); d.After(due) {
@@ -490,6 +496,15 @@ func (r *RestoreTestReconciler) afterBackupTrigger(
 		backups[src.SourcePVC] = newest.name
 		names = append(names, newest.name)
 		used = append(used, restorev1alpha1.HandledBackup{SourcePVC: src.SourcePVC, Name: newest.name, CreatedAt: metav1.NewTime(newest.completed)})
+	}
+
+	if len(waiting) > 0 {
+		// Show a stalled test. With no new backup at all, there is nothing to report yet.
+		if len(waiting) < len(test.Spec.Sources) {
+			r.blockTest(test, reasonWaitingBackups, "waiting for a new backup of source(s) "+strings.Join(waiting, ", "))
+		}
+
+		return nil, 0, nil
 	}
 
 	if now.Before(due) {
