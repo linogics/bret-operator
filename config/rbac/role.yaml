@@ -98,14 +98,6 @@ rules:
 - apiGroups:
   - velero.io
   resources:
-  - downloadrequests
-  verbs:
-  - create
-  - delete
-  - get
-- apiGroups:
-  - velero.io
-  resources:
   - restores
   verbs:
   - create

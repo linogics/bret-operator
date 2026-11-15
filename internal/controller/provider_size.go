@@ -65,8 +65,6 @@ func (r *RestoreReconciler) sourceSize(
 		}
 
 		return &size, nil
-	case restorev1alpha1.ProviderVelero:
-		return r.veleroSourceSize(ctx, restore)
 	default:
 		return nil, nil
 	}

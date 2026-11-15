@@ -38,3 +38,5 @@ func quantityPtr(s string) *resource.Quantity {
 
 	return &q
 }
+
+const testMatchLabels = "matchLabels"

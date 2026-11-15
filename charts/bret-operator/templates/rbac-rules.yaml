@@ -116,16 +116,6 @@ rules:
 - apiGroups:
   - velero.io
   resources:
-  - downloadrequests
-  verbs:
-  - create
-  - delete
-  - get
-{{- end }}
-{{- if $.Values.providers.velero.enabled }}
-- apiGroups:
-  - velero.io
-  resources:
   - restores
   verbs:
   - create
@@ -286,14 +276,6 @@ metadata:
   labels:
     {{- include "bret-operator.labels" $ | nindent 4 }}
 rules:
-- apiGroups:
-  - velero.io
-  resources:
-  - downloadrequests
-  verbs:
-  - create
-  - delete
-  - get
 - apiGroups:
   - velero.io
   resources:

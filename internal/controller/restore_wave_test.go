@@ -2,8 +2,6 @@ package controller
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -166,11 +164,6 @@ func TestVeleroCopiesPodSecurityLabels(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": testSize1Gi}))
-	}))
-	defer srv.Close()
-
 	restore := newTestRestore()
 	restore.Spec.Provider = restorev1alpha1.ProviderVelero
 
@@ -179,12 +172,6 @@ func TestVeleroCopiesPodSecurityLabels(t *testing.T) {
 	}}}
 	c, r := fakeRestoreClient(t, restore, newTestCheck(), tenant)
 	key := client.ObjectKeyFromObject(restore)
-
-	go func() {
-		for ctx.Err() == nil {
-			answerDownloadRequest(ctx, c, srv.URL)
-		}
-	}()
 
 	reconcileRestore(t, r, key)
 	reconcileRestore(t, r, key)
@@ -231,11 +218,6 @@ func TestVeleroDeleteRunningRestoreCleansUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": testSize1Gi}))
-	}))
-	defer srv.Close()
-
 	restore := newTestRestore()
 	restore.Spec.Provider = restorev1alpha1.ProviderVelero
 	restore.Spec.KeepOnFailure = true
@@ -243,12 +225,6 @@ func TestVeleroDeleteRunningRestoreCleansUp(t *testing.T) {
 	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}}
 	c, r := fakeRestoreClient(t, restore, newTestCheck(), tenant)
 	key := client.ObjectKeyFromObject(restore)
-
-	go func() {
-		for ctx.Err() == nil {
-			answerDownloadRequest(ctx, c, srv.URL)
-		}
-	}()
 
 	reconcileRestore(t, r, key)
 	reconcileRestore(t, r, key)

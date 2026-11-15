@@ -1,28 +1,18 @@
 package controller
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
@@ -48,172 +38,6 @@ func TestVeleroRestoreSpec(t *testing.T) {
 	}
 }
 
-// pvcTarGz builds a Velero backup contents archive with one PVC file per "namespace/name: size" entry.
-func pvcTarGz(t *testing.T, files map[string]string) []byte {
-	t.Helper()
-
-	var buf bytes.Buffer
-
-	gz := gzip.NewWriter(&buf)
-	tw := tar.NewWriter(gz)
-
-	for path, size := range files {
-		body := `{"spec":{"resources":{"requests":{"storage":"` + size + `"}}}}`
-		if size == "" {
-			body = "{}"
-		}
-
-		hdr := &tar.Header{Name: "resources/persistentvolumeclaims/namespaces/" + path + ".json", Mode: 0o644, Size: int64(len(body))}
-		if err := tw.WriteHeader(hdr); err != nil {
-			t.Fatal(err)
-		}
-
-		if _, err := tw.Write([]byte(body)); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if err := tw.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := gz.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	return buf.Bytes()
-}
-
-func TestVeleroPVCSizes(t *testing.T) {
-	data := pvcTarGz(t, map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi, "other/c": testSize1Gi, "ns/empty": ""})
-
-	got, err := veleroPVCSizes(bytes.NewReader(data), "ns")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	a, b := got["a"], got["b"]
-	if len(got) != 2 || a.Cmp(resource.MustParse(testSize5Gi)) != 0 || b.Cmp(resource.MustParse(testSize10Gi)) != 0 {
-		t.Fatalf("unexpected sizes %v", got)
-	}
-
-	if _, err := veleroPVCSizes(bytes.NewReader([]byte("not gzip")), "ns"); err == nil {
-		t.Fatal("want error for non gzip input")
-	}
-}
-
-func TestVeleroSourceSize(t *testing.T) {
-	check := &restorev1alpha1.RestoreCheck{
-		ObjectMeta: metav1.ObjectMeta{Name: "bp", Namespace: "ns"},
-		Spec: restorev1alpha1.RestoreCheckSpec{
-			RestoredVolumes: []restorev1alpha1.RestoredVolume{{SourcePVC: "b", MountPath: testDataPath}},
-		},
-	}
-
-	tests := []struct {
-		name   string
-		files  map[string]string
-		status int
-		bp     bool
-		want   string
-	}{
-		{"single pvc", map[string]string{testPVCKeyA: testSize5Gi}, 200, false, testSize5Gi},
-		{"check picks", map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi}, 200, true, testSize10Gi},
-		{"ambiguous without check", map[string]string{testPVCKeyA: testSize5Gi, testPVCKeyB: testSize10Gi}, 200, false, ""},
-		{"no pvc in namespace", map[string]string{"other/a": testSize5Gi}, 200, false, ""},
-		{"download fails", nil, 500, false, ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			body := pvcTarGz(t, tt.files)
-
-			var served, closeAsked atomic.Bool
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				served.Store(true)
-				closeAsked.Store(req.Close)
-
-				if tt.status != 200 {
-					w.WriteHeader(tt.status)
-
-					return
-				}
-
-				_, _ = w.Write(body)
-			}))
-
-			defer srv.Close()
-
-			scheme := runtime.NewScheme()
-			if err := clientgoscheme.AddToScheme(scheme); err != nil {
-				t.Fatal(err)
-			}
-
-			if err := restorev1alpha1.AddToScheme(scheme); err != nil {
-				t.Fatal(err)
-			}
-
-			objs := []client.Object{}
-			if tt.bp {
-				objs = append(objs, check.DeepCopy())
-			}
-
-			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
-			r := &RestoreReconciler{Client: c}
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			go answerDownloadRequest(ctx, c, srv.URL)
-
-			restore := sizeTestRestore("velero")
-			restore.Spec.RestoreCheckRef.Name = "bp"
-
-			got, err := r.veleroSourceSize(ctx, restore)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			switch {
-			case tt.want == "" && got != nil:
-				t.Fatalf("want nil, got %s", got)
-			case tt.want != "" && (got == nil || got.Cmp(resource.MustParse(tt.want)) != 0):
-				t.Fatalf("want %s, got %v", tt.want, got)
-			}
-
-			left := &unstructured.UnstructuredList{}
-			left.SetGroupVersionKind(downloadRequestGVK)
-
-			if err := c.List(context.Background(), left); err != nil || len(left.Items) != 0 {
-				t.Fatalf("DownloadRequest not deleted: %v %d", err, len(left.Items))
-			}
-
-			if served.Load() && !closeAsked.Load() {
-				t.Error("download request does not ask to close the connection")
-			}
-		})
-	}
-}
-
-// answerDownloadRequest plays Velero: it sets status.downloadURL on any DownloadRequest it finds.
-func answerDownloadRequest(ctx context.Context, c client.Client, url string) {
-	for ctx.Err() == nil {
-		list := &unstructured.UnstructuredList{}
-		list.SetGroupVersionKind(downloadRequestGVK)
-
-		if err := c.List(ctx, list); err == nil && len(list.Items) > 0 {
-			obj := &list.Items[0]
-			_ = unstructured.SetNestedField(obj.Object, url, "status", "downloadURL")
-			_ = c.Update(ctx, obj)
-
-			return
-		}
-
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
@@ -229,23 +53,12 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": testSize1Gi}))
-			}))
-			defer srv.Close()
-
 			restore := newTestRestore()
 			restore.Spec.Provider = restorev1alpha1.ProviderVelero
 			restore.Spec.KeepOnFailure = tt.keep
 
 			c, r := fakeRestoreClient(t, restore, newTestCheck(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
 			key := client.ObjectKeyFromObject(restore)
-
-			go func() {
-				for ctx.Err() == nil {
-					answerDownloadRequest(ctx, c, srv.URL)
-				}
-			}()
 
 			reconcileRestore(t, r, key) // Pending
 			reconcileRestore(t, r, key) // Velero Restore created
@@ -357,11 +170,6 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				_, _ = w.Write(pvcTarGz(t, map[string]string{testNamespace + "/data": testSize1Gi}))
-			}))
-			defer srv.Close()
-
 			restore := newTestRestore()
 			restore.Spec.Provider = restorev1alpha1.ProviderVelero
 
@@ -370,12 +178,6 @@ func TestVeleroRejectsRestoreNamespaceReferences(t *testing.T) {
 
 			c, r := fakeRestoreClient(t, restore, bp)
 			key := client.ObjectKeyFromObject(restore)
-
-			go func() {
-				for ctx.Err() == nil {
-					answerDownloadRequest(ctx, c, srv.URL)
-				}
-			}()
 
 			reconcileRestore(t, r, key) // Pending
 			reconcileRestore(t, r, key)
@@ -445,5 +247,180 @@ func TestVeleroRejectsSecretAndConfigMapRefs(t *testing.T) {
 				t.Fatalf("unexpected err = %v", err)
 			}
 		})
+	}
+}
+
+func veleroSelectorRestore() *restorev1alpha1.Restore {
+	restore := sizeTestRestore("velero")
+	restore.Spec.Sources[0].SourcePVC = ""
+
+	return restore
+}
+
+func TestVeleroCopiesLabelSelector(t *testing.T) {
+	restore := veleroSelectorRestore()
+	restore.Spec.Sources[0].LabelSelector = &metav1.LabelSelector{MatchLabels: map[string]string{testLabelKey: "db"}}
+
+	obj := (&RestoreReconciler{}).veleroRestoreObject(restore)
+
+	got, _, _ := unstructured.NestedMap(obj.Object, "spec", "labelSelector")
+	if want := map[string]any{testMatchLabels: map[string]any{testLabelKey: "db"}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("labelSelector = %v, want %v", got, want)
+	}
+
+	if _, found, _ := unstructured.NestedSlice(obj.Object, "spec", "orLabelSelectors"); found {
+		t.Fatal("orLabelSelectors set without being asked")
+	}
+}
+
+func TestVeleroCopiesOrLabelSelectors(t *testing.T) {
+	restore := veleroSelectorRestore()
+	restore.Spec.Sources[0].OrLabelSelectors = []*metav1.LabelSelector{
+		{MatchLabels: map[string]string{testLabelKey: "db"}},
+		{MatchLabels: map[string]string{testLabelKey: "web"}},
+	}
+
+	obj := (&RestoreReconciler{}).veleroRestoreObject(restore)
+
+	got, _, _ := unstructured.NestedSlice(obj.Object, "spec", "orLabelSelectors")
+	want := []any{
+		map[string]any{testMatchLabels: map[string]any{testLabelKey: "db"}},
+		map[string]any{testMatchLabels: map[string]any{testLabelKey: "web"}},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("orLabelSelectors = %v, want %v", got, want)
+	}
+
+	if _, found, _ := unstructured.NestedMap(obj.Object, "spec", "labelSelector"); found {
+		t.Fatal("labelSelector set without being asked")
+	}
+}
+
+// completedVelero reconciles a Velero Restore to Completed and creates the scratch namespace with the named PVCs.
+func completedVelero(t *testing.T, bp *restorev1alpha1.RestoreCheck, pvcs ...string) (client.Client, *RestoreReconciler, *restorev1alpha1.Restore) {
+	t.Helper()
+
+	ctx := context.Background()
+	restore := newTestRestore()
+	restore.Spec.Provider = restorev1alpha1.ProviderVelero
+
+	c, r := fakeRestoreClient(t, restore, bp, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
+	key := client.ObjectKeyFromObject(restore)
+
+	reconcileRestore(t, r, key) // Pending
+	reconcileRestore(t, r, key) // Velero Restore created
+
+	vr := r.veleroStub(restore)
+	if err := c.Get(ctx, client.ObjectKeyFromObject(vr), vr); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := unstructured.SetNestedField(vr.Object, "Completed", "status", "phase"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Update(ctx, vr); err != nil {
+		t.Fatal(err)
+	}
+
+	scratch := veleroScratchNamespace(restore)
+	if err := c.Create(ctx, scratch); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, n := range pvcs {
+		if err := c.Create(ctx, &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: n, Namespace: scratch.Name}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return c, r, restore
+}
+
+func veleroTwoVolumeCheck() *restorev1alpha1.RestoreCheck {
+	bp := newTestCheck()
+	bp.Spec.RestoredVolumes = []restorev1alpha1.RestoredVolume{
+		{SourcePVC: htmlName, MountPath: "/html"},
+		{SourcePVC: testPGData, MountPath: "/pgdata"},
+	}
+	bp.Spec.ScratchVolumes = []restorev1alpha1.ScratchVolume{{Name: "work", MountPath: "/work"}}
+
+	return bp
+}
+
+func TestVeleroTwoClaimsMounted(t *testing.T) {
+	c, r, restore := completedVelero(t, veleroTwoVolumeCheck(), htmlName, testPGData)
+	key := client.ObjectKeyFromObject(restore)
+
+	reconcileRestore(t, r, key)
+
+	pod := &corev1.Pod{}
+	if err := c.Get(context.Background(), client.ObjectKey{Name: checkPodName(restore), Namespace: veleroScratchName(restore)}, pod); err != nil {
+		t.Fatal(err)
+	}
+
+	var claims []string
+
+	for _, v := range pod.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil && !strings.HasPrefix(v.Name, "scratch-") {
+			claims = append(claims, v.PersistentVolumeClaim.ClaimName)
+		}
+	}
+
+	if !reflect.DeepEqual(claims, []string{htmlName, testPGData}) {
+		t.Fatalf("pod mounts %v, want html and pgdata", claims)
+	}
+}
+
+func TestVeleroMissingClaimFails(t *testing.T) {
+	c, r, restore := completedVelero(t, veleroTwoVolumeCheck(), htmlName)
+	key := client.ObjectKeyFromObject(restore)
+
+	res, err := r.Reconcile(context.Background(), reconcile.Request{NamespacedName: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := getRestore(t, c, key)
+	if got.Status.Phase != restorev1alpha1.RestorePhaseFailed || readyReason(got) != reasonRestoredVolumeMissing ||
+		!strings.Contains(got.Status.Message, testPGData) || strings.Contains(got.Status.Message, htmlName) {
+		t.Fatalf("phase %q reason %q message %q", got.Status.Phase, readyReason(got), got.Status.Message)
+	}
+
+	if res.RequeueAfter != 0 {
+		t.Fatalf("failed restore requeued: %v", res)
+	}
+}
+
+// listFrom reads like Reader, but lists from another reader.
+type listFrom struct {
+	client.Reader
+	list client.Reader
+}
+
+func (l listFrom) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	return l.list.List(ctx, list, opts...)
+}
+
+func TestVeleroClaimsUseAPIReader(t *testing.T) {
+	c, r, restore := completedVelero(t, veleroTwoVolumeCheck())
+	ctx := context.Background()
+
+	// The claims exist only for the API reader; the cache client never sees them.
+	other, _ := fakeRestoreClient(t)
+
+	for _, n := range []string{htmlName, testPGData} {
+		if err := other.Create(ctx, &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: n, Namespace: veleroScratchName(restore)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	r.APIReader = listFrom{Reader: c, list: other}
+
+	reconcileRestore(t, r, client.ObjectKeyFromObject(restore))
+
+	if err := c.Get(ctx, client.ObjectKey{Name: checkPodName(restore), Namespace: veleroScratchName(restore)}, &corev1.Pod{}); err != nil {
+		t.Fatalf("check pod not created from API reader claims: %v", err)
 	}
 }
