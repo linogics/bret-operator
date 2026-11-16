@@ -213,6 +213,113 @@ spec:
                       annotation.
                     type: boolean
                 type: object
+              velero:
+                description: Velero narrows what each Velero restore brings back.
+                  Velero only.
+                properties:
+                  labelSelector:
+                    description: LabelSelector selects the namespace objects to restore.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  orLabelSelectors:
+                    description: OrLabelSelectors select the namespace objects to
+                      restore, any one may match.
+                    items:
+                      description: |-
+                        A label selector is a label query over a set of resources. The result of matchLabels and
+                        matchExpressions are ANDed. An empty label selector matches all objects. A null
+                        label selector matches no objects.
+                      properties:
+                        matchExpressions:
+                          description: matchExpressions is a list of label selector
+                            requirements. The requirements are ANDed.
+                          items:
+                            description: |-
+                              A label selector requirement is a selector that contains values, a key, and an operator that
+                              relates the key and values.
+                            properties:
+                              key:
+                                description: key is the label key that the selector
+                                  applies to.
+                                type: string
+                              operator:
+                                description: |-
+                                  operator represents a key's relationship to a set of values.
+                                  Valid operators are In, NotIn, Exists and DoesNotExist.
+                                type: string
+                              values:
+                                description: |-
+                                  values is an array of string values. If the operator is In or NotIn,
+                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                  the values array must be empty. This array is replaced during a strategic
+                                  merge patch.
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            required:
+                            - key
+                            - operator
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                            map is equivalent to an element of matchExpressions, whose key field is "key", the
+                            operator is "In", and the values array contains only "value". The requirements are ANDed.
+                          type: object
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                type: object
+                x-kubernetes-validations:
+                - message: labelSelector and orLabelSelectors are mutually exclusive
+                  rule: '!(has(self.labelSelector) && has(self.orLabelSelectors))'
             required:
             - provider
             - restoreCheckRef
@@ -220,6 +327,14 @@ spec:
             - retries
             - sources
             type: object
+            x-kubernetes-validations:
+            - message: provider velero needs the same backupSelector on every source
+                and no size, autoExpand or storageClassName
+              rule: self.provider != 'velero' || self.sources.all(s, s.backupSelector
+                == self.sources[0].backupSelector && !has(s.size) && !has(s.autoExpand)
+                && !has(s.storageClassName))
+            - message: spec.velero is only allowed with provider velero
+              rule: self.provider == 'velero' || !has(self.velero)
           status:
             description: Status is the observed state of the test.
             properties:
@@ -291,8 +406,8 @@ spec:
                 description: LastHandledBackups is the newest backup that an afterBackup
                   trigger used. Only newer backups start a run.
                 items:
-                  description: HandledBackup identifies the backup an afterBackup
-                    trigger used last.
+                  description: HandledBackup identifies the backup picked for one
+                    source.
                   properties:
                     createdAt:
                       description: CreatedAt is the time the backup completed.
@@ -347,12 +462,32 @@ spec:
                 format: date-time
                 type: string
               pendingBackups:
-                additionalProperties:
-                  type: string
-                description: PendingBackups maps each sourcePVC to the backup of the
-                  queued run, which waits for the run in progress. It applies to overlap
-                  policy Queue.
-                type: object
+                description: |-
+                  PendingBackups are the backups of the queued run, one per source. The run waits for the run in progress.
+                  It applies to overlap policy Queue.
+                items:
+                  description: HandledBackup identifies the backup picked for one
+                    source.
+                  properties:
+                    createdAt:
+                      description: CreatedAt is the time the backup completed.
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name is the backup name.
+                      type: string
+                    sourcePVC:
+                      description: SourcePVC is the source this entry belongs to.
+                      type: string
+                  required:
+                  - createdAt
+                  - name
+                  - sourcePVC
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - sourcePVC
+                x-kubernetes-list-type: map
               pendingRunSource:
                 description: PendingRunSource is the trigger source of the queued
                   run. It keeps the name of the queued Restore stable across reconciles.

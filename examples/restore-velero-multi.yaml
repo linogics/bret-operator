@@ -11,12 +11,17 @@ metadata:
 spec:
   provider: velero
   sources:
-    - backupRef:
+    - sourcePVC: html
+      backupRef:
         name: nextcloud-2026-11-14
-      orLabelSelectors:
-        - matchLabels:
-            bret.linogics.io/volume: html
-        - matchLabels:
-            bret.linogics.io/volume: pgdata
+    - sourcePVC: pgdata
+      backupRef:
+        name: nextcloud-2026-11-14
+  velero:
+    orLabelSelectors:
+      - matchLabels:
+          bret.linogics.io/volume: html
+      - matchLabels:
+          bret.linogics.io/volume: pgdata
   restoreCheckRef:
     name: nextcloud

@@ -305,7 +305,7 @@ func (r *RestoreTestReconciler) retry(
 // runTriggers starts the queued run when no run is in progress, then handles one due trigger.
 func (r *RestoreTestReconciler) runTriggers(ctx context.Context, test *restorev1alpha1.RestoreTest) (ctrl.Result, error) {
 	if test.Status.CurrentRestore == "" && len(test.Status.PendingBackups) > 0 {
-		started, err := r.start(ctx, test, test.Status.PendingRunSource, test.Status.PendingBackups)
+		started, err := r.start(ctx, test, test.Status.PendingRunSource, pendingMap(test.Status.PendingBackups))
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -591,7 +591,7 @@ func (r *RestoreTestReconciler) queue(ctx context.Context, test *restorev1alpha1
 		return false, err
 	}
 
-	test.Status.PendingBackups = backups
+	test.Status.PendingBackups = pendingList(backups)
 	test.Status.PendingRunSource = "queued-" + trig.source
 
 	trig.consume()
@@ -923,4 +923,26 @@ func (r *RestoreTestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&restorev1alpha1.Restore{}).
 		Named("restoretest").
 		Complete(r)
+}
+
+// pendingList stores picked backups in the status shape, sorted by sourcePVC.
+func pendingList(backups map[string]string) []restorev1alpha1.HandledBackup {
+	list := make([]restorev1alpha1.HandledBackup, 0, len(backups))
+	for pvc, name := range backups {
+		list = append(list, restorev1alpha1.HandledBackup{SourcePVC: pvc, Name: name})
+	}
+
+	sort.Slice(list, func(i, j int) bool { return list[i].SourcePVC < list[j].SourcePVC })
+
+	return list
+}
+
+// pendingMap reads picked backups from the status shape.
+func pendingMap(list []restorev1alpha1.HandledBackup) map[string]string {
+	backups := make(map[string]string, len(list))
+	for _, b := range list {
+		backups[b.SourcePVC] = b.Name
+	}
+
+	return backups
 }

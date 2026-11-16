@@ -86,6 +86,8 @@ type Retries struct {
 }
 
 // RestoreTestSpec defines the desired state of RestoreTest.
+// +kubebuilder:validation:XValidation:rule="self.provider != 'velero' || self.sources.all(s, s.backupSelector == self.sources[0].backupSelector && !has(s.size) && !has(s.autoExpand) && !has(s.storageClassName))",message="provider velero needs the same backupSelector on every source and no size, autoExpand or storageClassName"
+// +kubebuilder:validation:XValidation:rule="self.provider == 'velero' || !has(self.velero)",message="spec.velero is only allowed with provider velero"
 type RestoreTestSpec struct {
 	// Provider is the backup tool that performs the restores.
 	Provider Provider `json:"provider"`
@@ -97,6 +99,8 @@ type RestoreTestSpec struct {
 	Sources []RestoreTestSource `json:"sources"`
 	// RestoreCheckRef names the check to run against each restored volume.
 	RestoreCheckRef RestoreCheckRef `json:"restoreCheckRef"`
+	// Velero narrows what each Velero restore brings back. Velero only.
+	Velero *VeleroOptions `json:"velero,omitempty"`
 	// Triggers defines what starts a run.
 	Triggers *Triggers `json:"triggers,omitempty"`
 	// RestoreWindow is the deadline for each attempt.
@@ -123,7 +127,7 @@ type LastRun struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// HandledBackup identifies the backup an afterBackup trigger used last.
+// HandledBackup identifies the backup picked for one source.
 type HandledBackup struct {
 	// SourcePVC is the source this entry belongs to.
 	SourcePVC string `json:"sourcePVC"`
@@ -151,8 +155,11 @@ type RestoreTestStatus struct {
 	CurrentRestore string `json:"currentRestore,omitempty"`
 	// RetryAt is when the next attempt of the run in progress is created.
 	RetryAt *metav1.Time `json:"retryAt,omitempty"`
-	// PendingBackups maps each sourcePVC to the backup of the queued run, which waits for the run in progress. It applies to overlap policy Queue.
-	PendingBackups map[string]string `json:"pendingBackups,omitempty"`
+	// PendingBackups are the backups of the queued run, one per source. The run waits for the run in progress.
+	// It applies to overlap policy Queue.
+	// +listType=map
+	// +listMapKey=sourcePVC
+	PendingBackups []HandledBackup `json:"pendingBackups,omitempty"`
 	// PendingRunSource is the trigger source of the queued run. It keeps the name of the queued Restore stable across reconciles.
 	PendingRunSource string `json:"pendingRunSource,omitempty"`
 	// LastRunNowValue is the last value of the run-now annotation that started a run.

@@ -124,7 +124,8 @@ spec:
                         rule: '!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max))
                           <= 0'
                     backupRef:
-                      description: BackupRef is the backup to restore.
+                      description: BackupRef is the backup to restore. Velero sources
+                        all name the same Backup.
                       properties:
                         name:
                           description: Name is the name of the backup object.
@@ -135,9 +136,95 @@ spec:
                       required:
                       - name
                       type: object
-                    labelSelector:
-                      description: LabelSelector selects the namespace objects to
-                        restore. Velero only.
+                    restoreAsOf:
+                      description: |-
+                        RestoreAsOf restores the newest snapshot taken at or before this time. VolSync only.
+                        Unset restores the newest snapshot.
+                      format: date-time
+                      type: string
+                    size:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Size is the capacity of the scratch volume. The
+                        source size sets it when unset.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    sourcePVC:
+                      description: SourcePVC is the name of the PVC in the backed-up
+                        namespace that this source restores.
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    storageClassName:
+                      description: StorageClassName is the storage class of the scratch
+                        volume.
+                      type: string
+                  required:
+                  - backupRef
+                  - sourcePVC
+                  type: object
+                maxItems: 10
+                minItems: 1
+                type: array
+              velero:
+                description: Velero narrows what a Velero restore brings back. Velero
+                  only.
+                properties:
+                  labelSelector:
+                    description: LabelSelector selects the namespace objects to restore.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  orLabelSelectors:
+                    description: OrLabelSelectors select the namespace objects to
+                      restore, any one may match.
+                    items:
+                      description: |-
+                        A label selector is a label query over a set of resources. The result of matchLabels and
+                        matchExpressions are ANDed. An empty label selector matches all objects. A null
+                        label selector matches no objects.
                       properties:
                         matchExpressions:
                           description: matchExpressions is a list of label selector
@@ -182,105 +269,29 @@ spec:
                           type: object
                       type: object
                       x-kubernetes-map-type: atomic
-                    orLabelSelectors:
-                      description: OrLabelSelectors select the namespace objects to
-                        restore, any one may match. Velero only.
-                      items:
-                        description: |-
-                          A label selector is a label query over a set of resources. The result of matchLabels and
-                          matchExpressions are ANDed. An empty label selector matches all objects. A null
-                          label selector matches no objects.
-                        properties:
-                          matchExpressions:
-                            description: matchExpressions is a list of label selector
-                              requirements. The requirements are ANDed.
-                            items:
-                              description: |-
-                                A label selector requirement is a selector that contains values, a key, and an operator that
-                                relates the key and values.
-                              properties:
-                                key:
-                                  description: key is the label key that the selector
-                                    applies to.
-                                  type: string
-                                operator:
-                                  description: |-
-                                    operator represents a key's relationship to a set of values.
-                                    Valid operators are In, NotIn, Exists and DoesNotExist.
-                                  type: string
-                                values:
-                                  description: |-
-                                    values is an array of string values. If the operator is In or NotIn,
-                                    the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                    the values array must be empty. This array is replaced during a strategic
-                                    merge patch.
-                                  items:
-                                    type: string
-                                  type: array
-                                  x-kubernetes-list-type: atomic
-                              required:
-                              - key
-                              - operator
-                              type: object
-                            type: array
-                            x-kubernetes-list-type: atomic
-                          matchLabels:
-                            additionalProperties:
-                              type: string
-                            description: |-
-                              matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                              map is equivalent to an element of matchExpressions, whose key field is "key", the
-                              operator is "In", and the values array contains only "value". The requirements are ANDed.
-                            type: object
-                        type: object
-                        x-kubernetes-map-type: atomic
-                      type: array
-                    size:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      description: Size is the capacity of the scratch volume. The
-                        source size sets it when unset.
-                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                      x-kubernetes-int-or-string: true
-                    sourcePVC:
-                      description: |-
-                        SourcePVC is the name of the PVC in the backed-up namespace that this source restores.
-                        Velero restores a whole namespace and does not use it.
-                      maxLength: 63
-                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                      type: string
-                    storageClassName:
-                      description: StorageClassName is the storage class of the scratch
-                        volume.
-                      type: string
-                  required:
-                  - backupRef
-                  type: object
-                  x-kubernetes-validations:
-                  - message: labelSelector and orLabelSelectors are mutually exclusive
-                    rule: '!(has(self.labelSelector) && has(self.orLabelSelectors))'
-                maxItems: 10
-                minItems: 1
-                type: array
+                    type: array
+                type: object
+                x-kubernetes-validations:
+                - message: labelSelector and orLabelSelectors are mutually exclusive
+                  rule: '!(has(self.labelSelector) && has(self.orLabelSelectors))'
             required:
             - provider
             - restoreCheckRef
             - sources
             type: object
             x-kubernetes-validations:
-            - message: provider velero takes exactly one source without sourcePVC,
-                size, autoExpand or storageClassName
-              rule: self.provider != 'velero' || (size(self.sources) == 1 && !has(self.sources[0].sourcePVC)
-                && !has(self.sources[0].size) && !has(self.sources[0].autoExpand)
-                && !has(self.sources[0].storageClassName))
-            - message: sources need a sourcePVC and no label selectors unless provider
-                is velero
-              rule: self.provider == 'velero' || self.sources.all(s, has(s.sourcePVC)
-                && !has(s.labelSelector) && !has(s.orLabelSelectors))
             - message: sourcePVC must be unique across sources
-              rule: self.provider == 'velero' || self.sources.all(s, self.sources.exists_one(o,
-                o.sourcePVC == s.sourcePVC))
+              rule: self.sources.all(s, self.sources.exists_one(o, o.sourcePVC ==
+                s.sourcePVC))
+            - message: provider velero needs the same backupRef on every source and
+                no size, autoExpand or storageClassName
+              rule: self.provider != 'velero' || self.sources.all(s, s.backupRef ==
+                self.sources[0].backupRef && !has(s.size) && !has(s.autoExpand) &&
+                !has(s.storageClassName))
+            - message: spec.velero is only allowed with provider velero
+              rule: self.provider == 'velero' || !has(self.velero)
+            - message: restoreAsOf is only allowed with provider volsync
+              rule: self.provider == 'volsync' || self.sources.all(s, !has(s.restoreAsOf))
           status:
             description: Status is the observed state of the restore.
             properties:

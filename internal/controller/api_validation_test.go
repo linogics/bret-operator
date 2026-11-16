@@ -30,30 +30,62 @@ var _ = Describe("CRD validation", func() {
 		}
 	}
 
-	It("rejects velero with two sources", func() {
-		r := newRestore("v-two", restorev1alpha1.ProviderVelero,
-			restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "a"}},
-			restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "b"}})
+	It("rejects a velero source without sourcePVC", func() {
+		r := newRestore("v-nopvc", restorev1alpha1.ProviderVelero, src(""))
 
-		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("velero")))
+		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("sourcePVC")))
 	})
 
-	It("rejects both selectors on one source", func() {
-		s := restorev1alpha1.RestoreSource{
-			BackupRef:        restorev1alpha1.BackupRef{Name: "a"},
+	It("rejects velero sources with different backupRefs", func() {
+		other := src("mysql")
+		other.BackupRef.Name = "other"
+		r := newRestore("v-diff", restorev1alpha1.ProviderVelero, src("wp-content"), other)
+
+		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("same backupRef")))
+	})
+
+	It("accepts two velero sources with the same backupRef", func() {
+		r := newRestore("v-two", restorev1alpha1.ProviderVelero, src("wp-content"), src("mysql"))
+
+		Expect(k8sClient.Create(ctx, r)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, r)).To(Succeed())
+	})
+
+	DescribeTable("rejects spec.velero with another provider", func(p restorev1alpha1.Provider) {
+		r := newRestore("o-velero", p, src("html"))
+		r.Spec.Velero = &restorev1alpha1.VeleroOptions{LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"a": "b"}}}
+
+		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("velero is only allowed")))
+	},
+		Entry("kopiur", restorev1alpha1.ProviderKopiur),
+		Entry("volsync", restorev1alpha1.ProviderVolSync),
+	)
+
+	DescribeTable("rejects restoreAsOf with another provider", func(p restorev1alpha1.Provider) {
+		s := src("html")
+		s.RestoreAsOf = &metav1.Time{Time: metav1.Now().Time}
+		r := newRestore("o-asof", p, s)
+
+		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("restoreAsOf")))
+	},
+		Entry("kopiur", restorev1alpha1.ProviderKopiur),
+		Entry("velero", restorev1alpha1.ProviderVelero),
+	)
+
+	It("rejects spec.velero with both selectors", func() {
+		r := newRestore("v-both", restorev1alpha1.ProviderVelero, src("html"))
+		r.Spec.Velero = &restorev1alpha1.VeleroOptions{
 			LabelSelector:    &metav1.LabelSelector{MatchLabels: map[string]string{"a": "b"}},
 			OrLabelSelectors: []*metav1.LabelSelector{{MatchLabels: map[string]string{"c": "d"}}},
 		}
-		r := newRestore("v-both", restorev1alpha1.ProviderVelero, s)
 
 		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("mutually exclusive")))
 	})
 
 	It("rejects kopiur without sourcePVC", func() {
-		s := src("")
-		r := newRestore("k-nopvc", restorev1alpha1.ProviderKopiur, s)
+		r := newRestore("k-nopvc", restorev1alpha1.ProviderKopiur, src(""))
 
-		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("sources need a sourcePVC")))
+		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("sourcePVC")))
 	})
 
 	It("rejects duplicate sourcePVC", func() {
@@ -62,26 +94,12 @@ var _ = Describe("CRD validation", func() {
 		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("sourcePVC must be unique")))
 	})
 
-	It("rejects a kopiur source with labelSelector", func() {
-		s := src("html")
-		s.LabelSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"a": "b"}}
-		r := newRestore("k-sel", restorev1alpha1.ProviderKopiur, s)
-
-		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("no label selectors")))
-	})
-
-	It("rejects a velero source with sourcePVC", func() {
-		r := newRestore("v-pvc", restorev1alpha1.ProviderVelero, src("html"))
-
-		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("without sourcePVC")))
-	})
-
 	It("rejects a velero source with size", func() {
-		s := restorev1alpha1.RestoreSource{BackupRef: restorev1alpha1.BackupRef{Name: "a"}}
+		s := src("html")
 		s.Size = quantityPtr("1Gi")
 		r := newRestore("v-size", restorev1alpha1.ProviderVelero, s)
 
-		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("without sourcePVC, size")))
+		Expect(k8sClient.Create(ctx, r)).To(MatchError(ContainSubstring("same backupRef")))
 	})
 
 	DescribeTable("rejects a bad sourcePVC", func(pvc string) {
@@ -128,6 +146,23 @@ var _ = Describe("CRD validation", func() {
 
 	It("rejects a RestoreTest with duplicate sourcePVC", func() {
 		Expect(k8sClient.Create(ctx, newTest("rt-dup", rtSrc("html"), rtSrc("html")))).To(MatchError(ContainSubstring("Duplicate value")))
+	})
+
+	It("rejects a velero RestoreTest with different backupSelectors", func() {
+		other := rtSrc("mysql")
+		other.BackupSelector.Name = "other"
+		t := newTest("rt-vdiff", rtSrc("wp-content"), other)
+		t.Spec.Provider = restorev1alpha1.ProviderVelero
+
+		Expect(k8sClient.Create(ctx, t)).To(MatchError(ContainSubstring("same backupSelector")))
+	})
+
+	It("rejects a RestoreTest with spec.velero and provider volsync", func() {
+		t := newTest("rt-vvol", rtSrc("html"))
+		t.Spec.Provider = restorev1alpha1.ProviderVolSync
+		t.Spec.Velero = &restorev1alpha1.VeleroOptions{LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"a": "b"}}}
+
+		Expect(k8sClient.Create(ctx, t)).To(MatchError(ContainSubstring("velero is only allowed")))
 	})
 
 	It("rejects empty restoredVolumes", func() {

@@ -313,15 +313,12 @@ func TestVeleroMissingCheckRefFails(t *testing.T) {
 }
 
 func veleroSelectorRestore() *restorev1alpha1.Restore {
-	restore := sizeTestRestore("velero")
-	restore.Spec.Sources[0].SourcePVC = ""
-
-	return restore
+	return sizeTestRestore("velero")
 }
 
 func TestVeleroCopiesLabelSelector(t *testing.T) {
 	restore := veleroSelectorRestore()
-	restore.Spec.Sources[0].LabelSelector = &metav1.LabelSelector{MatchLabels: map[string]string{testLabelKey: "db"}}
+	restore.Spec.Velero = &restorev1alpha1.VeleroOptions{LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{testLabelKey: "db"}}}
 
 	obj := (&RestoreReconciler{}).veleroRestoreObject(restore)
 
@@ -337,10 +334,10 @@ func TestVeleroCopiesLabelSelector(t *testing.T) {
 
 func TestVeleroCopiesOrLabelSelectors(t *testing.T) {
 	restore := veleroSelectorRestore()
-	restore.Spec.Sources[0].OrLabelSelectors = []*metav1.LabelSelector{
+	restore.Spec.Velero = &restorev1alpha1.VeleroOptions{OrLabelSelectors: []*metav1.LabelSelector{
 		{MatchLabels: map[string]string{testLabelKey: "db"}},
 		{MatchLabels: map[string]string{testLabelKey: "web"}},
-	}
+	}}
 
 	obj := (&RestoreReconciler{}).veleroRestoreObject(restore)
 
@@ -366,6 +363,15 @@ func completedVelero(t *testing.T, bp *restorev1alpha1.RestoreCheck, pvcs ...str
 	ctx := context.Background()
 	restore := newTestRestore()
 	restore.Spec.Provider = restorev1alpha1.ProviderVelero
+	restore.Spec.Sources = nil
+
+	// One Velero Backup holds every PVC, so all sources share the backupRef.
+	for _, rv := range bp.Spec.RestoredVolumes {
+		restore.Spec.Sources = append(restore.Spec.Sources, restorev1alpha1.RestoreSource{
+			SourcePVC: rv.SourcePVC,
+			BackupRef: restorev1alpha1.BackupRef{Name: "b1"},
+		})
+	}
 
 	c, r := fakeRestoreClient(t, restore, bp, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
 	key := client.ObjectKeyFromObject(restore)

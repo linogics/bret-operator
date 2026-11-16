@@ -90,7 +90,7 @@ _Appears in:_
 
 
 
-HandledBackup identifies the backup an afterBackup trigger used last.
+HandledBackup identifies the backup picked for one source.
 
 
 
@@ -318,10 +318,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `sourcePVC` _string_ | SourcePVC is the name of the PVC in the backed-up namespace that this source restores.<br />Velero restores a whole namespace and does not use it. |  | MaxLength: 63 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
-| `backupRef` _[BackupRef](#backupref)_ | BackupRef is the backup to restore. |  |  |
-| `labelSelector` _[LabelSelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#labelselector-v1-meta)_ | LabelSelector selects the namespace objects to restore. Velero only. |  |  |
-| `orLabelSelectors` _[LabelSelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#labelselector-v1-meta) array_ | OrLabelSelectors select the namespace objects to restore, any one may match. Velero only. |  |  |
+| `sourcePVC` _string_ | SourcePVC is the name of the PVC in the backed-up namespace that this source restores. |  | MaxLength: 63 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
+| `backupRef` _[BackupRef](#backupref)_ | BackupRef is the backup to restore. Velero sources all name the same Backup. |  |  |
+| `restoreAsOf` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | RestoreAsOf restores the newest snapshot taken at or before this time. VolSync only.<br />Unset restores the newest snapshot. |  |  |
 | `storageClassName` _string_ | StorageClassName is the storage class of the scratch volume. |  |  |
 | `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. The source size sets it when unset. |  |  |
 | `autoExpand` _[AutoExpand](#autoexpand)_ | AutoExpand derives the size from the source size when Size is unset. |  |  |
@@ -344,6 +343,7 @@ _Appears in:_
 | `sources` _[RestoreSource](#restoresource) array_ | Sources are the backups to restore from, each with its scratch volume. |  | MaxItems: 10 <br />MinItems: 1 <br /> |
 | `restoreCheckRef` _[RestoreCheckRef](#restorecheckref)_ | RestoreCheckRef is the RestoreCheck that checks the restored data. |  |  |
 | `restoreWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | RestoreWindow is the deadline for this attempt. It covers the restore, image pulls and the check. | 45m |  |
+| `velero` _[VeleroOptions](#velerooptions)_ | Velero narrows what a Velero restore brings back. Velero only. |  |  |
 | `keepOnFailure` _boolean_ | KeepOnFailure keeps the check pod, scratch volume and native restore object after a failed attempt. | false |  |
 
 
@@ -446,6 +446,7 @@ _Appears in:_
 | `provider` _[Provider](#provider)_ | Provider is the backup tool that performs the restores. |  | Enum: [velero volsync kopiur] <br /> |
 | `sources` _[RestoreTestSource](#restoretestsource) array_ | Sources are the volumes each run restores. |  | MaxItems: 10 <br />MinItems: 1 <br /> |
 | `restoreCheckRef` _[RestoreCheckRef](#restorecheckref)_ | RestoreCheckRef names the check to run against each restored volume. |  |  |
+| `velero` _[VeleroOptions](#velerooptions)_ | Velero narrows what each Velero restore brings back. Velero only. |  |  |
 | `triggers` _[Triggers](#triggers)_ | Triggers defines what starts a run. |  |  |
 | `restoreWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#duration-v1-meta)_ | RestoreWindow is the deadline for each attempt. | 45m |  |
 | `retries` _[Retries](#retries)_ | Retries defines how failed attempts are retried. | \{  \} |  |
@@ -473,7 +474,7 @@ _Appears in:_
 | `retainedResources` _string array_ | RetainedResources lists objects kept after a failed run. They help debugging. |  |  |
 | `currentRestore` _string_ | CurrentRestore is the Restore of the run in progress. It is empty when no run is in progress. |  |  |
 | `retryAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | RetryAt is when the next attempt of the run in progress is created. |  |  |
-| `pendingBackups` _object (keys:string, values:string)_ | PendingBackups maps each sourcePVC to the backup of the queued run, which waits for the run in progress. It applies to overlap policy Queue. |  |  |
+| `pendingBackups` _[HandledBackup](#handledbackup) array_ | PendingBackups are the backups of the queued run, one per source. The run waits for the run in progress.<br />It applies to overlap policy Queue. |  |  |
 | `pendingRunSource` _string_ | PendingRunSource is the trigger source of the queued run. It keeps the name of the queued Restore stable across reconciles. |  |  |
 | `lastRunNowValue` _string_ | LastRunNowValue is the last value of the run-now annotation that started a run. |  |  |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#condition-v1-meta) array_ | Conditions are the latest observations of the test state. |  |  |
@@ -566,5 +567,23 @@ _Appears in:_
 | `cron` _string_ | Cron is a 5-field cron schedule evaluated in UTC. |  | Pattern: `^(\S+\s+)\{4\}\S+$` <br /> |
 | `afterBackup` _[AfterBackupTrigger](#afterbackuptrigger)_ | AfterBackup starts a run after a matching backup completes. |  |  |
 | `manual` _boolean_ | Manual enables starting a run by changing the run-now annotation. | false |  |
+
+
+#### VeleroOptions
+
+
+
+VeleroOptions narrows what a Velero restore brings back.
+
+
+
+_Appears in:_
+- [RestoreSpec](#restorespec)
+- [RestoreTestSpec](#restoretestspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `labelSelector` _[LabelSelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#labelselector-v1-meta)_ | LabelSelector selects the namespace objects to restore. |  |  |
+| `orLabelSelectors` _[LabelSelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#labelselector-v1-meta) array_ | OrLabelSelectors select the namespace objects to restore, any one may match. |  |  |
 
 

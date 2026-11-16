@@ -44,21 +44,27 @@ type BackupRef struct {
 }
 
 // RestoreSource identifies one backup a Restore reads from and the scratch volume it writes into.
-// +kubebuilder:validation:XValidation:rule="!(has(self.labelSelector) && has(self.orLabelSelectors))",message="labelSelector and orLabelSelectors are mutually exclusive"
 type RestoreSource struct {
 	// SourcePVC is the name of the PVC in the backed-up namespace that this source restores.
-	// Velero restores a whole namespace and does not use it.
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
 	// +kubebuilder:validation:MaxLength=63
-	SourcePVC string `json:"sourcePVC,omitempty"`
-	// BackupRef is the backup to restore.
+	SourcePVC string `json:"sourcePVC"`
+	// BackupRef is the backup to restore. Velero sources all name the same Backup.
 	BackupRef BackupRef `json:"backupRef"`
-	// LabelSelector selects the namespace objects to restore. Velero only.
-	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
-	// OrLabelSelectors select the namespace objects to restore, any one may match. Velero only.
-	OrLabelSelectors []*metav1.LabelSelector `json:"orLabelSelectors,omitempty"`
+	// RestoreAsOf restores the newest snapshot taken at or before this time. VolSync only.
+	// Unset restores the newest snapshot.
+	RestoreAsOf *metav1.Time `json:"restoreAsOf,omitempty"`
 	// RestoreTarget is the scratch volume to restore into.
 	RestoreTarget `json:",inline"`
+}
+
+// VeleroOptions narrows what a Velero restore brings back.
+// +kubebuilder:validation:XValidation:rule="!(has(self.labelSelector) && has(self.orLabelSelectors))",message="labelSelector and orLabelSelectors are mutually exclusive"
+type VeleroOptions struct {
+	// LabelSelector selects the namespace objects to restore.
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+	// OrLabelSelectors select the namespace objects to restore, any one may match.
+	OrLabelSelectors []*metav1.LabelSelector `json:"orLabelSelectors,omitempty"`
 }
 
 // Condition reasons for a Restore that cannot resolve its scratch size.
@@ -94,9 +100,10 @@ type RestoreTarget struct {
 }
 
 // RestoreSpec defines the desired state of Restore.
-// +kubebuilder:validation:XValidation:rule="self.provider != 'velero' || (size(self.sources) == 1 && !has(self.sources[0].sourcePVC) && !has(self.sources[0].size) && !has(self.sources[0].autoExpand) && !has(self.sources[0].storageClassName))",message="provider velero takes exactly one source without sourcePVC, size, autoExpand or storageClassName"
-// +kubebuilder:validation:XValidation:rule="self.provider == 'velero' || self.sources.all(s, has(s.sourcePVC) && !has(s.labelSelector) && !has(s.orLabelSelectors))",message="sources need a sourcePVC and no label selectors unless provider is velero"
-// +kubebuilder:validation:XValidation:rule="self.provider == 'velero' || self.sources.all(s, self.sources.exists_one(o, o.sourcePVC == s.sourcePVC))",message="sourcePVC must be unique across sources"
+// +kubebuilder:validation:XValidation:rule="self.sources.all(s, self.sources.exists_one(o, o.sourcePVC == s.sourcePVC))",message="sourcePVC must be unique across sources"
+// +kubebuilder:validation:XValidation:rule="self.provider != 'velero' || self.sources.all(s, s.backupRef == self.sources[0].backupRef && !has(s.size) && !has(s.autoExpand) && !has(s.storageClassName))",message="provider velero needs the same backupRef on every source and no size, autoExpand or storageClassName"
+// +kubebuilder:validation:XValidation:rule="self.provider == 'velero' || !has(self.velero)",message="spec.velero is only allowed with provider velero"
+// +kubebuilder:validation:XValidation:rule="self.provider == 'volsync' || self.sources.all(s, !has(s.restoreAsOf))",message="restoreAsOf is only allowed with provider volsync"
 type RestoreSpec struct {
 	// Provider is the backup tool that performs the restore.
 	Provider Provider `json:"provider"`
@@ -109,6 +116,8 @@ type RestoreSpec struct {
 	// RestoreWindow is the deadline for this attempt. It covers the restore, image pulls and the check.
 	// +kubebuilder:default="45m"
 	RestoreWindow metav1.Duration `json:"restoreWindow,omitempty"`
+	// Velero narrows what a Velero restore brings back. Velero only.
+	Velero *VeleroOptions `json:"velero,omitempty"`
 	// KeepOnFailure keeps the check pod, scratch volume and native restore object after a failed attempt.
 	// +kubebuilder:default=false
 	KeepOnFailure bool `json:"keepOnFailure,omitempty"`

@@ -19,12 +19,7 @@ const (
 )
 
 // matchSources checks that the sources of the Restore and the restored volumes of the check name the same PVCs.
-// Velero restores a whole namespace and has no sourcePVC, so it always matches.
 func matchSources(restore *restorev1alpha1.Restore, bp *restorev1alpha1.RestoreCheck) error {
-	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
-		return nil
-	}
-
 	want := make([]string, 0, len(bp.Spec.RestoredVolumes))
 	for _, rv := range bp.Spec.RestoredVolumes {
 		want = append(want, rv.SourcePVC)

@@ -1,9 +1,8 @@
 # Restore: one manual restore attempt. A RestoreTest usually creates these.
 # The check in restoreCheckRef runs after the restore. Check: examples/restorecheck-multi.yaml.
-# Velero has one source, no sourcePVC and no size. One Velero Backup holds the whole namespace.
-# The selector picks the objects that were labeled before the backup. Label every app PVC.
+# Velero: every source names its PVC, and all sources share one Velero Backup, which holds the
+# whole namespace. spec.velero.labelSelector limits what is restored. Label every app PVC.
 # PVCs are restored under their source names (html, pgdata) into a bret-scratch-<hash> namespace.
-# Several PVCs: see examples/restore-velero-multi.yaml.
 apiVersion: bret.linogics.io/v1alpha1
 kind: Restore
 metadata:
@@ -12,10 +11,15 @@ metadata:
 spec:
   provider: velero
   sources:
-    - backupRef:
+    - sourcePVC: html
+      backupRef:
         name: nextcloud-2026-11-14 # A Velero Backup in the Velero namespace (providers.velero.namespace).
-      labelSelector:
-        matchLabels:
-          app.kubernetes.io/name: nextcloud # Matches html and pgdata, both labeled.
+    - sourcePVC: pgdata
+      backupRef:
+        name: nextcloud-2026-11-14
+  velero:
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: nextcloud # Matches html and pgdata, both labeled.
   restoreCheckRef:
     name: nextcloud

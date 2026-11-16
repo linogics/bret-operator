@@ -360,7 +360,7 @@ func TestRestoreTestQueueStartsPendingRunAfterCurrent(t *testing.T) {
 		t.Fatalf("restores while queued = %d, want 1", n)
 	}
 
-	if got := f.test().Status.PendingBackups[testDataName]; got != "b1" {
+	if got := pendingMap(f.test().Status.PendingBackups)[testDataName]; got != "b1" {
 		t.Fatalf("pendingBackups = %q, want b1", got)
 	}
 
@@ -371,7 +371,7 @@ func TestRestoreTestQueueStartsPendingRunAfterCurrent(t *testing.T) {
 		t.Fatalf("restores after current run ended = %d, want 2", n)
 	}
 
-	if got := f.test().Status.PendingBackups[testDataName]; got != "" {
+	if got := pendingMap(f.test().Status.PendingBackups)[testDataName]; got != "" {
 		t.Errorf("pendingBackups = %q, want empty", got)
 	}
 }
@@ -908,7 +908,7 @@ func TestRestoreTestQueueStoresBackups(t *testing.T) {
 	f.setRunNow("n2")
 	f.run()
 
-	pending := f.test().Status.PendingBackups
+	pending := pendingMap(f.test().Status.PendingBackups)
 	if pending[testHTML] != "h1" || pending[testPGData] != "p1" || len(pending) != 2 {
 		t.Errorf("pendingBackups = %v, want both sources", pending)
 	}

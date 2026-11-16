@@ -70,23 +70,27 @@ func (r *RestoreReconciler) veleroStub(restore *restorev1alpha1.Restore) *unstru
 func (r *RestoreReconciler) veleroRestoreObject(restore *restorev1alpha1.Restore) *unstructured.Unstructured {
 	obj := r.veleroStub(restore)
 	obj.SetLabels(restoreLabels(restore))
-	src := restore.Spec.Sources[0]
 	obj.Object["spec"] = map[string]any{
-		"backupName":         src.BackupRef.Name,
+		"backupName":         restore.Spec.Sources[0].BackupRef.Name,
 		"includedNamespaces": []any{restore.Namespace},
 		"includedResources":  []any{"persistentvolumeclaims", "persistentvolumes"},
 		"namespaceMapping":   map[string]any{restore.Namespace: veleroScratchName(restore)},
 		"restorePVs":         true,
 	}
 
-	// The selectors are mutually exclusive, the API enforces it.
-	if src.LabelSelector != nil {
-		setSelector(obj, "labelSelector", src.LabelSelector)
+	opts := restore.Spec.Velero
+	if opts == nil {
+		return obj
 	}
 
-	if len(src.OrLabelSelectors) > 0 {
-		sels := make([]any, len(src.OrLabelSelectors))
-		for i, sel := range src.OrLabelSelectors {
+	// The selectors are mutually exclusive, the API enforces it.
+	if opts.LabelSelector != nil {
+		setSelector(obj, "labelSelector", opts.LabelSelector)
+	}
+
+	if len(opts.OrLabelSelectors) > 0 {
+		sels := make([]any, len(opts.OrLabelSelectors))
+		for i, sel := range opts.OrLabelSelectors {
 			sels[i] = selectorMap(sel)
 		}
 
@@ -331,7 +335,7 @@ func (r *RestoreReconciler) checkVelero(
 		return ctrl.Result{}, err
 	}
 
-	restored, missing := restoredVeleroClaims(pvcs.Items, bp)
+	restored, missing := restoredVeleroClaims(pvcs.Items, restore.Spec.Sources)
 	if len(missing) > 0 {
 		// Velero is Completed, so the missing claims will not come.
 		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
@@ -381,10 +385,10 @@ func (r *RestoreReconciler) copyPodSecurity(ctx context.Context, restore *restor
 	return r.Patch(ctx, scratch, client.MergeFrom(base))
 }
 
-// restoredVeleroClaims maps each check sourcePVC to the restored PVC of the same name.
+// restoredVeleroClaims maps each source PVC to the restored PVC of the same name.
 // Scratch claims of the operator carry the restore label and are skipped. missing lists the sourcePVCs
 // that were not restored.
-func restoredVeleroClaims(pvcs []corev1.PersistentVolumeClaim, bp *restorev1alpha1.RestoreCheck) (claims map[string]string, missing []string) {
+func restoredVeleroClaims(pvcs []corev1.PersistentVolumeClaim, sources []restorev1alpha1.RestoreSource) (claims map[string]string, missing []string) {
 	have := make(map[string]bool, len(pvcs))
 
 	for i := range pvcs {
@@ -393,13 +397,13 @@ func restoredVeleroClaims(pvcs []corev1.PersistentVolumeClaim, bp *restorev1alph
 		}
 	}
 
-	claims = make(map[string]string, len(bp.Spec.RestoredVolumes))
+	claims = make(map[string]string, len(sources))
 
-	for _, rv := range bp.Spec.RestoredVolumes {
-		if have[rv.SourcePVC] {
-			claims[rv.SourcePVC] = rv.SourcePVC
+	for _, src := range sources {
+		if have[src.SourcePVC] {
+			claims[src.SourcePVC] = src.SourcePVC
 		} else {
-			missing = append(missing, rv.SourcePVC)
+			missing = append(missing, src.SourcePVC)
 		}
 	}
 

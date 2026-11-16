@@ -67,10 +67,16 @@ func TestMatchSourcesMissing(t *testing.T) {
 	if err := matchSources(twoSourceRestore(), twoVolumeCheck()); err != nil {
 		t.Fatalf("matching sources: %v", err)
 	}
+}
 
+func TestMatchSourcesVelero(t *testing.T) {
+	restore := twoSourceRestore()
 	restore.Spec.Provider = restorev1alpha1.ProviderVelero
-	if err := matchSources(restore, bp); err != nil {
-		t.Fatalf("velero: %v", err)
+	restore.Spec.Sources = restore.Spec.Sources[:1]
+
+	err := matchSources(restore, twoVolumeCheck())
+	if err == nil || !strings.Contains(err.Error(), testPGData) {
+		t.Fatalf("velero missing source: err = %v, want it to name %s", err, testPGData)
 	}
 }
 
