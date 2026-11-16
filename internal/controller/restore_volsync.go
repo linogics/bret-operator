@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -43,19 +44,26 @@ func volsyncDestinationObject(restore *restorev1alpha1.Restore, src restorev1alp
 		mover = *uid
 	}
 
+	restic := map[string]any{
+		"repository":     repository,
+		"copyMethod":     "Direct",
+		"destinationPVC": restoredClaimName(restore, src.SourcePVC),
+		"capacity":       size.String(),
+		"moverSecurityContext": map[string]any{
+			"runAsUser": mover, "runAsGroup": mover, "fsGroup": mover,
+		},
+	}
+
+	// Restic restores the newest snapshot at or before this time, so a later sync does not change the run.
+	if src.RestoreAsOf != nil {
+		restic["restoreAsOf"] = src.RestoreAsOf.UTC().Format(time.RFC3339)
+	}
+
 	obj := volsyncStub(restore, src)
 	obj.SetLabels(restoreLabels(restore))
 	obj.Object["spec"] = map[string]any{
 		"trigger": map[string]any{"manual": restore.Name},
-		"restic": map[string]any{
-			"repository":     repository,
-			"copyMethod":     "Direct",
-			"destinationPVC": restoredClaimName(restore, src.SourcePVC),
-			"capacity":       size.String(),
-			"moverSecurityContext": map[string]any{
-				"runAsUser": mover, "runAsGroup": mover, "fsGroup": mover,
-			},
-		},
+		"restic":  restic,
 	}
 
 	return obj

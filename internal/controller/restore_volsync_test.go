@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -60,6 +61,19 @@ func TestVolSyncRestoreSpec(t *testing.T) {
 	got, _, _ := unstructured.NestedMap(obj.Object, "spec", "restic")
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("spec.restic = %v, want %v", got, want)
+	}
+}
+
+func TestVolSyncRestoreAsOf(t *testing.T) {
+	restore := volsyncTestRestore()
+	src := restore.Spec.Sources[0]
+	src.RestoreAsOf = &metav1.Time{Time: time.Date(2026, 11, 16, 3, 0, 0, 0, time.UTC)}
+
+	obj := volsyncDestinationObject(restore, src, testRepoSecret, resource.MustParse("3Gi"), nil)
+
+	got, _, _ := unstructured.NestedString(obj.Object, "spec", "restic", "restoreAsOf")
+	if got != "2026-11-16T03:00:00Z" {
+		t.Fatalf("restoreAsOf = %q, want 2026-11-16T03:00:00Z", got)
 	}
 }
 
