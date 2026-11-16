@@ -13,7 +13,7 @@ controllers, so you can test today.
 | `render.py` | Turns a `RestoreCheck` into a check pod. It runs the Go renderer in `hack/check-test/render`, which calls the operator's own code, so the pod is the same one the operator makes. |
 | `check.sh` | Runs one check pod against restored PVCs you name. Prints each container's exit code and the last logs. Exit 0 means pass. |
 | `roundtrip.sh` | Full test for one app: seed a source volume, back it up with Kopiur, restore it into `r-<volume>` PVCs, run the check. |
-| `seeds/<app>.yaml` | The seed for one app: source PVCs and a `seed` pod that writes the data and the canary. |
+| `checks/<app>/seed.yaml` | The seed for one app: source PVCs and a `seed` pod that writes the data and the canary. |
 
 ## Prerequisites
 
@@ -31,7 +31,7 @@ controllers, so you can test today.
 Use this when you already have restored PVCs and only want to run the check:
 
 ```bash
-hack/check-test/check.sh checks/nextcloud.yaml bpt-nextcloud check-nextcloud html=r-html pgdata=r-pgdata
+hack/check-test/check.sh checks/nextcloud/restorecheck.yaml bpt-nextcloud check-nextcloud html=r-html pgdata=r-pgdata
 ```
 
 Arguments:
@@ -42,11 +42,11 @@ Arguments:
 4. one `KEY=PVC` pair per restored volume.
 
 The KEY is the `sourcePVC` of a `restoredVolumes` entry. Give a pair for every entry. A missing
-pair is an error. A one-volume check such as `checks/postgres.yaml` needs one pair, `data=r-data`.
+pair is an error. A one-volume check such as `checks/postgres/restorecheck.yaml` needs one pair, `data=r-data`.
 List the keys with:
 
 ```bash
-python3 hack/check-test/render.py checks/nextcloud.yaml --list
+python3 hack/check-test/render.py checks/nextcloud/restorecheck.yaml --list
 ```
 
 Environment variables:
@@ -67,7 +67,7 @@ hack/check-test/roundtrip.sh nextcloud
 This runs these steps in namespace `bpt-nextcloud`:
 
 1. Create a Kopiur `Repository` and a `SnapshotPolicy` for each volume the check needs.
-2. Apply `hack/check-test/seeds/nextcloud.yaml`. Wait for the `seed` pod to succeed.
+2. Apply `checks/nextcloud/seed.yaml`. Wait for the `seed` pod to succeed.
 3. For each volume: create a `Snapshot`, wait for `Succeeded`, create a `Restore` and a PVC
    named `r-<volume>`, wait for `Completed` and `Bound`.
 4. Run the check against the `r-<volume>` PVCs.
@@ -86,8 +86,8 @@ Custom paths:
 
 ```bash
 hack/check-test/roundtrip.sh minimal \
-  hack/check-test/seeds/minimal.yaml \
-  checks/minimal.yaml
+  checks/minimal/seed.yaml \
+  checks/minimal/restorecheck.yaml
 ```
 
 ## Round trip through the operator
@@ -127,7 +127,7 @@ A seed is the only per-app work. It must satisfy this contract:
 - Use the same UID the check uses. If the PVC starts owned by root, add a root init
   container that runs `chown <uid>:<gid>` on the mount, as the seeds do.
 
-Start from `seeds/nextcloud.yaml` (two volumes) or `seeds/minimal.yaml` (one volume).
+Start from `checks/nextcloud/seed.yaml` (two volumes) or `checks/minimal/seed.yaml` (one volume).
 
 ## Negative test
 
@@ -161,5 +161,5 @@ nerdctl --namespace k8s.io pull postgres:17.12
 
 ## Status of the app checks
 
-See [checks/INDEX.md](../checks/INDEX.md). It records, per app, whether the round trip
-passed, the negative test result, and the open issues.
+See [checks/README.md](../checks/README.md). Each `checks/<app>/README.md` records whether
+the round trip passed, the negative test result, and the open issues.

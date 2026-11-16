@@ -147,7 +147,7 @@ kubectl -n wordpress wait --for=jsonpath='{.status.phase}'=Succeeded snapshot --
 ## 3. Write the check
 
 The check is the same for every tool:
-[examples/wordpress/restorecheck.yaml](../../examples/wordpress/restorecheck.yaml). It mounts
+[checks/wordpress/restorecheck.yaml](../../checks/wordpress/restorecheck.yaml). It mounts
 `html` and `mysql`, starts MariaDB as a sidecar, and compares the canary post with the canary
 file. The annotation `bret.linogics.io/mover-uid` gives the restore mover of each volume its UID.
 How to write a check: [checks.md](../checks.md).

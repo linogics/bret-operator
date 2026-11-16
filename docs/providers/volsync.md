@@ -104,7 +104,7 @@ MariaDB. The default mover UID cannot read a database data dir (`permission deni
 ## 3. Write the check
 
 The check is the same for every tool:
-[examples/wordpress/restorecheck.yaml](../../examples/wordpress/restorecheck.yaml). The annotation
+[checks/wordpress/restorecheck.yaml](../../checks/wordpress/restorecheck.yaml). The annotation
 `bret.linogics.io/mover-uid` gives the restore mover of each volume its UID; without it the mover
 uses the first container's `runAsUser`, then 65534. How to write a check: [checks.md](../checks.md).
 

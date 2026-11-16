@@ -69,7 +69,7 @@ Velero sets `velero.io/schedule-name: wordpress` on every `Backup` it creates, w
 ## 3. Write the check
 
 The check is the same for every tool:
-[examples/wordpress/restorecheck.yaml](../../examples/wordpress/restorecheck.yaml). With Velero
+[checks/wordpress/restorecheck.yaml](../../checks/wordpress/restorecheck.yaml). With Velero
 the check pod runs in the scratch namespace. bret copies the Secrets and ConfigMaps the check
 names in `imagePullSecrets`, `env` and `envFrom` (here `wordpress-db`) into it first.
 

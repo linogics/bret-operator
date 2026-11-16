@@ -1,0 +1,60 @@
+# RestoreCheck for prometheus v2.54.1. Files only: TSDB blocks and WAL under /prometheus.
+# Canary contract: metric bret_canary_seq. Its last written value is BRET_CANARY_SEQ.
+# The sample must fall within the 10-year window below. The seeding job writes it before the backup.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreCheck
+metadata:
+  name: prometheus
+spec:
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /prometheus
+
+  initContainers:
+  # The restored mount root comes back owned by root. Prometheus must write its lock and WAL there.
+  # An init container with no securityContext runs as root. It gives the root to uid 65534.
+    - name: data-perms
+      image: busybox:1.37
+      command:
+        - /bin/sh
+        - -c
+        - chown 65534:65534 /prometheus
+
+  containers:
+    - name: check
+      image: prom/prometheus:v2.54.1
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+      env:
+        - name: BRET_CANARY_SEQ
+          value: "42" # Value written by the seeding job.
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          # Every block must list cleanly before the server starts.
+          promtool tsdb list /prometheus >/tmp/blocks.txt
+          test -s /tmp/blocks.txt
+
+          # Start the server on the restored TSDB and stop it on exit.
+          /bin/prometheus --config.file=/etc/prometheus/prometheus.yml \
+              --storage.tsdb.path=/prometheus --web.listen-address=127.0.0.1:9090 \
+              >/tmp/prom.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+
+          # Wait for readiness (up to 120 s).
+          for i in $(seq 1 120); do
+            wget -qO- http://127.0.0.1:9090/-/ready >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          # Canary: the restored series must answer the query with the seeded value.
+          query='max_over_time(bret_canary_seq[3650d])'
+          wget -qO- "http://127.0.0.1:9090/api/v1/query?query=$query" \
+              | grep -q "\"$BRET_CANARY_SEQ\"]"
+
+  volumes: []

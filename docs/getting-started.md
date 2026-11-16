@@ -53,7 +53,7 @@ Follow steps 1 and 2 on the page of your tool. They deploy the app into the name
 - [providers/velero.md](providers/velero.md)
 
 The example also applies the check,
-[examples/wordpress/restorecheck.yaml](../examples/wordpress/restorecheck.yaml). It mounts both
+[checks/wordpress/restorecheck.yaml](../checks/wordpress/restorecheck.yaml). It mounts both
 restored volumes, starts MariaDB next to WordPress, and checks that the canary post matches the
 canary file. For your own app, write a check as described in [checks.md](checks.md). Only
 cluster admins should create checks, because a check runs a pod with your chosen image.

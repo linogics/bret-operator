@@ -1,0 +1,67 @@
+# Shell one-liners in block scalars are the content, not prose.
+# yamllint disable rule:line-length
+# Seed for restorecheck.yaml in this folder. Datadir is /var/lib/mysql (uid 999), the PVC root.
+# Writes the canary, then kill -9 mysqld so the backup is crash-consistent.
+# The check must recover from the redo log on boot.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 999:999 /var/lib/mysql"
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+  containers:
+    - name: seed
+      image: mysql:8.4
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          mysqld --initialize-insecure --user=mysql --datadir=/var/lib/mysql >/tmp/init.log 2>&1
+          mysqld --user=mysql --datadir=/var/lib/mysql --socket=/tmp/mysql.sock \
+              --skip-networking --mysqlx=OFF >/tmp/mysqld.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 150); do
+            mysqladmin -S /tmp/mysql.sock ping >/dev/null 2>&1 && break
+            sleep 1
+          done
+          mysql -S /tmp/mysql.sock -u root -e "create database bret"
+          mysql -S /tmp/mysql.sock -u root -e "create table bret.canary(id int primary key, payload text, sha256 char(64)); insert into bret.canary values (1, 'canary-payload-42', sha2('canary-payload-42', 256))"
+          mysql -S /tmp/mysql.sock -u root -e "create table bret.filler as select n.n as id, md5(n.n) as h from (select a.n + b.n * 1000 + 1 as n from (select 0 n union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) a, (select 0 n union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) b, (select 0 n union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) c) n"
+          # Crash-consistent point: no clean shutdown.
+          kill -9 "$pid"
+          sleep 2
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

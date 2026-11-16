@@ -9,8 +9,8 @@ A `RestoreCheck` lists every volume in `restoredVolumes`. A `Restore` or `Restor
 one source per volume in one attempt, and the check pod mounts them all. The `sourcePVC` values tie
 the two together. See [concepts.md](concepts.md#which-pvc-gets-restored).
 
-The checks for apps with several volumes are `checks/nextcloud.yaml`, `checks/wordpress.yaml`,
-`checks/jellyfin.yaml` and `checks/pihole.yaml`.
+The checks for apps with several volumes are `checks/nextcloud/restorecheck.yaml`, `checks/wordpress/restorecheck.yaml`,
+`checks/jellyfin/restorecheck.yaml` and `checks/pihole/restorecheck.yaml`.
 
 ## The problem
 
@@ -33,7 +33,7 @@ Symptoms seen in the apps:
 - Pi-hole: lists in the DB that are not applied, or missing DNS records.
 - n8n: credentials that cannot be decrypted (key mismatch, not drift).
 
-(Source: `checks/INDEX.md`, "Apps that have data and a database".)
+(Source: the caveats in each `checks/<app>/README.md`.)
 
 ## Rules
 
@@ -49,8 +49,8 @@ Symptoms seen in the apps:
    - **Pre-backup flush hook.** Flush or checkpoint the database before the snapshot. Not tested
      in this project.
    - **SQLite-in-volume apps** (gitea, grafana, home-assistant, vaultwarden, uptime-kuma): take
-     the backup with the app stopped, or with a consistent snapshot. `checks/INDEX.md` names the
-     SQLite file as the main risk.
+     the backup with the app stopped, or with a consistent snapshot. Their check READMEs name
+     the SQLite file as the main risk.
 4. **Write checks that cross-reference.** A DB row must point to a file that exists, and the
    file must match the row.
 5. **Each restored workload holds its PVC alone.** Scale restored workloads to 0 before the
@@ -67,7 +67,7 @@ Files plus Postgres, two PVCs.
   [examples/kopiur/restoretest.yaml](../examples/kopiur/restoretest.yaml).
 - Repair if drift happens: `occ files:scan` can fix listings but may drop or duplicate
   entries.
-- Check (`checks/nextcloud.yaml`): `occ status` shows installed, `occ integrity:check-core`
+- Check (`checks/nextcloud/restorecheck.yaml`): `occ status` shows installed, `occ integrity:check-core`
   passes, and the canary `oc_filecache.size` equals the file size on disk.
 - The check runs Postgres as a native sidecar: an init container with `restartPolicy: Always`.
   The check rewrites `dbhost` to `127.0.0.1` in `config.php`.

@@ -86,9 +86,9 @@ Check tests do not run in CI. They need a cluster and several gigabytes of image
 | `config/` | Kustomize bases: CRDs, RBAC, manager, metrics. |
 | `charts/bret-operator/` | Helm chart. RBAC is copied from `config/`. Depends on `charts/bret-operator-crds/`, which holds the CRDs. |
 | `charts/bret-operator-crds/` | Helm chart with the CRDs only. Copied from `config/crd/bases/`. |
-| `checks/` | Check drafts for each app. See `checks/INDEX.md`. |
+| `checks/` | One folder per app: check, seed and README. See `checks/README.md`. |
 | `examples/` | WordPress + MariaDB (`wordpress/`) and per tool (`kopiur/`, `volsync/`, `velero/`) the backup setup, a `Restore`, a `RestoreTest` and a negative `Restore`. |
-| `hack/check-test/` | Check harness and per-app seeds. |
+| `hack/check-test/` | Check harness. The seeds live in `checks/<app>/seed.yaml`. |
 | `hack/helm/sync_rbac.py` | Copies RBAC rules into the chart. |
 | `docs/` | This documentation. `docs/reference/api.md` is generated. |
 

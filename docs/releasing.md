@@ -17,7 +17,7 @@ The workflow publishes three kinds of artifact. All of them have the same versio
    notes. Tell users to apply the CRDs first (see [installation.md](installation.md#upgrading)).
 4. The version you tag is a valid semantic version. Use `-rc.1` suffixes for pre-releases. The
    workflow marks those as pre-releases on GitHub.
-5. The check catalog status in [checks/INDEX.md](../checks/INDEX.md) matches what you
+5. The check catalog status in [checks/README.md](../checks/README.md) matches what you
    claim in the release notes.
 
 ## Cut the release

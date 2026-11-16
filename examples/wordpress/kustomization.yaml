@@ -9,4 +9,4 @@ resources:
   - mariadb.yaml
   - wordpress.yaml
   - seed-job.yaml
-  - restorecheck.yaml
+  - ../../checks/wordpress

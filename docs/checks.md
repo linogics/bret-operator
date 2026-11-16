@@ -10,8 +10,8 @@ not read logs.
 You may use any image and any language: bash, Python, a Go binary, `psql`, `php occ`, `mysqlcheck`,
 or anything else that exits with a code. The check runs in its own image, not in the application image.
 
-Start with [examples/wordpress/restorecheck.yaml](../examples/wordpress/restorecheck.yaml): an app with
-two volumes. [checks/minimal.yaml](../checks/minimal.yaml) is the
+Start with [checks/wordpress/restorecheck.yaml](../checks/wordpress/restorecheck.yaml): an app with
+two volumes. [checks/minimal/restorecheck.yaml](../checks/minimal/restorecheck.yaml) is the
 short form with one volume. Both work.
 
 ## Anatomy
@@ -161,15 +161,15 @@ unchanged.
 2. The check reads the canary from the restored data and recomputes the SHA-256.
 3. The check passes only if the hashes match.
 
-Postgres example (from [checks/postgres.yaml](../checks/postgres.yaml)):
+Postgres example (from [checks/postgres/restorecheck.yaml](../checks/postgres/restorecheck.yaml)):
 
 ```sql
 select count(*) from bret_canary
 where id = 1 and encode(sha256(payload::bytea), 'hex') = sha256;
 ```
 
-Name the canary in the header comment of your check. Put the seed for it in
-`hack/check-test/seeds/`.
+Name the canary in the header comment of your check. Put the seed for it next to the
+check, in `checks/<app>/seed.yaml`.
 
 ## Secrets
 
@@ -284,13 +284,13 @@ Read [testing-checks.md](testing-checks.md). Short version:
 
 ```bash
 # Run a check against restored PVCs you already have
-hack/check-test/check.sh checks/minimal.yaml restore-test check-minimal data=my-restored-pvc
+hack/check-test/check.sh checks/minimal/restorecheck.yaml restore-test check-minimal data=my-restored-pvc
 
 # Or run the whole round trip: seed, back up with Kopiur, restore, check
-hack/check-test/roundtrip.sh minimal hack/check-test/seeds/minimal.yaml checks/minimal.yaml
+hack/check-test/roundtrip.sh minimal checks/minimal/seed.yaml checks/minimal/restorecheck.yaml
 ```
 
 ## Catalog
 
-[checks/INDEX.md](../checks/INDEX.md) lists the app checks, the volumes each one
+[checks/README.md](../checks/README.md) lists the app checks, the volumes each one
 needs, the canary it uses, and its test status.

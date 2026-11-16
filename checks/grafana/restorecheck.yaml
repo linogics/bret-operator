@@ -1,0 +1,58 @@
+# RestoreCheck for grafana 11.2 with SQLite (default). One PVC.
+# Canary contract: dashboard with uid and title "bret-canary". Seed it before the backup.
+# Secret grafana-admin holds GF_SECURITY_ADMIN_PASSWORD. It must match the source instance.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreCheck
+metadata:
+  name: grafana
+spec:
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /var/lib/grafana
+
+  initContainers:
+  # The restored mount root comes back owned by root. Grafana must create its own directories there.
+  # An init container with no securityContext runs as root. It gives the root to uid 472.
+    - name: data-perms
+      image: busybox:1.37
+      command:
+        - /bin/sh
+        - -c
+        - chown 472:472 /var/lib/grafana
+
+  containers:
+    - name: check
+      image: grafana/grafana:11.2.0
+      securityContext:
+        runAsUser: 472
+        runAsGroup: 472
+      envFrom:
+        - secretRef:
+            name: grafana-admin
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          # Start grafana on the restored grafana.db and stop it on exit.
+          /usr/share/grafana/bin/grafana server --homepath /usr/share/grafana \
+              >/tmp/grafana.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+
+          # Wait for health (up to 120 s).
+          for i in $(seq 1 120); do
+            curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          # grafana.db opened and migrated.
+          curl -fsS http://127.0.0.1:3000/api/health | grep -q '"database": *"ok"'
+
+          # Canary dashboard via API (also proves the admin credentials work).
+          curl -fsS -u "admin:$GF_SECURITY_ADMIN_PASSWORD" \
+              http://127.0.0.1:3000/api/dashboards/uid/bret-canary \
+              | grep -q '"title": *"bret-canary"'
+
+  volumes: []

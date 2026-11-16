@@ -22,7 +22,7 @@ Kopiur into a scratch volume. It runs your check in a throwaway pod. Then it rec
   WordPress + MariaDB example.
 - [Concepts](docs/concepts.md): what the operator does and the rules it follows.
 - [Checks](docs/checks.md): how to write a check. App drafts are in
-  [checks/](checks/INDEX.md).
+  [checks/](checks/README.md).
 - [API reference](docs/reference/api.md): generated from the Go types.
 
 ## Install

@@ -68,7 +68,7 @@ Rules for backups and restore tests.
 - The provider tools read object storage credentials, not the operator. The operator reads
   backup metadata only.
 - Pin tool and image versions. Use pinned image tags in checks. Check tags marked unverified in
-  [checks/INDEX.md](../checks/INDEX.md) need a test run before use.
+  [checks/README.md](../checks/README.md) need a test run before use.
 - Kopiur is alpha. Upstream issue `kopiur#233` affects restores. Review its results with care.
 
 ## Data apps

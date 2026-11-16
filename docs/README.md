@@ -62,7 +62,7 @@ Each box is one step. The arrows show the order of work from your objects to the
 | Document | Content |
 |---|---|
 | [reference/api.md](reference/api.md) | Generated field reference for all three kinds. Do not edit by hand. |
-| [checks/INDEX.md](../checks/INDEX.md) | Catalog of app checks, their volumes, checks and test status. |
+| [checks/README.md](../checks/README.md) | Catalog of app checks, their volumes, checks and test status. |
 | [best-practices.md](best-practices.md) | Rules for backups and restore tests. |
 | [data-and-database.md](data-and-database.md) | Apps that have files and a database. Keep them in one restore point. |
 | [troubleshooting.md](troubleshooting.md) | Known errors and their fixes. |

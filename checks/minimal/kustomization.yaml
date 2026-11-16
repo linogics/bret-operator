@@ -1,0 +1,5 @@
+# The RestoreCheck only. The seed is test data for hack/check-test.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - restorecheck.yaml
