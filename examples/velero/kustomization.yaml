@@ -1,0 +1,9 @@
+# WordPress backed up with Velero. Apply with: kubectl apply -k examples/velero -n <namespace>
+# Velero needs no objects in the app namespace. Take the backup with the velero CLI:
+#   velero backup create wordpress-1 --include-namespaces <namespace> --snapshot-move-data \
+#     --labels velero.io/schedule-name=wordpress --wait
+# A Velero Schedule named wordpress sets the same label on every Backup it creates.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../wordpress

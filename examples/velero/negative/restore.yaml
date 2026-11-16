@@ -1,0 +1,14 @@
+# Negative test: the check reads html and mysql, but this Restore only restores html.
+# Expected: phase Failed, reason SourceMissing.
+apiVersion: bret.linogics.io/v1alpha1
+kind: Restore
+metadata:
+  name: wordpress-negative
+spec:
+  provider: velero
+  sources:
+    - sourcePVC: html
+      backupRef:
+        name: wordpress-1
+  restoreCheckRef:
+    name: wordpress

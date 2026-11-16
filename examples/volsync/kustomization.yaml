@@ -1,0 +1,7 @@
+# WordPress backed up with VolSync. Apply with: kubectl apply -k examples/volsync -n <namespace>
+# Needs the Secrets restic-html and restic-mysql first (see docs/providers/volsync.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../wordpress
+  - backup.yaml
