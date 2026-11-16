@@ -64,7 +64,7 @@ Files plus Postgres, two PVCs.
 - Files: `/var/www/html/data`. The rows that say which files exist and their sizes are in
   `oc_filecache` in Postgres.
 - Restore: two sources, `html` and `pgdata`, in one `Restore` or `RestoreTest`. Example:
-  [examples/restoretest.yaml](../examples/restoretest.yaml).
+  [examples/kopiur/restoretest.yaml](../examples/kopiur/restoretest.yaml).
 - Repair if drift happens: `occ files:scan` can fix listings but may drop or duplicate
   entries.
 - Check (`checks/nextcloud.yaml`): `occ status` shows installed, `occ integrity:check-core`

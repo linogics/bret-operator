@@ -1,7 +1,7 @@
 # Installation
 
 This page installs the bret CRDs and the manager. Install a backup tool first. See
-[backup-providers.md](backup-providers.md).
+[providers/](providers/README.md).
 
 ## Requirements
 
@@ -137,6 +137,15 @@ Server-side apply avoids the size limit on the `last-applied` annotation for lar
 - The keys of the `bret.linogics.io/mover-uid` annotation are now `sourcePVC` values. Old keys
   are ignored without an error, and the mover falls back to the `runAsUser` of the container.
 - `RestoreTest` `afterBackup` watermarks reset once. They moved to `status.lastHandledBackups`.
+
+### Upgrading to RestoreTest for all providers
+
+- A Velero `Restore` source needs `sourcePVC`, like the other providers. List one source per
+  PVC, all with the same `backupRef`.
+- The Velero selectors moved from `sources[].labelSelector` and `sources[].orLabelSelectors` to
+  `spec.velero.labelSelector` and `spec.velero.orLabelSelectors`.
+- `RestoreTest` `status.pendingBackups` changed from a map to a list of `{sourcePVC, name}`
+  entries, like `lastHandledBackups`. Recreate every `RestoreTest` that has a queued run.
 
 ## Uninstalling
 

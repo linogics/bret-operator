@@ -1,7 +1,7 @@
 # Concepts
 
 This page explains what bret does and the rules it follows. The schema is in
-[reference/api.md](reference/api.md). Behavior marked **planned** is design. It is not yet in the code.
+[reference/api.md](reference/api.md).
 
 ## The problem
 
@@ -39,85 +39,19 @@ It does not:
 
 ## Providers
 
-| Provider | Native object created | Restore done when | Backup done when |
+| Provider | Backup the operator reads | Native object created | Restore done when |
 |---|---|---|---|
-| `velero` | `velero.io/v1` `Restore` | `status.phase` is `Completed`, `PartiallyFailed`, `Failed` or `FailedValidation` | planned: `Backup` `status.phase` is `Completed` |
-| `volsync` | `volsync.backube/v1alpha1` `ReplicationDestination` with a manual trigger | `status.latestImage.kind` is `PersistentVolumeClaim` | planned: `ReplicationSource` `status.lastSyncTime` changes |
-| `kopiur` (alpha) | `kopiur.home-operations.com/v1alpha1` `Restore` | `status.phase` is `Completed` and condition `Ready` is `True` | `Snapshot` `status.phase` is `Succeeded` |
+| `kopiur` (alpha) | `Snapshot`, phase `Succeeded`; one PVC each | `kopiur.home-operations.com/v1alpha1` `Restore` | `status.phase` is `Completed` and condition `Ready` is `True` |
+| `volsync` | `ReplicationSource`, its `status.lastSyncTime`; one PVC each | `volsync.backube/v1alpha1` `ReplicationDestination` with a manual trigger, pinned with `restoreAsOf` | `status.latestImage.kind` is `PersistentVolumeClaim` |
+| `velero` | `Backup` in the Velero namespace, phase `Completed`; every PVC of the namespace | `velero.io/v1` `Restore` into a scratch namespace | `status.phase` is `Completed`, `PartiallyFailed`, `Failed` or `FailedValidation` |
 
-Kopiur is alpha. Setup steps are in
-[backup-providers.md](backup-providers.md).
+Every source names its `sourcePVC`, for all three. Setup, the namespaces each tool uses, and how
+the backups are picked are on the tool pages: [Kopiur](providers/kopiur.md),
+[VolSync](providers/volsync.md), [Velero](providers/velero.md).
 
 Enable providers in the Helm chart with `providers.<name>.enabled`. Kopiur is on by
-default. Velero and VolSync are off by default. A `Restore` for a disabled provider fails with
-reason `ProviderUnsupported`.
-
-### Velero
-
-The diagram shows the three namespaces of a Velero restore and what lives in each. Here the
-`Restore` is in the namespace `nextcloud`.
-
-```text
-┌ velero ───────────────┐   ┌ nextcloud (your ns) ───┐
-│ Backup      (read)    │   │ RestoreTest            │
-│ Restore     (created) │◄──│ Restore                │
-└──────────┬────────────┘   │ RestoreCheck           │
-           │                └───────────┬────────────┘
-           ▼                            │ copies pod-security labels
-┌ bret-scratch-<hash> ──────────────────▼────────────┐
-│ restored PVC + PV   (only those of "nextcloud")    │
-│ check pod           + copied Secrets, ConfigMaps   │
-└────────────────────────────────────────────────────┘
-  hash = first 12 hex of sha256("<namespace>/<name>")
-```
-
-- The Velero namespace is `providers.velero.namespace`, default `velero`. The chart passes it to
-  the operator as `VELERO_NAMESPACE`.
-- The Velero `Restore` sets `includedNamespaces` to the `Restore` namespace. So no other namespace
-  of the backup is restored.
-- The hash covers the namespace. So equal `Restore` names in two namespaces never share data.
-- The operator copies the `pod-security.kubernetes.io/*` labels before the check pod starts. The
-  pod then runs under the same Pod Security rules as in your namespace.
-- Velero restores at the original size. A Velero source has no `size`, `autoExpand` or `storageClassName`.
-- Velero restores the PVCs that match the source's label selector. See [Which PVC gets restored](#which-pvc-gets-restored).
-- The operator copies the Secrets and ConfigMaps that the check names in `imagePullSecrets`, `env`
-  and `envFrom` from your namespace into the scratch namespace, before the check pod starts. The
-  check then reads the same values as with Kopiur and VolSync. The copies go when the scratch
-  namespace is deleted. A required one that is missing ends the `Restore` as `Failed` with
-  `CheckRefMissing`. An `optional: true` reference that is missing is skipped.
-- Pull secrets of the `default` ServiceAccount are not copied. With Velero, list the pull secret
-  in the check's `imagePullSecrets`.
-
-A check for Velero must not set any of these. Such a check fails with `ProviderUnsupported`:
-
-- `serviceAccountName`
-- a configMap, secret, projected or persistentVolumeClaim volume
-- a hostPath volume
-
-### VolSync
-
-The diagram shows where the operator reads the backup settings, and what it creates in the
-`Restore` namespace. The last line is the order in which it picks the mover UID.
-
-```text
-┌ backup namespace ─────────┐      ┌ Restore namespace ───────────┐
-│ ReplicationSource         │      │ repository Secret (must be   │
-│   restic.repository ──────┼─────►│   here)                      │
-│   sourcePVC ──────────────┼─────►│ ReplicationDestination       │
-└───────────────────────────┘      │ scratch PVC ─► check pod     │
- backupRef.namespace,              └──────────────────────────────┘
- else the Restore namespace
-
-mover UID:  annotation bret.linogics.io/mover-uid ─► first container runAsUser ─► 65534
-```
-
-- The `ReplicationDestination` uses a restic mover.
-- The reason `RepositoryMissing` is set when the `ReplicationSource` has no
-  `spec.restic.repository`, or when the Secret is not in the `Restore` namespace.
-- The annotation and `runAsUser` are read from the check.
-- The annotation value is a JSON map of `sourcePVC` to UID, one UID per restored volume.
-  A volume without a key uses the first container's `runAsUser`. A plain number such as `"999"` is a parse
-  error. Example: `bret.linogics.io/mover-uid: '{"html": 33, "pgdata": 999}'`.
+default. Velero and VolSync are off by default. A `Restore` or `RestoreTest` for a disabled
+provider stops with reason `ProviderUnsupported`.
 
 ## Which PVC gets restored
 
@@ -135,12 +69,13 @@ RestoreCheck.restoredVolumes[].sourcePVC ◄──── same set ────�
 |---|---|---|---|
 | `kopiur` | The PVC in one `Snapshot`. One `Snapshot` holds one PVC. | `<restore>-<sourcePVC>` | The `Restore` namespace. |
 | `volsync` | The PVC of one `ReplicationSource`. | `<restore>-<sourcePVC>` | The `Restore` namespace. |
-| `velero` | Every PVC of the `Backup` that the label selector matches. One source only. | The source PVC name, for example `html` and `pgdata`. | `bret-scratch-<hash>`. |
+| `velero` | Its `sourcePVC` from the one `Backup` that all sources name. `spec.velero` can narrow the restore with label selectors. | The source PVC name, for example `html` and `pgdata`. | `bret-scratch-<hash>`. |
 
 - A Kopiur or VolSync claim name is `<restore>-<sourcePVC>`. When that is longer than 63
   characters, the operator shortens it and adds a hash.
-- Velero has no name filter. It matches the labels that are stored in the backup, so label each
-  app PVC before the backup. `labelSelector` and `orLabelSelectors` are exclusive.
+- Velero restores all PVCs of the `Restore` namespace from the `Backup`. The optional selectors
+  in `spec.velero` match the labels stored in the backup. `labelSelector` and `orLabelSelectors`
+  are exclusive.
 - One restore reads all sources. The check pod mounts every restored claim at the `mountPath` of
   its `sourcePVC`.
 
@@ -152,8 +87,8 @@ condition is `False` with that reason, a Warning Event is written, and no check 
   check has no source, or a source has no volume.
 - `SourceMismatch` (Kopiur and VolSync): the backup holds another PVC than the `sourcePVC` of its
   source. For example, `html` points at the `Snapshot` of `pgdata`.
-- `RestoredVolumeMissing` (Velero): a `sourcePVC` of the check was not restored. The selector did
-  not match it, or the backup does not contain it.
+- `RestoredVolumeMissing` (Velero): a `sourcePVC` of the `Restore` was not restored. The selector
+  did not match it, or the backup does not contain it.
 - `CheckRefMissing` (Velero): a Secret or ConfigMap that the check needs is not in the `Restore`
   namespace, so the operator cannot copy it into the scratch namespace.
 
@@ -335,5 +270,5 @@ Namespaces:
   in the scratch namespace.
 - With Velero on, the operator can read and create Secrets and ConfigMaps in every namespace. It
   copies the ones a check names into the scratch namespace, which is not watched.
-- **Planned:** Velero backups live in the Velero namespace (`velero` by default). The operator reads
+- Velero backups live in the Velero namespace (`velero` by default). The operator reads
   backup objects there. In namespaced mode, this is the one cross-namespace read it needs.

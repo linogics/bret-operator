@@ -87,30 +87,32 @@ Custom paths:
 ```bash
 hack/check-test/roundtrip.sh minimal \
   hack/check-test/seeds/minimal.yaml \
-  examples/restorecheck-minimal.yaml
+  checks/minimal.yaml
 ```
 
 ## Round trip through the operator
 
-`roundtrip.sh` skips the operator. `operator-roundtrip.sh` drives it for real:
+`roundtrip.sh` skips the operator. `operator-roundtrip.sh` drives it for real with the WordPress
+example of one tool, from the repo root:
 
 ```bash
-hack/check-test/operator-roundtrip.sh kopiur nextcloud
-NEGATIVE=1 hack/check-test/operator-roundtrip.sh velero nextcloud
+hack/check-test/operator-roundtrip.sh kopiur
+hack/check-test/operator-roundtrip.sh velero negative
 ```
 
-Needs the operator running with the provider enabled, and Kopiur, VolSync or Velero (with data
-mover) installed. Namespace `bpo-<provider>-<app>`; Velero lives in `VELERO_NS` (default `velero`).
+Needs the operator running with the provider enabled, the tool installed (Velero with the node
+agent), and the S3 endpoint of the kind dev cluster. The namespace is `bret-<tool>` (`NS`), Velero
+lives in `VELERO_NS` (default `velero`). `KEEP=1` keeps the namespace.
 
-1. Seed the PVCs. Wait for the `seed` pod.
-2. Back up every PVC: Kopiur one `SnapshotPolicy` and `Snapshot` each; VolSync one manual
-   `ReplicationSource` each, wait `lastSyncTime`; Velero label the PVCs
-   `bret.linogics.io/test=<app>` and `velero backup create --snapshot-move-data`.
-3. Apply the check and a `Restore` (one source per PVC; Velero one source with `labelSelector`).
-4. Wait for `Succeeded`, `Failed` or `Canceled`. Print the phase, the Ready reason and the logs.
-5. Exit 0 only when the result matches. `NEGATIVE=1` needs two or more PVCs. Kopiur and VolSync
-   omit the last source and expect `Failed` with `SourceMissing`. Velero labels only the first PVC
-   and expects `Failed` with `RestoredVolumeMissing`.
+1. Recreate the namespace, create the S3 Secrets with `kubectl create secret`, and
+   `kubectl apply -k examples/<tool>`. Wait for the Deployments and the `seed` Job.
+2. Back up both PVCs: Kopiur applies `snapshot.yaml`; VolSync patches a manual trigger into
+   both `ReplicationSources`; Velero runs `velero backup create wordpress-1 --snapshot-move-data`.
+3. Without `negative`: apply `restore.yaml` and wait for `Succeeded`, then apply
+   `restoretest.yaml`, set the run-now annotation, and wait for `lastRun.result: Succeeded`.
+4. With `negative`: apply `negative/restore.yaml` (only `html`) and wait for `Failed`. It prints
+   the Ready reason, `SourceMissing`.
+5. Exit 0 and print `PASS` only when every wait matched.
 
 ## Writing a seed
 

@@ -4,49 +4,45 @@ A `RestoreTest` says what to restore, when, how often to retry, and what to keep
 explains each field with an example. The complete field list is in
 [reference/api.md](reference/api.md).
 
-**Status:** the controller implements the schedule, the after-backup and manual triggers, the
-overlap policy and the retries. An end-to-end run on a live cluster is not yet verified.
-
 A `RestoreTest` name can have at most 50 characters. The names of its `Restore` objects add up to 13 characters and must fit a 63-character label value.
 
 ## A complete example
 
-Taken from [examples/restoretest.yaml](../examples/restoretest.yaml):
+The Kopiur WordPress example, [examples/kopiur/restoretest.yaml](../examples/kopiur/restoretest.yaml).
+The same test for VolSync and Velero differs only in `provider`, the `backupSelector` and the
+scratch volume fields: see [providers/](providers/README.md).
 
 ```yaml
+# RestoreTest: restore the newest Kopiur Snapshot of each PVC and run the check.
+# Each backupSelector matches Snapshot labels in this namespace.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
-  name: nextcloud-nightly
-  namespace: nextcloud
+  name: wordpress
 spec:
   provider: kopiur
   sources:
     - sourcePVC: html
       backupSelector:
         labels:
-          app.kubernetes.io/name: nextcloud-html
-      storageClassName: fast-ssd
-      size: 20Gi
-    - sourcePVC: pgdata
+          app.kubernetes.io/name: wordpress-html
+      storageClassName: csi-hostpath-sc
+    - sourcePVC: mysql
       backupSelector:
         labels:
-          app.kubernetes.io/name: nextcloud-pgdata
-      storageClassName: fast-ssd
-      size: 10Gi
+          app.kubernetes.io/name: wordpress-mysql
+      storageClassName: csi-hostpath-sc
   restoreCheckRef:
-    name: nextcloud
+    name: wordpress
   triggers:
-    cron: "17 3 * * *"
+    cron: "17 3 * * *"   # 03:17 UTC every day.
     afterBackup:
-      delay: 30m
-    manual: true
+      delay: 30m         # Also 30 minutes after every source has a new backup.
+    manual: true         # On demand with the bret.linogics.io/run-now annotation.
   restoreWindow: 45m
   retries:
-    count: 2
+    count: 1
     backoff: 10m
-  keepOnFailure: true
-  overlapPolicy: Skip
 ```
 
 ## Fields
@@ -54,11 +50,10 @@ spec:
 ### provider
 
 One of `velero`, `volsync`, `kopiur`. The tool that made the backups. The operator uses the same
-tool to restore them. Setup for each tool: [backup-providers.md](backup-providers.md).
+tool to restore them. Setup for each tool: [providers/](providers/README.md).
 
-The `RestoreTest` controller runs for `kopiur` only. A test with another provider gets the
-condition reason `ProviderUnsupported` and starts no run. A `Restore` that you create by hand works
-with all three providers.
+A test for a provider that is disabled in the chart gets the condition reason
+`ProviderUnsupported` and starts no run.
 
 ### sources
 
@@ -87,10 +82,18 @@ Picks which backups one source uses. Set either:
 
 Set at least one. The API rejects an empty selector.
 
-The operator looks up Kopiur `Snapshot` objects in the namespace of the `RestoreTest`. Only
-`Snapshot` objects in phase `Succeeded` count. `name` matches the `Snapshot` name. `labels` must all
-match the `Snapshot` labels. One `Snapshot` holds one PVC, so use one selector per source. Each run
-restores the newest backup of every source.
+What `name` and `labels` select depends on the provider:
+
+| Provider | Backup object | `name` | `labels` |
+|---|---|---|---|
+| kopiur | `Snapshot` in the test namespace, phase `Succeeded` | one Snapshot | Snapshots with these labels |
+| volsync | `ReplicationSource` in the test namespace, with `lastSyncTime` | the ReplicationSource | must match exactly one ReplicationSource |
+| velero | `Backup` in the Velero namespace, phase `Completed`, covering the test namespace | one Backup | Backups with these labels, e.g. `velero.io/schedule-name` |
+
+Each run restores the newest backup of every source. For Velero every source must have the same
+`backupSelector`, because one `Backup` holds all PVCs. For VolSync the run is pinned to the picked
+sync time with `restoreAsOf`. The details are under "How bret picks backups" on each tool page in
+[providers/](providers/README.md).
 
 If a source has no matching backup, the test sets the reason `BackupNotFound`. The message names
 the sources without a backup.
@@ -120,7 +123,7 @@ Use any combination of three triggers. A run starts when any one of them fires.
 A manual run needs no CLI:
 
 ```bash
-kubectl annotate restoretest nextcloud-nightly bret.linogics.io/run-now="$(date +%s)" --overwrite
+kubectl -n wordpress annotate restoretest wordpress bret.linogics.io/run-now="$(date +%s)" --overwrite
 ```
 
 The flow from a trigger to a run result is in [concepts.md](concepts.md#trigger-flow).
@@ -198,7 +201,7 @@ Use `Replace` only when the newest backup must win.
 Read it with:
 
 ```bash
-kubectl -n nextcloud get restoretest nextcloud-nightly -o jsonpath='{.status.lastRun}{"\n"}'
+kubectl -n wordpress get restoretest wordpress -o jsonpath='{.status.lastRun}{"\n"}'
 ```
 
 ## Recipes

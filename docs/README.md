@@ -52,7 +52,7 @@ Each box is one step. The arrows show the order of work from your objects to the
 1. [concepts.md](concepts.md): what the operator does, the restore test lifecycle, the rules.
 2. [getting-started.md](getting-started.md): tutorial from an empty cluster to a first check.
 3. [installation.md](installation.md): install and upgrade the operator (Helm or manifests).
-4. [backup-providers.md](backup-providers.md): set up Velero, VolSync or Kopiur so restores work.
+4. [providers/](providers/README.md): set up Velero, VolSync or Kopiur so restores work.
 5. [checks.md](checks.md): write a `RestoreCheck` check.
 6. [restoretest-guide.md](restoretest-guide.md): schedule and tune restore tests.
 7. [testing-checks.md](testing-checks.md): run a check by hand before the operator does it.

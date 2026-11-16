@@ -1,63 +1,12 @@
 # Troubleshooting
 
 Each entry gives the exact text you see, the cause, and the fix. Errors were seen on kind with
-Kubernetes 1.37, Velero 1.18.4, VolSync 0.17.0, Kopiur 0.10.21 and PostgreSQL 17.12.
+Kubernetes 1.37, Velero 1.18, VolSync 0.17.0, Kopiur 0.11.0 and PostgreSQL 17.12.
 
 ## Backups and restores
 
-### Velero backup is gone after the source cluster is lost
-
-- **Symptom:** the restore works only while the snapshot still exists in the cluster.
-- **Cause:** the backup was created without data movement. Velero kept the volume data as a
-  cluster snapshot.
-- **Fix:** create backups with `velero backup create ... --snapshot-move-data`. See
-  [backup-providers.md](backup-providers.md#velero).
-
-### Restore warning `ConfigMap:kube-root-ca.crt already exists`
-
-- **Cause:** every namespace already has this ConfigMap.
-- **Fix:** none needed. The warning is harmless.
-
-### Restored Deployment holds the volume, check pod stays Pending
-
-- **Symptom:** the check pod waits with a volume attach error for an RWO PVC.
-- **Cause:** a Velero restore brings back a Deployment that mounts the restored volume. It starts
-  and holds the RWO volume.
-- **Fix:** scale restored workloads to zero, or delete them, before the check runs.
-
-### Kopiur restore: `MissingCredentialsSecret`
-
-- **Cause:** the `Restore` is in a different namespace from the repository, and the credentials
-  Secret is not there.
-- **Fix:** copy the Secret into the restore namespace. See
-  [backup-providers.md](backup-providers.md#restore).
-
-### Kopiur snapshot: `PermissionDenied`, `cannot create iterator: unable to read directory`
-
-- **Symptom:** `kopia snapshot create ... permission denied` on a database directory.
-- **Cause:** the snapshot mover runs as UID 65532 by default. The data directory is owned by the
-  database UID with mode 0700.
-- **Fix:** set `spec.mover.securityContext.runAsUser` on the `SnapshotPolicy` to the database UID
-  (999 for Postgres 17).
-
-### Kopiur snapshot stays `Pending`, `WaitingForStagedPvcBind`
-
-- **Symptom:** the condition says the staged PVC is waiting to bind. `kubectl get pvc` shows the
-  staged PVC `Bound` a few seconds later.
-- **Cause:** a reconcile lag. The controller retries on its own.
-- **Fix:** wait. If it stays Pending past the staging deadline in the condition message, read the
-  controller logs in `kopiur-system`.
-
-### VolSync mover: `permission denied` on the data directory
-
-- **Cause:** the mover runs as the default non-database UID.
-- **Fix:** set `moverSecurityContext` in the `ReplicationSource` and `ReplicationDestination` to
-  the database UID.
-
-### VolSync: `permission denied` after changing the mover UID
-
-- **Cause:** the cache PVC was created by the old mover UID.
-- **Fix:** delete the cache PVC. VolSync creates a new one.
+Errors of a backup tool are on its page: [Kopiur](providers/kopiur.md#6-troubleshooting),
+[VolSync](providers/volsync.md#6-troubleshooting), [Velero](providers/velero.md#6-troubleshooting).
 
 ## Checks
 
@@ -94,8 +43,9 @@ Fix the cause first, or every retry fails the same way.
 - **`SourceMismatch`** (Kopiur, VolSync): the backup holds another PVC than the `sourcePVC` of its
   source. Point the source at the backup of that PVC. A Kopiur `SnapshotPolicy` with several `pvc:`
   entries backs up only the first one. Use one policy per PVC or `pvcSelector`.
-- **`RestoredVolumeMissing`** (Velero): a `sourcePVC` of the check was not restored. The selector
-  did not match the PVC, or the backup lacks it. Label the PVC and take a new backup.
+- **`RestoredVolumeMissing`** (Velero): a `sourcePVC` of the `Restore` was not restored. The
+  `spec.velero` selector did not match the PVC, or the backup lacks it. Label the PVC and take a
+  new backup.
 - **`CheckRefMissing`** (Velero): a Secret or ConfigMap that the check names in
   `imagePullSecrets`, `env` or `envFrom` is not in the `Restore` namespace. Create it there, or
   mark an env reference `optional: true`.
@@ -109,12 +59,13 @@ Fix the cause first, or every retry fails the same way.
     the object. Add the namespace to the chart value. Or `spec.triggers` is not set, or no trigger
     is due yet. Then wait, or start a manual run. See
     [restoretest-guide.md](restoretest-guide.md#triggers).
-  - `ProviderUnsupported`: `spec.provider` is not `kopiur`, or the Kopiur provider is disabled in
-    the chart. The `RestoreTest` controller runs for Kopiur only. For Velero and VolSync, create a
-    `Restore` by hand.
-  - `BackupNotFound`: a source has no `Succeeded` backup that matches its `backupSelector`. The
-    message names those sources. Check the labels, and that the backups are in the namespace of
-    the `RestoreTest`.
+  - `ProviderUnsupported`: the provider of `spec.provider` is disabled in the chart
+    (`providers.<name>.enabled`).
+  - `BackupNotFound`: a source has no finished backup that matches its `backupSelector`. The
+    message names those sources. What counts as finished, and where the operator looks, is under
+    "How bret picks backups" on the tool page in [providers/](providers/README.md).
+  - `BackupSelectorAmbiguous` (VolSync): the `labels` of a source match more than one
+    `ReplicationSource`. Use `name`, or labels that one `ReplicationSource` carries.
   - A source mismatch is not a `Ready` reason of the `RestoreTest`. The run ends `Failed` and
     `status.lastRun.reason` carries the `SourceMissing` message of the `Restore` (see above).
 

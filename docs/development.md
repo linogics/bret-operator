@@ -48,7 +48,7 @@ Install the CSI hostpath driver for snapshots. Tested with csi-driver-host-path 
 external-snapshotter v8.7.0. Create a `VolumeSnapshotClass` named `csi-hostpath-snapclass` and a
 `StorageClass` named `csi-hostpath-sc`.
 
-Install the backup tools you test with. See [backup-providers.md](backup-providers.md). The
+Install the backup tools you test with. See [providers/](providers/README.md). The
 check harness expects an S3-compatible endpoint named `versitygw.storage.svc.cluster.local:7070`
 with buckets `kopiur`, `velero` and `volsync`. Versity Gateway with the posix backend works for this.
 
@@ -87,7 +87,7 @@ Check tests do not run in CI. They need a cluster and several gigabytes of image
 | `charts/bret-operator/` | Helm chart. RBAC is copied from `config/`. Depends on `charts/bret-operator-crds/`, which holds the CRDs. |
 | `charts/bret-operator-crds/` | Helm chart with the CRDs only. Copied from `config/crd/bases/`. |
 | `checks/` | Check drafts for each app. See `checks/INDEX.md`. |
-| `examples/` | Minimal check, RestoreTest and one Restore example per provider. |
+| `examples/` | WordPress + MariaDB (`wordpress/`) and per tool (`kopiur/`, `volsync/`, `velero/`) the backup setup, a `Restore`, a `RestoreTest` and a negative `Restore`. |
 | `hack/check-test/` | Check harness and per-app seeds. |
 | `hack/helm/sync_rbac.py` | Copies RBAC rules into the chart. |
 | `docs/` | This documentation. `docs/reference/api.md` is generated. |

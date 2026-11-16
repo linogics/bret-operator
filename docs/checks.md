@@ -10,8 +10,8 @@ not read logs.
 You may use any image and any language: bash, Python, a Go binary, `psql`, `php occ`, `mysqlcheck`,
 or anything else that exits with a code. The check runs in its own image, not in the application image.
 
-Start with [examples/restorecheck-multi.yaml](../examples/restorecheck-multi.yaml): an app with
-two volumes. [examples/restorecheck-minimal.yaml](../examples/restorecheck-minimal.yaml) is the
+Start with [examples/wordpress/restorecheck.yaml](../examples/wordpress/restorecheck.yaml): an app with
+two volumes. [checks/minimal.yaml](../checks/minimal.yaml) is the
 short form with one volume. Both work.
 
 ## Anatomy
@@ -236,7 +236,7 @@ Rules:
 - With Velero, the operator copies only Secrets and ConfigMaps named in `imagePullSecrets`, `env`
   and `envFrom`. Secret and ConfigMap volumes are rejected with `ProviderUnsupported`, and so are
   pull secrets that only the `default` ServiceAccount lists. The full list of what a Velero check
-  must not set is in [concepts.md](concepts.md#velero).
+  must not set is in [providers/velero.md](providers/velero.md#3-write-the-check).
 
 ## Pod security
 
@@ -268,7 +268,7 @@ Two rules for database checks:
   `chmod 0700 "$PGDATA"`. Your data must live in `<mount>/pgdata`, which is the `PGDATA` in the
   check.
 
-The backup side needs the same UID. See [backup-providers.md](backup-providers.md) for the
+The backup side needs the same UID. See [providers/](providers/README.md) for the
 mover security context of each tool.
 
 ## Images and tags
@@ -284,10 +284,10 @@ Read [testing-checks.md](testing-checks.md). Short version:
 
 ```bash
 # Run a check against restored PVCs you already have
-hack/check-test/check.sh examples/restorecheck-minimal.yaml restore-test check-minimal data=my-restored-pvc
+hack/check-test/check.sh checks/minimal.yaml restore-test check-minimal data=my-restored-pvc
 
 # Or run the whole round trip: seed, back up with Kopiur, restore, check
-hack/check-test/roundtrip.sh minimal hack/check-test/seeds/minimal.yaml examples/restorecheck-minimal.yaml
+hack/check-test/roundtrip.sh minimal hack/check-test/seeds/minimal.yaml checks/minimal.yaml
 ```
 
 ## Catalog
