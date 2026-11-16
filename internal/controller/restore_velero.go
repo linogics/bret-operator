@@ -32,6 +32,7 @@ const (
 
 var (
 	veleroRestoreGVK = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "Restore"}
+	veleroBackupGVK  = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "Backup"}
 )
 
 // restoreHash is a short hash of namespace/name. The hash keeps the names of objects outside the Restore
@@ -46,6 +47,9 @@ func restoreHash(restore *restorev1alpha1.Restore) string {
 func veleroName(restore *restorev1alpha1.Restore) string {
 	return "bret-" + restoreHash(restore)
 }
+
+// veleroPhaseCompleted is the phase of a Velero Backup or Restore that finished without errors.
+const veleroPhaseCompleted = "Completed"
 
 // veleroNS is the Velero install namespace.
 func (r *RestoreReconciler) veleroNS() string {
@@ -289,7 +293,7 @@ func (r *RestoreReconciler) reconcileVelero(
 	setRunning(restore)
 
 	switch phase {
-	case "Completed":
+	case veleroPhaseCompleted:
 		return r.checkVelero(ctx, restore, bp)
 	case "Failed", "PartiallyFailed", "FailedValidation":
 		r.finish(restore, restorev1alpha1.RestorePhaseFailed, reasonRestoreFailed, "Velero restore "+phase)

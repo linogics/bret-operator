@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -36,6 +37,10 @@ func (r *RestoreTestReconciler) completedBackups(
 	case restorev1alpha1.ProviderVolSync:
 		backups, err = r.listBackups(ctx, replicationSourceGVK, test.Namespace, func(list []unstructured.Unstructured) ([]completedBackup, error) {
 			return volsyncBackups(list, sel)
+		})
+	case restorev1alpha1.ProviderVelero:
+		backups, err = r.listBackups(ctx, veleroBackupGVK, r.veleroNS(), func(list []unstructured.Unstructured) ([]completedBackup, error) {
+			return veleroBackups(list, sel, test.Namespace), nil
 		})
 	default:
 		return nil, nil
@@ -125,6 +130,52 @@ func volsyncBackups(list []unstructured.Unstructured, sel restorev1alpha1.Backup
 	}
 
 	return backups, nil
+}
+
+// veleroBackups keeps Completed Velero Backups that cover the namespace. Completion is status.completionTimestamp.
+func veleroBackups(list []unstructured.Unstructured, sel restorev1alpha1.BackupSelector, namespace string) []completedBackup {
+	var backups []completedBackup
+
+	for i := range list {
+		obj := &list[i]
+
+		phase, _, _ := unstructured.NestedString(obj.Object, "status", "phase")
+		if phase != veleroPhaseCompleted || !selects(sel, obj) || !coversNamespace(obj, namespace) {
+			continue
+		}
+
+		raw, _, _ := unstructured.NestedString(obj.Object, "status", "completionTimestamp")
+
+		done, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			continue
+		}
+
+		backups = append(backups, completedBackup{name: obj.GetName(), completed: done})
+	}
+
+	return backups
+}
+
+// coversNamespace reports whether a Velero Backup includes the namespace. No includedNamespaces means all.
+func coversNamespace(obj *unstructured.Unstructured, namespace string) bool {
+	excluded, _, _ := unstructured.NestedStringSlice(obj.Object, "spec", "excludedNamespaces")
+	if slices.Contains(excluded, namespace) {
+		return false
+	}
+
+	included, _, _ := unstructured.NestedStringSlice(obj.Object, "spec", "includedNamespaces")
+
+	return len(included) == 0 || slices.Contains(included, "*") || slices.Contains(included, namespace)
+}
+
+// veleroNS is the namespace that holds Velero Backups.
+func (r *RestoreTestReconciler) veleroNS() string {
+	if r.VeleroNamespace == "" {
+		return defaultVeleroNamespace
+	}
+
+	return r.VeleroNamespace
 }
 
 // sortBackups orders backups oldest first, ties by name.

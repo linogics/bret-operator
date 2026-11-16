@@ -149,9 +149,9 @@ func TestVeleroNamesAreUniquePerNamespace(t *testing.T) {
 
 func TestVeleroUsesConfiguredNamespace(t *testing.T) {
 	restore := newTestRestore()
-	r := &RestoreReconciler{VeleroNamespace: "velero-system"}
+	r := &RestoreReconciler{VeleroNamespace: testVeleroNS}
 
-	if got := r.veleroStub(restore).GetNamespace(); got != "velero-system" {
+	if got := r.veleroStub(restore).GetNamespace(); got != testVeleroNS {
 		t.Fatalf("namespace %q, want velero-system", got)
 	}
 

@@ -29,6 +29,7 @@ const (
 	testVolumes       = "volumes"
 	testHourlyCron    = "0 * * * *"
 	testOther         = "other"
+	testVeleroNS      = "velero-system"
 	testSpecKey       = "spec"
 	testPVCKey        = "pvc"
 )
