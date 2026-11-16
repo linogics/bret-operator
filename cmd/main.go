@@ -298,6 +298,7 @@ func main() {
 		APIReader: mgr.GetAPIReader(),
 
 		EnabledProviders: enabledProviders,
+		VeleroNamespace:  os.Getenv("VELERO_NAMESPACE"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RestoreTest")
 		os.Exit(1)

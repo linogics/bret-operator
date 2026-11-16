@@ -475,9 +475,14 @@ func isTerminal(phase restorev1alpha1.RestorePhase) bool {
 
 // providerEnabled reports whether the provider is known and switched on.
 func (r *RestoreReconciler) providerEnabled(p restorev1alpha1.Provider) bool {
+	return providerOn(r.EnabledProviders, p)
+}
+
+// providerOn reports whether p is a known provider and enabled. A nil map enables all of them.
+func providerOn(enabled map[restorev1alpha1.Provider]bool, p restorev1alpha1.Provider) bool {
 	switch p {
 	case restorev1alpha1.ProviderKopiur, restorev1alpha1.ProviderVelero, restorev1alpha1.ProviderVolSync:
-		return r.EnabledProviders == nil || r.EnabledProviders[p]
+		return enabled == nil || enabled[p]
 	}
 
 	return false

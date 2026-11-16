@@ -49,6 +49,11 @@ func newRestoreTestFixture(t *testing.T, test *restorev1alpha1.RestoreTest, objs
 		t.Fatal(err)
 	}
 
+	// newRestoreTestObject selects the Snapshot b1 by name. Seed it unless the test brings its own.
+	if !hasObjectNamed(objs, "b1") {
+		objs = append(objs, namedSnapshot())
+	}
+
 	c := fake.NewClientBuilder().
 		WithScheme(s).
 		WithObjects(append(objs, test)...).
@@ -186,6 +191,21 @@ func (f *testFixture) events() []string {
 func hasEvent(events []string, reason string) bool {
 	for _, e := range events {
 		if strings.Contains(e, " "+reason+" ") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// namedSnapshot is the Succeeded Snapshot b1 that newRestoreTestObject selects by name.
+func namedSnapshot() *unstructured.Unstructured {
+	return newSnapshot("b1", nil, "Succeeded", testStart.Add(-time.Hour))
+}
+
+func hasObjectNamed(objs []client.Object, name string) bool {
+	for _, o := range objs {
+		if o.GetName() == name {
 			return true
 		}
 	}
@@ -360,7 +380,7 @@ func TestRestoreTestQueueStartsPendingRunAfterCurrent(t *testing.T) {
 		t.Fatalf("restores while queued = %d, want 1", n)
 	}
 
-	if got := pendingMap(f.test().Status.PendingBackups)[testDataName]; got != "b1" {
+	if got := pendingMap(f.test().Status.PendingBackups)[testDataName].Name; got != "b1" {
 		t.Fatalf("pendingBackups = %q, want b1", got)
 	}
 
@@ -371,7 +391,7 @@ func TestRestoreTestQueueStartsPendingRunAfterCurrent(t *testing.T) {
 		t.Fatalf("restores after current run ended = %d, want 2", n)
 	}
 
-	if got := pendingMap(f.test().Status.PendingBackups)[testDataName]; got != "" {
+	if got := pendingMap(f.test().Status.PendingBackups)[testDataName].Name; got != "" {
 		t.Errorf("pendingBackups = %q, want empty", got)
 	}
 }
@@ -493,29 +513,74 @@ func TestRestoreTestAfterBackupIgnoresBackupsBeforeCreation(t *testing.T) {
 	}
 }
 
-func TestRestoreTestKopiurDisabled(t *testing.T) {
-	test := newRestoreTestObject()
-	test.Spec.Sources[0].BackupSelector = restorev1alpha1.BackupSelector{Labels: map[string]string{testLabelKey: testLabelValue}}
-	test.Spec.Triggers = &restorev1alpha1.Triggers{AfterBackup: &restorev1alpha1.AfterBackupTrigger{}}
+func TestRestoreTestProviderDisabled(t *testing.T) {
+	for _, p := range []restorev1alpha1.Provider{restorev1alpha1.ProviderKopiur, restorev1alpha1.ProviderVolSync, restorev1alpha1.ProviderVelero} {
+		t.Run(string(p), func(t *testing.T) {
+			test := newRestoreTestObject()
+			test.Spec.Provider = p
+			test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
 
-	snap := newSnapshot("a", map[string]string{testLabelKey: testLabelValue}, "Succeeded",
-		time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC))
+			f := newRestoreTestFixture(t, test)
+			f.r.EnabledProviders = map[restorev1alpha1.Provider]bool{}
+			f.setRunNow("n1")
 
-	f := newRestoreTestFixture(t, test, snap)
-	f.now = time.Date(2026, 11, 15, 10, 20, 0, 0, time.UTC)
-	f.r.EnabledProviders = map[restorev1alpha1.Provider]bool{restorev1alpha1.ProviderVelero: true}
+			res, err := f.r.Reconcile(f.ctx, ctrl.Request{NamespacedName: f.key})
+			if err != nil || res.Requeue || res.RequeueAfter != 0 { //nolint:staticcheck // requeue check
+				t.Fatalf("result = %+v, err = %v, want no requeue", res, err)
+			}
 
-	res, err := f.r.Reconcile(f.ctx, ctrl.Request{NamespacedName: f.key})
-	if err != nil || res.Requeue || res.RequeueAfter != 0 { //nolint:staticcheck // requeue check
-		t.Fatalf("result = %+v, err = %v, want no requeue", res, err)
+			if n := len(f.restores()); n != 0 {
+				t.Fatalf("restores = %d, want 0", n)
+			}
+
+			c := apimeta.FindStatusCondition(f.test().Status.Conditions, readyConditionType)
+			if c == nil || c.Reason != reasonProviderUnsupported || c.Message != "provider "+string(p)+" is disabled" {
+				t.Errorf("condition = %+v, want %s and provider %s is disabled", c, reasonProviderUnsupported, p)
+			}
+		})
 	}
+}
+
+func TestRestoreTestNamedSnapshotMustSucceed(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.Sources[0].BackupSelector = restorev1alpha1.BackupSelector{Name: "running"}
+	test.Spec.Triggers = &restorev1alpha1.Triggers{Manual: true}
+
+	f := newRestoreTestFixture(t, test, newSnapshot("running", nil, "Running", testStart))
+	f.setRunNow("n1")
+	f.run()
 
 	if n := len(f.restores()); n != 0 {
 		t.Fatalf("restores = %d, want 0", n)
 	}
 
-	if reason := testReadyReason(f.test()); reason != reasonProviderUnsupported {
-		t.Errorf("Ready reason = %q, want %s", reason, reasonProviderUnsupported)
+	if got := testReadyReason(f.test()); got != reasonBackupNotFound {
+		t.Errorf("reason = %q, want %s", got, reasonBackupNotFound)
+	}
+}
+
+func TestRestoreTestCopiesVeleroOptions(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Spec.Provider = restorev1alpha1.ProviderVelero
+	test.Spec.Sources[0].RestoreTarget = restorev1alpha1.RestoreTarget{}
+	test.Spec.Velero = &restorev1alpha1.VeleroOptions{LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{testLabelKey: "db"}}}
+	test.Status.PendingRunSource = "queued-x"
+	test.Status.PendingBackups = []restorev1alpha1.HandledBackup{{SourcePVC: testDataName, Name: "b1", CreatedAt: metav1.NewTime(testStart)}}
+
+	f := newRestoreTestFixture(t, test)
+	if err := f.c.Status().Update(f.ctx, test); err != nil {
+		t.Fatal(err)
+	}
+
+	f.run()
+
+	restores := f.restores()
+	if len(restores) != 1 {
+		t.Fatalf("restores = %d, want 1", len(restores))
+	}
+
+	if got := restores[0].Spec.Velero; got == nil || got.LabelSelector.MatchLabels[testLabelKey] != "db" {
+		t.Errorf("spec.velero = %+v, want the selector of the test", got)
 	}
 }
 
@@ -909,7 +974,7 @@ func TestRestoreTestQueueStoresBackups(t *testing.T) {
 	f.run()
 
 	pending := pendingMap(f.test().Status.PendingBackups)
-	if pending[testHTML] != "h1" || pending[testPGData] != "p1" || len(pending) != 2 {
+	if pending[testHTML].Name != "h1" || pending[testPGData].Name != "p1" || len(pending) != 2 {
 		t.Errorf("pendingBackups = %v, want both sources", pending)
 	}
 }

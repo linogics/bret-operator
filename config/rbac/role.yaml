@@ -100,6 +100,14 @@ rules:
 - apiGroups:
   - velero.io
   resources:
+  - backups
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - velero.io
+  resources:
   - restores
   verbs:
   - create
