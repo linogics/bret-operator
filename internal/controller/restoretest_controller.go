@@ -39,11 +39,12 @@ const (
 
 // Event and condition reasons for RestoreTest.
 const (
-	reasonRunSkipped     = "RunSkipped"
-	reasonRunReplaced    = "RunReplaced"
-	reasonRunning        = "Running"
-	reasonBackupNotFound = "BackupNotFound"
-	reasonWaitingBackups = "WaitingForBackups"
+	reasonRunSkipped              = "RunSkipped"
+	reasonRunReplaced             = "RunReplaced"
+	reasonRunning                 = "Running"
+	reasonBackupNotFound          = "BackupNotFound"
+	reasonWaitingBackups          = "WaitingForBackups"
+	reasonBackupSelectorAmbiguous = "BackupSelectorAmbiguous"
 
 	conditionBackupsPending = "BackupsPending"
 	reasonInvalidCron       = "InvalidCron"
@@ -162,7 +163,14 @@ func (r *RestoreTestReconciler) advance(ctx context.Context, test *restorev1alph
 		}
 	}
 
-	return r.runTriggers(ctx, test)
+	result, err := r.runTriggers(ctx, test)
+	if errors.Is(err, errBackupSelectorAmbiguous) {
+		r.blockTest(test, reasonBackupSelectorAmbiguous, err.Error())
+
+		return ctrl.Result{RequeueAfter: snapshotPollInterval}, nil
+	}
+
+	return result, err
 }
 
 // currentRestore returns the Restore of the run in progress. It clears the reference when the Restore is gone.
