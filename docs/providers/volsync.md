@@ -200,7 +200,8 @@ VolSync has no object per backup. The backup is the last sync of a `ReplicationS
   `BackupNotFound`.
 - **Completion time:** `status.lastSyncTime`.
 - **afterBackup:** a run starts when every source has a newer `lastSyncTime` than the one of the
-  last run (`status.lastHandledBackups`).
+  last run (`status.lastHandledBackups`). A sync that finished before the `RestoreTest` was
+  created never starts a run, so a new test waits for the next sync.
 - **Pinning:** each `Restore` source gets `restoreAsOf` = the picked `lastSyncTime`. The
   `ReplicationDestination` then restores the newest restic snapshot at or before that time
   (`spec.restic.restoreAsOf`). A sync that lands during the run, or while a run waits in the

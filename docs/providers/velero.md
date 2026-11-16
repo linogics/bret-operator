@@ -193,7 +193,8 @@ All fields: [restoretest-guide.md](../restoretest-guide.md).
 - **Completion time:** `status.completionTimestamp`. The newest wins; equal times are ordered by
   name.
 - **afterBackup:** a run starts when a newer `Backup` than the one of the last run
-  (`status.lastHandledBackups`) exists. All entries name the same `Backup`.
+  (`status.lastHandledBackups`) exists. All entries name the same `Backup`. A `Backup` that
+  completed before the `RestoreTest` was created never starts a run.
 
 What bret creates. Here the `Restore` is in the namespace `wordpress`:
 

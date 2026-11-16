@@ -112,17 +112,18 @@ The `mover` block is needed for every volume that the default mover UID 65532 ca
 it to the owner of the data: 33 for the WordPress docroot, 999 for MariaDB.
 
 Take one backup by hand with [examples/kopiur/snapshot.yaml](../../examples/kopiur/snapshot.yaml).
-Add a schedule to the `SnapshotPolicy` for regular backups.
+For regular backups, create a `SnapshotSchedule` with a `policyRef` to each policy. Kopiur
+labels every `Snapshot`, manual or scheduled, with `kopiur.home-operations.com/config: <policy>`.
+The `RestoreTest` below selects on that label, so it finds scheduled backups too.
 
 ```yaml
-# One manual Kopiur backup per PVC. A schedule on the SnapshotPolicy creates these too.
-# The labels are what the RestoreTest backupSelector matches.
+# One manual Kopiur backup per PVC. A SnapshotSchedule creates them on a schedule.
+# Kopiur labels every Snapshot with kopiur.home-operations.com/config=<policy>, manual or
+# scheduled. The RestoreTest backupSelector matches that label.
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
   name: html-1
-  labels:
-    app.kubernetes.io/name: wordpress-html
 spec:
   policyRef:
     name: html
@@ -132,8 +133,6 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
   name: mysql-1
-  labels:
-    app.kubernetes.io/name: wordpress-mysql
 spec:
   policyRef:
     name: mysql
@@ -196,7 +195,7 @@ A `RestoreTest` picks the newest `Snapshot` of each source and repeats the test:
 
 ```yaml
 # RestoreTest: restore the newest Kopiur Snapshot of each PVC and run the check.
-# Each backupSelector matches Snapshot labels in this namespace.
+# Each backupSelector matches the policy label Kopiur sets on every Snapshot.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
@@ -207,12 +206,12 @@ spec:
     - sourcePVC: html
       backupSelector:
         labels:
-          app.kubernetes.io/name: wordpress-html
+          kopiur.home-operations.com/config: html
       storageClassName: csi-hostpath-sc
     - sourcePVC: mysql
       backupSelector:
         labels:
-          app.kubernetes.io/name: wordpress-mysql
+          kopiur.home-operations.com/config: mysql
       storageClassName: csi-hostpath-sc
   restoreCheckRef:
     name: wordpress
@@ -239,7 +238,8 @@ All fields: [restoretest-guide.md](../restoretest-guide.md).
 
 - **Object:** Kopiur `Snapshot` in the `RestoreTest` namespace.
 - **`backupSelector.name`:** that one `Snapshot`. **`labels`:** every `Snapshot` with these
-  labels. Use labels that only the `Snapshots` of one PVC carry.
+  labels. Use labels that only the `Snapshots` of one PVC carry, such as
+  `kopiur.home-operations.com/config: <policy>` with one policy per PVC.
 - **Counts when:** `status.phase` is `Succeeded`.
 - **Completion time:** `lastTransitionTime` of the `Ready=True` condition. The newest wins; equal
   times are ordered by name.

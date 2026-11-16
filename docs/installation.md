@@ -144,8 +144,12 @@ Server-side apply avoids the size limit on the `last-applied` annotation for lar
   PVC, all with the same `backupRef`.
 - The Velero selectors moved from `sources[].labelSelector` and `sources[].orLabelSelectors` to
   `spec.velero.labelSelector` and `spec.velero.orLabelSelectors`.
-- `RestoreTest` `status.pendingBackups` changed from a map to a list of `{sourcePVC, name}`
-  entries, like `lastHandledBackups`. Recreate every `RestoreTest` that has a queued run.
+- `RestoreTest` `status.pendingBackups` changed from a map to a list of
+  `{sourcePVC, name, createdAt}` entries, like `lastHandledBackups`. The operator cannot read a
+  `RestoreTest` that still holds the old map, and logs an error for it until you recreate it.
+  Recreate every `RestoreTest` that has a queued run.
+- A `backupSelector.name` must now name a finished backup. Before, the name was used as is, even
+  for a Kopiur `Snapshot` that had not succeeded. Now the test waits with `BackupNotFound`.
 
 ## Uninstalling
 

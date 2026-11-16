@@ -91,14 +91,19 @@ take_backup() {
 	velero)
 		# Backup names are global in Velero. Drop the one of an earlier run.
 		if kubectl -n "$velero_ns" get backup wordpress-1 >/dev/null 2>&1; then
-			velero backup delete wordpress-1 -n "$velero_ns" --confirm
+			velero backup delete wordpress-1 -n "$velero_ns" --confirm \
+				|| return 1
 			kubectl -n "$velero_ns" wait --for=delete backup/wordpress-1 \
-				--timeout="$timeout"
+				--timeout="$timeout" || return 1
 		fi
 
 		velero backup create wordpress-1 -n "$velero_ns" \
 			--include-namespaces "$ns" --snapshot-move-data \
-			--labels velero.io/schedule-name=wordpress --wait
+			--labels velero.io/schedule-name=wordpress --wait || return 1
+
+		# --wait exits 0 on PartiallyFailed too.
+		kubectl -n "$velero_ns" wait --for=jsonpath='{.status.phase}'=Completed \
+			--timeout="$timeout" backup/wordpress-1
 		;;
 	esac
 }

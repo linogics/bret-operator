@@ -14,7 +14,7 @@ scratch volume fields: see [providers/](providers/README.md).
 
 ```yaml
 # RestoreTest: restore the newest Kopiur Snapshot of each PVC and run the check.
-# Each backupSelector matches Snapshot labels in this namespace.
+# Each backupSelector matches the policy label Kopiur sets on every Snapshot.
 apiVersion: bret.linogics.io/v1alpha1
 kind: RestoreTest
 metadata:
@@ -25,12 +25,12 @@ spec:
     - sourcePVC: html
       backupSelector:
         labels:
-          app.kubernetes.io/name: wordpress-html
+          kopiur.home-operations.com/config: html
       storageClassName: csi-hostpath-sc
     - sourcePVC: mysql
       backupSelector:
         labels:
-          app.kubernetes.io/name: wordpress-mysql
+          kopiur.home-operations.com/config: mysql
       storageClassName: csi-hostpath-sc
   restoreCheckRef:
     name: wordpress

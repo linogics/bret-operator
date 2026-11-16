@@ -1,11 +1,10 @@
-# One manual Kopiur backup per PVC. A schedule on the SnapshotPolicy creates these too.
-# The labels are what the RestoreTest backupSelector matches.
+# One manual Kopiur backup per PVC. A SnapshotSchedule creates them on a schedule.
+# Kopiur labels every Snapshot with kopiur.home-operations.com/config=<policy>, manual or
+# scheduled. The RestoreTest backupSelector matches that label.
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
   name: html-1
-  labels:
-    app.kubernetes.io/name: wordpress-html
 spec:
   policyRef:
     name: html
@@ -15,8 +14,6 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
   name: mysql-1
-  labels:
-    app.kubernetes.io/name: wordpress-mysql
 spec:
   policyRef:
     name: mysql
