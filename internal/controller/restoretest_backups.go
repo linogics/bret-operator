@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"slices"
 	"sort"
 	"strings"
@@ -158,15 +159,24 @@ func veleroBackups(list []unstructured.Unstructured, sel restorev1alpha1.BackupS
 }
 
 // coversNamespace reports whether a Velero Backup includes the namespace. No includedNamespaces means all.
+// Entries are glob patterns, as in Velero.
 func coversNamespace(obj *unstructured.Unstructured, namespace string) bool {
 	excluded, _, _ := unstructured.NestedStringSlice(obj.Object, "spec", "excludedNamespaces")
-	if slices.Contains(excluded, namespace) {
+	if matchesAny(excluded, namespace) {
 		return false
 	}
 
 	included, _, _ := unstructured.NestedStringSlice(obj.Object, "spec", "includedNamespaces")
 
-	return len(included) == 0 || slices.Contains(included, "*") || slices.Contains(included, namespace)
+	return len(included) == 0 || matchesAny(included, namespace)
+}
+
+func matchesAny(patterns []string, name string) bool {
+	return slices.ContainsFunc(patterns, func(p string) bool {
+		ok, _ := path.Match(p, name)
+
+		return ok
+	})
 }
 
 // veleroNS is the namespace that holds Velero Backups.

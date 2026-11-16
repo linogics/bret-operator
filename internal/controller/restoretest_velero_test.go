@@ -81,6 +81,8 @@ func TestVeleroBackupsCoverage(t *testing.T) {
 		{"named", []string{testNamespace}, nil, true},
 		{"other namespace", []string{testOther}, nil, false},
 		{"excluded", []string{"*"}, []string{testNamespace}, false},
+		{"included glob", []string{"def*"}, nil, true},
+		{"excluded glob", nil, []string{"def*"}, false},
 	}
 
 	for _, tc := range cases {

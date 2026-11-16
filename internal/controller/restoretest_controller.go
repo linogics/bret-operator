@@ -609,10 +609,16 @@ func (r *RestoreTestReconciler) queue(ctx context.Context, test *restorev1alpha1
 }
 
 // replace deletes the run in progress and starts the trigger in its place.
+// The backups are resolved first, so a run that cannot start does not cost the run in progress.
 func (r *RestoreTestReconciler) replace(ctx context.Context, test *restorev1alpha1.RestoreTest, trig *trigger) (bool, error) {
+	backups, ok, err := r.resolveOrBlock(ctx, test, trig.backups)
+	if err != nil || !ok {
+		return false, err
+	}
+
 	old := &restorev1alpha1.Restore{}
 
-	err := r.Get(ctx, client.ObjectKey{Namespace: test.Namespace, Name: test.Status.CurrentRestore}, old)
+	err = r.Get(ctx, client.ObjectKey{Namespace: test.Namespace, Name: test.Status.CurrentRestore}, old)
 	if client.IgnoreNotFound(err) != nil {
 		return false, err
 	}
@@ -634,8 +640,7 @@ func (r *RestoreTestReconciler) replace(ctx context.Context, test *restorev1alph
 	test.Status.PendingBackups = nil
 	test.Status.PendingRunSource = ""
 
-	started, err := r.start(ctx, test, trig.source, trig.backups)
-	if err != nil || !started {
+	if err = r.createRestore(ctx, test, startRunID(test, trig.source), backups, 1); err != nil {
 		return false, err
 	}
 
@@ -676,7 +681,7 @@ func (r *RestoreTestReconciler) resolveOrBlock(
 	}
 
 	if len(missing) > 0 {
-		r.blockTest(test, reasonBackupNotFound, "no Succeeded backup matches backupSelector for source(s) "+strings.Join(missing, ", "))
+		r.blockTest(test, reasonBackupNotFound, "no finished backup matches backupSelector for source(s) "+strings.Join(missing, ", "))
 
 		return nil, false, nil
 	}
