@@ -72,6 +72,67 @@ the PVCs close together, or quiesce the app during the backup.
 
 Velero backs up all PVCs of the namespace in one `Backup`. Its PVCs are one point in time.
 
+## Throttle restore throughput
+
+A restore test reads the whole backup from S3 and writes it to a volume. It can saturate the
+network or the disks. bret has no throttle field. Each tool has its own levers. Checked against
+the tool docs in November 2026.
+
+### Kopiur
+
+- Kopia throttle: `Repository.spec.moverDefaults.throttle` with `downloadBytesPerSecond`,
+  `uploadBytesPerSecond`, `readOpsPerSecond`, `writeOpsPerSecond`.
+  - Pro: a real bandwidth and ops cap. Restore movers honor it. No CNI support needed.
+  - Con: set per repository, so it also slows backup, maintenance and replication movers.
+  - Con: no per-`Restore` field.
+  - Con: cached content bypasses the cap. Small objects stay well below the cap.
+- Restore parallelism: `Restore.spec.options.parallel`, default `8`.
+  - Pro: set per restore.
+  - Con: limits concurrency, not bytes or ops.
+- Mover pod annotations: `Repository.spec.moverDefaults.podAnnotations`.
+  - Pro: carries the `kubernetes.io/ingress-bandwidth` annotation.
+  - Con: set per repository, so it hits every mover. Needs a CNI that enforces ingress limits.
+
+### Velero
+
+- No bandwidth or IOPS cap.
+- Files in parallel: `velero restore create --parallel-files-download=<n>`.
+  - Pro: set per restore.
+  - Con: limits concurrency only. Only the file-system data mover. No effect on block mode.
+- node-agent ConfigMap `loadConcurrency` (`globalConfig`, `perNodeConfig`).
+  - Pro: limits the data mover pods per node.
+  - Con: set per install. Also limits backups. Needs a node-agent restart.
+- node-agent ConfigMap `podResources` (`cpuLimit`, `memoryLimit`).
+  - Pro: caps CPU of the restore pods.
+  - Con: an indirect brake, not a throughput cap. Set per install.
+- node-agent ConfigMap `podAnnotations` / `podLabels` (`PodVolumeRestore` and `DataDownload`
+  pods).
+  - Pro: carries the `kubernetes.io/ingress-bandwidth` annotation.
+  - Con: set per install, so it also hits backups. Replaces Velero's own annotations, such as IAM
+    role annotations, so add those back. Needs a CNI that enforces ingress limits.
+
+### VolSync
+
+- No bandwidth or IOPS cap.
+- `moverResources` (CPU, memory) on the mover spec.
+  - Pro: set per `ReplicationDestination`, so only the restore.
+  - Con: an indirect brake, not a throughput cap. Tight limits can crash the mover.
+- `moverPodLabels`.
+  - Pro: set per `ReplicationDestination`.
+  - Con: labels only, no annotations, so the bandwidth annotation cannot be set.
+- Restic env from the repository Secret.
+  - Con: the docs name no bandwidth variable.
+
+### Pod bandwidth annotation
+
+- `kubernetes.io/ingress-bandwidth` on the mover pod caps the download.
+  - Pro: the same mechanism for every tool.
+  - Con: works only if the CNI enforces it, for example the CNI `bandwidth` plugin. Cilium ignores
+    the ingress annotation.
+  - Con: no tool can set it per restore. VolSync cannot set it at all. A mutating webhook would be
+    needed to inject it into restore pods only.
+- Kubernetes has no per-pod disk IOPS limit. Use storage QoS (StorageClass parameters) instead.
+
 ## Which tool to choose
 
 | Need | Pick |
