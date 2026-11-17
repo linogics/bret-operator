@@ -8,7 +8,7 @@ its own page. Every page walks through the same WordPress + MariaDB example, whi
 
 | Page | Backup object | One backup holds |
 |---|---|---|
-| [kopiur.md](kopiur.md) (alpha) | Kopiur `Snapshot` | one PVC |
+| [kopiur.md](kopiur.md) | Kopiur `Snapshot` | one PVC |
 | [volsync.md](volsync.md) | VolSync `ReplicationSource` (its last sync) | one PVC |
 | [velero.md](velero.md) | Velero `Backup` | every PVC of the namespace |
 
@@ -139,7 +139,7 @@ the tool docs in November 2026.
 |---|---|
 | Whole-namespace backups, many resource types, one tool for the cluster | Velero |
 | Per-volume backups with restic, scheduled by the volume | VolSync |
-| Per-volume backups with Kopia, deduplication, and a repository you manage | Kopiur (alpha) |
+| Per-volume backups with Kopia, deduplication, and a repository you manage | Kopiur |
 
 All three work with the same check. The check does not care which tool made the data.
 
