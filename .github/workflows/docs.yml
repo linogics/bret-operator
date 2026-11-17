@@ -13,8 +13,13 @@ permissions:
   contents: read
 
 jobs:
+  guard:
+    uses: ./.github/workflows/skip-ci.yml
+
   generated-docs:
     name: Generated docs are up to date
+    needs: guard
+    if: needs.guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code

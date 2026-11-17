@@ -10,8 +10,13 @@ permissions:
   contents: read
 
 jobs:
+  guard:
+    uses: ./.github/workflows/skip-ci.yml
+
   unit:
     name: Unit and envtest
+    needs: guard
+    if: needs.guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
