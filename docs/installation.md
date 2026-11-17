@@ -53,6 +53,7 @@ The full table is in [charts/bret-operator/README.md](../charts/bret-operator/RE
 
 | Value | Default | Change it when |
 |---|---|---|
+| `image.repository` | `ghcr.io/linogics/bret-operator` | You pull from the Docker Hub mirror `docker.io/linogics/bret-operator`. |
 | `image.tag` | chart `appVersion` | You pin a different image. |
 | `replicaCount` | `1` | Leader election keeps one active replica. More replicas only add standby. |
 | `metrics.enabled` | `true` | You do not scrape Prometheus. |
