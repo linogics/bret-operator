@@ -8,11 +8,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3--Clause-green" alt="License: BSD-3-Clause"></a>
 </p>
 
-**bret** stands for **b**ackup **re**store **T**est.
+***bret*** stands for ***b***ackup ***re***store ***t***est.
 
 bret tests your Kubernetes backups. It restores a backup from Velero, VolSync or
-Kopiur into a scratch volume. It runs your check in a throwaway pod. Then it records the result. An app with several volumes, such as nextcloud with `html` and
-`pgdata`, is restored and checked as one unit.
+Kopiur into a scratch volume. It runs your check in a throwaway pod. Then it records the result. An app with several volumes, such as wordpress with `html` and
+`mysql`, is restored and checked as one unit.
 
 ## Quick links
 
