@@ -69,7 +69,7 @@ Rules for backups and restore tests.
   backup metadata only.
 - Pin tool and image versions. Use pinned image tags in checks. Check tags marked unverified in
   [checks/README.md](../checks/README.md) need a test run before use.
-- Kopiur is alpha. Upstream issue `kopiur#233` affects restores. Review its results with care.
+- Upstream issue `kopiur#233` affects Kopiur restores. Review its results with care.
 
 ## Data apps
 

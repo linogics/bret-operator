@@ -2,11 +2,18 @@ name: E2E Tests
 
 on:
   push:
+    branches:
+      - "main"
   pull_request:
 
 jobs:
+  guard:
+    uses: ./.github/workflows/skip-ci.yml
+
   test-e2e:
     name: Run on Ubuntu
+    needs: guard
+    if: needs.guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code

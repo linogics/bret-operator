@@ -1,0 +1,33 @@
+name: Skip CI
+
+# Reusable guard. Other workflows run it first and skip their jobs when skip is "true".
+# Matches [skip ci], [ci skip], [skip-ci], [ci-skip] or [no ci] in the commit message or PR title (any case).
+
+on:
+  workflow_call:
+    outputs:
+      skip:
+        description: "true when a skip marker was found"
+        value: ${{ jobs.check.outputs.skip }}
+
+permissions: {}
+
+jobs:
+  check:
+    name: Check for skip marker
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Look for a skip marker
+        id: check
+        env:
+          # Passed via env, never interpolated into the script: commit messages and PR titles are untrusted.
+          TEXT: ${{ github.event.head_commit.message }} ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s' "$TEXT" | grep -qiE '\[(skip[ -]ci|ci[ -]skip|no ci)\]'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skip marker found, skipping CI jobs."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
