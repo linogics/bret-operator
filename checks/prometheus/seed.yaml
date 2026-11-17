@@ -41,14 +41,21 @@ spec:
         - /bin/sh
         - -c
         - |
-          now=$(date +%s)
+          set -eu
+
           om=/tmp/canary.om
+          now=$(date +%s)
+
+          # bret_canary_seq counts 1..42, one sample per minute, ending now.
           echo '# TYPE bret_canary_seq gauge' > "$om"
           for i in $(seq 1 42); do
-            printf 'bret_canary_seq %s %s.000\n' "$i" "$((now - (42 - i) * 60))" >> "$om"
+            ts=$((now - (42 - i) * 60))
+            printf 'bret_canary_seq %s %s.000\n' "$i" "$ts" >> "$om"
           done
           echo '# EOF' >> "$om"
-          promtool tsdb create-blocks-from openmetrics "$om" /prometheus || exit 1
+
+          # Write the samples as TSDB blocks straight into the data dir.
+          promtool tsdb create-blocks-from openmetrics "$om" /prometheus
           sync
       volumeMounts:
         - name: data

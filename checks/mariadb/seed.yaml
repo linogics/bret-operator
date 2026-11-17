@@ -1,5 +1,3 @@
-# Shell one-liners in block scalars are the content, not prose.
-# yamllint disable rule:line-length
 # Seed for restorecheck.yaml in this folder. Datadir is /var/lib/mysql (uid 999), the PVC root.
 # Writes the canary, then kill -9 mariadbd so the backup is crash-consistent.
 # The check must recover from the redo log on boot.
@@ -44,17 +42,33 @@ spec:
         - -c
         - |
           set -eu
-          mariadb-install-db --user=mysql --datadir=/var/lib/mysql --auth-root-authentication-method=normal >/tmp/init.log 2>&1
-          mariadbd --user=mysql --datadir=/var/lib/mysql --socket=/tmp/mariadb.sock \
+
+          sock=/tmp/mariadb.sock
+          payload=seed-canary-payload-42-not-secret
+
+          # Fresh datadir, then the server on a socket only.
+          mariadb-install-db --user=mysql --datadir=/var/lib/mysql \
+              --auth-root-authentication-method=normal >/tmp/init.log 2>&1
+          mariadbd --user=mysql --datadir=/var/lib/mysql --socket="$sock" \
               --skip-networking >/tmp/mariadbd.log 2>&1 &
           pid=$!
+
+          # Wait for the server (up to 150 s).
           for i in $(seq 1 150); do
-            mariadb-admin -S /tmp/mariadb.sock -u root ping >/dev/null 2>&1 && break
+            mariadb-admin -S "$sock" -u root ping >/dev/null 2>&1 && break
             sleep 1
           done
-          mariadb -S /tmp/mariadb.sock -u root -e "create database bret"
-          mariadb -S /tmp/mariadb.sock -u root -e "create table bret.canary(id int primary key, payload text, sha256 char(64)); insert into bret.canary values (1, 'seed-canary-payload-42-not-secret', sha2('seed-canary-payload-42-not-secret', 256))"
-          mariadb -S /tmp/mariadb.sock -u root -D bret -e "create table filler as select seq as id, md5(seq) as h from seq_1_to_1000"
+
+          # Canary row: payload and its sha256.
+          mariadb -S "$sock" -u root -e "create database bret"
+          mariadb -S "$sock" -u root -D bret -e "
+            create table canary(id int primary key, payload text, sha256 char(64));
+            insert into canary values (1, '$payload', sha2('$payload', 256));"
+
+          # Filler rows so the backup holds more than the canary.
+          mariadb -S "$sock" -u root -D bret \
+              -e "create table filler as select seq as id, md5(seq) as h from seq_1_to_1000"
+
           # Crash-consistent point: no clean shutdown.
           kill -9 "$pid"
           sleep 2

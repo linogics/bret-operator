@@ -38,7 +38,11 @@ spec:
         - /bin/sh
         - -c
         - |
+          set -eu
+
           mkdir -p /etc/pihole /etc/dnsmasq.d
+
+          # gravity.db with the canary adlist and one disabled sample.
           sqlite3 /etc/pihole/gravity.db <<'SQL'
           create table if not exists adlist (
             id integer primary key autoincrement,
@@ -46,12 +50,22 @@ spec:
             enabled boolean not null default 1,
             comment text
           );
-          insert or ignore into adlist (address, enabled, comment) values ('https://bret-canary.invalid/list.txt', 1, 'bret canary');
-          insert or ignore into adlist (address, enabled, comment) values ('https://example.invalid/hosts.txt', 0, 'disabled sample');
+          insert or ignore into adlist (address, enabled, comment)
+          values ('https://bret-canary.invalid/list.txt', 1, 'bret canary');
+          insert or ignore into adlist (address, enabled, comment)
+          values ('https://example.invalid/hosts.txt', 0, 'disabled sample');
           SQL
+
+          # Canary local DNS record and the matching dnsmasq entry.
           printf '10.0.0.53 bret-canary.test\n' > /etc/pihole/custom.list
-          printf 'PIHOLE_INTERFACE=eth0\nIPV4_ADDRESS=10.0.0.53/24\nWEBPASSWORD=\n' > /etc/pihole/setupVars.conf
           printf 'address=/bret-canary.test/10.0.0.53\n' > /etc/dnsmasq.d/02-bret.conf
+
+          # Minimal setupVars.conf so FTL starts without the installer.
+          cat > /etc/pihole/setupVars.conf <<'VARS'
+          PIHOLE_INTERFACE=eth0
+          IPV4_ADDRESS=10.0.0.53/24
+          WEBPASSWORD=
+          VARS
           sync
       volumeMounts:
         - name: etc-pihole

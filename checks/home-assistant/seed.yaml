@@ -42,8 +42,14 @@ spec:
         - -c
         - |
           set -eu
+
+          canary=/config/bret-canary
+
+          # Start HA in the background. First boot writes the config and the recorder DB.
           python3 -m homeassistant --config /config --skip-pip >/tmp/seed-ha.log 2>&1 &
           pid=$!
+
+          # HTTP API answers 401 without a token once the app is up (up to 240 s).
           code=000
           for i in $(seq 1 240); do
             code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/ || true)
@@ -52,11 +58,13 @@ spec:
           done
           test "$code" = 401
           test -f /config/home-assistant_v2.db
-          mkdir -p /config/bret-canary
-          printf '%s' 'seed-canary-payload-not-secret' > /config/bret-canary/canary.txt
-          sha=$(sha256sum /config/bret-canary/canary.txt | cut -d ' ' -f 1)
-          printf '%s  canary.txt\n' "$sha" > /config/bret-canary/canary.sha256
+
+          # Canary file and its checksum file.
+          mkdir -p "$canary"
+          printf '%s' 'seed-canary-payload-not-secret' > "$canary/canary.txt"
+          (cd "$canary" && sha256sum canary.txt > canary.sha256)
           sync
+
           # Crash-consistent point: no clean shutdown.
           kill -9 "$pid"
           sleep 2

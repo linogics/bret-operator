@@ -42,18 +42,27 @@ spec:
         - -c
         - |
           set -eu
+
+          # Start the server in the background. RDB only, no automatic saves.
           redis-server --dir /data --port 6379 --save "" --appendonly no >/tmp/redis.log 2>&1 &
           pid=$!
+
+          # Wait for ping (up to 60 s).
           for i in $(seq 1 60); do
             redis-cli -p 6379 ping >/dev/null 2>&1 && break
             sleep 1
           done
+
+          # Canary: payload and its sha256.
           payload="seed-canary-payload-not-secret"
           sha=$(printf %s "$payload" | sha256sum | cut -d' ' -f1)
           redis-cli -p 6379 SET bret:canary:payload "$payload"
           redis-cli -p 6379 SET bret:canary:sha256 "$sha"
           redis-cli -p 6379 DBSIZE
+
+          # Write the RDB to disk.
           redis-cli -p 6379 SAVE
+
           # Crash-consistent point: no clean shutdown.
           kill -9 "$pid"
           sleep 2

@@ -54,22 +54,46 @@ spec:
         - -c
         - |
           set -eu
+
+          # Canary credential and workflow, imported straight into the DB.
           cat > /tmp/creds.json <<'JSON'
-          [{"id":"1","name":"bret-canary","type":"httpBasicAuth","data":{"user":"bret","password":"seed-password-not-secret"},"nodesAccess":[]}]
+          [
+            {
+              "id": "1",
+              "name": "bret-canary",
+              "type": "httpBasicAuth",
+              "data": {"user": "bret", "password": "seed-password-not-secret"},
+              "nodesAccess": []
+            }
+          ]
           JSON
           cat > /tmp/wf.json <<'JSON'
-          [{"id":"1","name":"bret-canary","nodes":[],"connections":{},"active":false,"settings":{}}]
+          [
+            {
+              "id": "1",
+              "name": "bret-canary",
+              "nodes": [],
+              "connections": {},
+              "active": false,
+              "settings": {}
+            }
+          ]
           JSON
           n8n import:credentials --input=/tmp/creds.json
           n8n import:workflow --input=/tmp/wf.json
+
+          # Start the app in the background.
           n8n start >/tmp/seed-n8n.log 2>&1 &
           pid=$!
+
+          # App boots and reports healthy (up to 180 s).
           for i in $(seq 1 180); do
             wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 && break
             sleep 1
           done
           wget -qO- http://127.0.0.1:5678/healthz | grep -q '"status":"ok"'
           sync
+
           # Crash-consistent point: no clean shutdown.
           kill -9 "$pid"
           sleep 2

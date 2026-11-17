@@ -138,12 +138,24 @@ spec:
         - -c
         - |
           set -eu
+
+          # Copy the app into the html volume and install it against the Postgres sidecar.
           cp -a /usr/src/nextcloud/. /var/www/html/
           cd /var/www/html
-          php occ maintenance:install --database pgsql --database-host 127.0.0.1 \
-              --database-name nextcloud --database-user nextcloud --database-pass "$POSTGRES_PASSWORD" \
-              --admin-user admin --admin-pass "$NC_ADMIN_PASS" --data-dir /var/www/html/data
+          php occ maintenance:install \
+              --database pgsql \
+              --database-host 127.0.0.1 \
+              --database-name nextcloud \
+              --database-user nextcloud \
+              --database-pass "$POSTGRES_PASSWORD" \
+              --admin-user admin \
+              --admin-pass "$NC_ADMIN_PASS" \
+              --data-dir /var/www/html/data
+
+          # Canary user. OC_PASS holds its password.
           php occ user:add --password-from-env --display-name=bret-canary bret-canary
+
+          # Canary file. files:scan records it in oc_filecache.
           mkdir -p data/bret-canary/files
           printf '%s' 'seed-canary-payload-not-secret' > data/bret-canary/files/bret-canary.txt
           php occ files:scan bret-canary

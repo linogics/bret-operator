@@ -46,16 +46,23 @@ spec:
         - /bin/sh
         - -c
         - |
+          set -eu
+
+          # Start the app in the background. First boot creates and migrates db.sqlite3.
           /vaultwarden >/tmp/seed-vw.log 2>&1 &
           pid=$!
+
+          # Wait for the health endpoint (up to 120 s).
           for i in $(seq 1 120); do
             curl -fs -o /dev/null http://127.0.0.1:8080/alive && break
             sleep 1
           done
-          curl -fs -o /dev/null http://127.0.0.1:8080/alive || exit 1
+          curl -fs -o /dev/null http://127.0.0.1:8080/alive
+
+          # Clean stop, so the seed container is the only writer. wait reports the kill signal.
           kill "$pid"
-          wait "$pid" 2>/dev/null
-          test -s /data/db.sqlite3 || exit 1
+          wait "$pid" 2>/dev/null || true
+          test -s /data/db.sqlite3
       volumeMounts:
         - name: data
           mountPath: /data
@@ -73,8 +80,20 @@ spec:
           import time
           import uuid
 
+
+          def zero(typ):
+              """Zero value for a NOT NULL column without a default."""
+              typ = typ.upper()
+              if "BLOB" in typ:
+                  return b""
+              if "INT" in typ:
+                  return 0
+              return ""
+
+
           conn = sqlite3.connect("/data/db.sqlite3")
           now = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+
           known = {
               "uuid": str(uuid.uuid4()),
               "enabled": 1,
@@ -91,12 +110,15 @@ spec:
               "client_kdf_iter": 600000,
               "login_verify_count": 0,
           }
+
+          # Fill every other required column, so the insert survives schema changes between versions.
           row = {}
-          for cid, name, typ, notnull, dflt, pk in conn.execute("pragma table_info(users)"):
+          for _, name, typ, notnull, dflt, pk in conn.execute("pragma table_info(users)"):
               if name in known:
                   row[name] = known[name]
               elif notnull and dflt is None and not pk:
-                  row[name] = b"" if "BLOB" in typ.upper() else (0 if "INT" in typ.upper() else "")
+                  row[name] = zero(typ)
+
           cols = ", ".join(row)
           marks = ", ".join("?" for _ in row)
           conn.execute(f"insert into users ({cols}) values ({marks})", list(row.values()))

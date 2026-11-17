@@ -1,5 +1,3 @@
-# Shell one-liners in block scalars are the content, not prose.
-# yamllint disable rule:line-length
 # Seed for restorecheck.yaml in this folder. Mount is /var/lib/grafana, owned by uid 472.
 # Starts grafana on a fresh grafana.db with the admin password from Secret grafana-admin,
 # creates dashboard uid and title bret-canary through the API, then kill -9 the server so the
@@ -55,14 +53,29 @@ spec:
         - /bin/sh
         - -c
         - |
-          /usr/share/grafana/bin/grafana server --homepath /usr/share/grafana >/tmp/seed-grafana.log 2>&1 &
+          set -eu
+
+          grafana=http://127.0.0.1:3000
+
+          # Start grafana in the background. First boot creates and migrates grafana.db.
+          /usr/share/grafana/bin/grafana server --homepath /usr/share/grafana \
+              >/tmp/seed-grafana.log 2>&1 &
           pid=$!
+
+          # Wait for health (up to 120 s).
           for i in $(seq 1 120); do
-            curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1 && break
+            curl -fsS "$grafana/api/health" >/dev/null 2>&1 && break
             sleep 1
           done
-          curl -fsS http://127.0.0.1:3000/api/health >/dev/null || exit 1
-          curl -fsS -u "admin:$GF_SECURITY_ADMIN_PASSWORD" -H 'Content-Type: application/json' -X POST -d '{"dashboard":{"uid":"bret-canary","title":"bret-canary","panels":[],"schemaVersion":39},"overwrite":true}' http://127.0.0.1:3000/api/dashboards/db >/dev/null || exit 1
+          curl -fsS "$grafana/api/health" >/dev/null
+
+          # Canary dashboard, stored in grafana.db.
+          dashboard='{"uid":"bret-canary","title":"bret-canary","panels":[],"schemaVersion":39}'
+          curl -fsS -u "admin:$GF_SECURITY_ADMIN_PASSWORD" -X POST \
+              -H 'Content-Type: application/json' \
+              -d "{\"dashboard\":$dashboard,\"overwrite\":true}" \
+              "$grafana/api/dashboards/db" >/dev/null
+
           # Crash-consistent point: no clean shutdown.
           kill -9 "$pid"
           sync

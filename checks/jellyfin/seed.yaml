@@ -57,19 +57,27 @@ spec:
         - -c
         - |
           set -eu
+
+          canary=/media/bret-canary
+
+          # Start the server in the background. First boot writes the config and library.db.
           /jellyfin/jellyfin --datadir /config >/tmp/seed-jf.log 2>&1 &
           pid=$!
+
+          # Wait for the health endpoint to report Healthy (up to 150 s).
           for i in $(seq 1 150); do
             curl -fs http://127.0.0.1:8096/health 2>/dev/null | grep -q Healthy && break
             sleep 1
           done
           curl -fs http://127.0.0.1:8096/health | grep -q Healthy
           test -f /config/data/library.db || test -f /config/library.db
-          mkdir -p /media/bret-canary
-          printf '%s' 'seed-canary-payload-not-secret' > /media/bret-canary/canary.txt
-          sha=$(sha256sum /media/bret-canary/canary.txt | cut -d ' ' -f 1)
-          printf '%s  canary.txt\n' "$sha" > /media/bret-canary/canary.sha256
+
+          # Canary media file and its checksum file.
+          mkdir -p "$canary"
+          printf '%s' 'seed-canary-payload-not-secret' > "$canary/canary.txt"
+          (cd "$canary" && sha256sum canary.txt > canary.sha256)
           sync
+
           # Crash-consistent point: no clean shutdown.
           kill -9 "$pid"
           sleep 2
