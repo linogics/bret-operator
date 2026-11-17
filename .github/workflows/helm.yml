@@ -10,17 +10,13 @@ permissions:
   contents: read
 
 jobs:
+  guard:
+    uses: ./.github/workflows/skip-ci.yml
+
   chart:
     name: Chart is in sync and lints
-    # Skip on [skip ci], [ci skip], [skip-ci], [ci-skip] or [no ci] in the commit message or PR title (any case).
-    if: >-
-      ${{
-        !contains(format('{0} {1}', github.event.head_commit.message, github.event.pull_request.title), '[skip ci]') &&
-        !contains(format('{0} {1}', github.event.head_commit.message, github.event.pull_request.title), '[ci skip]') &&
-        !contains(format('{0} {1}', github.event.head_commit.message, github.event.pull_request.title), '[skip-ci]') &&
-        !contains(format('{0} {1}', github.event.head_commit.message, github.event.pull_request.title), '[ci-skip]') &&
-        !contains(format('{0} {1}', github.event.head_commit.message, github.event.pull_request.title), '[no ci]')
-      }}
+    needs: guard
+    if: needs.guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
