@@ -1,3 +1,7 @@
+# NOTICE: only for manual tests. Do not deploy this for regular restore testing.
+# A RestoreTest creates and manages its own Restore objects on its schedule. Use restoretest.yaml for that.
+# This file is a hand-made Restore that mimics one of those, to run a single restore by hand.
+#
 # Restore: one manual restore test of the Velero Backup wordpress-1.
 # One Velero Backup holds every PVC of the namespace, so all sources name the same backupRef.
 # bret restores only PVCs and PVs, into a scratch namespace bret-scratch-<hash>, under their

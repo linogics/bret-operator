@@ -1,9 +1,11 @@
 name: Release
 
 # Runs on tags like v0.1.0 (or v0.2.0-rc.1). Publishes:
-#   - container image ghcr.io/linogics/bret-operator:<version> (amd64 and arm64)
+#   - container image ghcr.io/linogics/bret-operator and docker.io/linogics/bret-operator
+#     (amd64 and arm64), tags <version>, <major>.<minor>, <major> and latest. Pre-releases get <version> only.
 #   - Helm charts oci://ghcr.io/linogics/charts/bret-operator and bret-operator-crds:<version>
 #   - GitHub release with dist/install.yaml (plain manifests) and the chart .tgz
+#   - Docker Hub overview from .github/dockerhub/README.md
 
 on:
   push:
@@ -53,18 +55,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Same tag set on both registries. Major and minor tags and latest skip pre-releases.
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.IMAGE }}
+            docker.io/linogics/bret-operator
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ env.VERSION }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ env.VERSION }}
-            org.opencontainers.image.revision=${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
       - name: Build plain install manifests
         run: make build-installer IMG=${{ env.IMAGE }}:${{ env.VERSION }}
@@ -96,3 +113,13 @@ jobs:
             --title "bret-operator $VERSION" \
             --generate-notes \
             $prerelease_flag
+
+      # Last step so a Hub API failure cannot block the release. Token needs Read, Write, Delete scope.
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: linogics/bret-operator
+          short-description: ${{ github.event.repository.description }}
+          readme-filepath: .github/dockerhub/README.md
