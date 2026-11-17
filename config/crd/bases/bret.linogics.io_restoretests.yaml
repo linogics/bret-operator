@@ -1,0 +1,516 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: restoretests.bret.linogics.io
+spec:
+  group: bret.linogics.io
+  names:
+    kind: RestoreTest
+    listKind: RestoreTestList
+    plural: restoretests
+    shortNames:
+    - rtest
+    singular: restoretest
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.provider
+      name: Provider
+      type: string
+    - jsonPath: .status.lastRun.result
+      name: Last
+      type: string
+    - jsonPath: .status.nextRun
+      name: Next
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RestoreTest schedules restore runs and sets their policy.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec is the desired state of the test.
+            properties:
+              keepOnFailure:
+                default: false
+                description: KeepOnFailure keeps the check pod and restore objects
+                  after the final attempt fails.
+                type: boolean
+              overlapPolicy:
+                default: Skip
+                description: OverlapPolicy decides what happens when a trigger fires
+                  during a run.
+                enum:
+                - Skip
+                - Queue
+                - Replace
+                type: string
+              provider:
+                description: Provider is the backup tool that performs the restores.
+                enum:
+                - velero
+                - volsync
+                - kopiur
+                type: string
+              restoreCheckRef:
+                description: RestoreCheckRef names the check to run against each restored
+                  volume.
+                properties:
+                  name:
+                    description: Name is the name of the RestoreCheck in the same
+                      namespace.
+                    type: string
+                required:
+                - name
+                type: object
+              restoreWindow:
+                default: 45m
+                description: RestoreWindow is the deadline for each attempt.
+                type: string
+              retries:
+                default: {}
+                description: Retries defines how failed attempts are retried.
+                properties:
+                  backoff:
+                    default: 5m
+                    description: Backoff is the wait between attempts.
+                    type: string
+                  count:
+                    default: 0
+                    description: Count is the number of retries after the first attempt.
+                    format: int32
+                    maximum: 10
+                    minimum: 0
+                    type: integer
+                type: object
+              sources:
+                description: Sources are the volumes each run restores.
+                items:
+                  description: 'RestoreTestSource is one volume a RestoreTest restores:
+                    the PVC, the backups to pick from, and the scratch target.'
+                  properties:
+                    autoExpand:
+                      description: AutoExpand derives the size from the source size
+                        when Size is unset.
+                      properties:
+                        max:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: Max is the upper bound of the derived size.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        min:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: Min is the lower bound of the derived size.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        percentage:
+                          description: Percentage is the headroom added to the source
+                            size, in percent.
+                          format: int32
+                          type: integer
+                      required:
+                      - percentage
+                      type: object
+                      x-kubernetes-validations:
+                      - message: percentage must be greater than 0
+                        rule: self.percentage > 0
+                      - message: percentage must not be greater than 1000
+                        rule: self.percentage <= 1000
+                      - message: min must not be greater than max
+                        rule: '!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max))
+                          <= 0'
+                    backupSelector:
+                      description: BackupSelector chooses which backups the restore
+                        reads from.
+                      properties:
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels selects backup objects that carry all
+                            of these labels.
+                          type: object
+                        name:
+                          description: Name is the name of one backup object.
+                          type: string
+                      type: object
+                      x-kubernetes-validations:
+                      - message: name or labels must be set
+                        rule: has(self.name) || has(self.labels)
+                    size:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Size is the capacity of the scratch volume. The
+                        source size sets it when unset.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    sourcePVC:
+                      description: SourcePVC is the name of the PVC in the backed-up
+                        namespace.
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    storageClassName:
+                      description: StorageClassName is the storage class of the scratch
+                        volume.
+                      type: string
+                  required:
+                  - backupSelector
+                  - sourcePVC
+                  type: object
+                maxItems: 10
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - sourcePVC
+                x-kubernetes-list-type: map
+              triggers:
+                description: Triggers defines what starts a run.
+                properties:
+                  afterBackup:
+                    description: AfterBackup starts a run after a matching backup
+                      completes.
+                    properties:
+                      delay:
+                        description: Delay is how long to wait after the backup completes
+                          before the run starts.
+                        type: string
+                    type: object
+                  cron:
+                    description: Cron is a 5-field cron schedule evaluated in UTC.
+                    pattern: ^(\S+\s+){4}\S+$
+                    type: string
+                  manual:
+                    default: false
+                    description: Manual enables starting a run by changing the run-now
+                      annotation.
+                    type: boolean
+                type: object
+              velero:
+                description: Velero narrows what each Velero restore brings back.
+                  Velero only.
+                properties:
+                  labelSelector:
+                    description: LabelSelector selects the namespace objects to restore.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  orLabelSelectors:
+                    description: OrLabelSelectors select the namespace objects to
+                      restore, any one may match.
+                    items:
+                      description: |-
+                        A label selector is a label query over a set of resources. The result of matchLabels and
+                        matchExpressions are ANDed. An empty label selector matches all objects. A null
+                        label selector matches no objects.
+                      properties:
+                        matchExpressions:
+                          description: matchExpressions is a list of label selector
+                            requirements. The requirements are ANDed.
+                          items:
+                            description: |-
+                              A label selector requirement is a selector that contains values, a key, and an operator that
+                              relates the key and values.
+                            properties:
+                              key:
+                                description: key is the label key that the selector
+                                  applies to.
+                                type: string
+                              operator:
+                                description: |-
+                                  operator represents a key's relationship to a set of values.
+                                  Valid operators are In, NotIn, Exists and DoesNotExist.
+                                type: string
+                              values:
+                                description: |-
+                                  values is an array of string values. If the operator is In or NotIn,
+                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                  the values array must be empty. This array is replaced during a strategic
+                                  merge patch.
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            required:
+                            - key
+                            - operator
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                            map is equivalent to an element of matchExpressions, whose key field is "key", the
+                            operator is "In", and the values array contains only "value". The requirements are ANDed.
+                          type: object
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                type: object
+                x-kubernetes-validations:
+                - message: labelSelector and orLabelSelectors are mutually exclusive
+                  rule: '!(has(self.labelSelector) && has(self.orLabelSelectors))'
+            required:
+            - provider
+            - restoreCheckRef
+            - restoreWindow
+            - retries
+            - sources
+            type: object
+            x-kubernetes-validations:
+            - message: provider velero needs the same backupSelector on every source
+                and no size, autoExpand or storageClassName
+              rule: self.provider != 'velero' || self.sources.all(s, s.backupSelector
+                == self.sources[0].backupSelector && !has(s.size) && !has(s.autoExpand)
+                && !has(s.storageClassName))
+            - message: spec.velero is only allowed with provider velero
+              rule: self.provider == 'velero' || !has(self.velero)
+          status:
+            description: Status is the observed state of the test.
+            properties:
+              conditions:
+                description: Conditions are the latest observations of the test state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              currentRestore:
+                description: CurrentRestore is the Restore of the run in progress.
+                  It is empty when no run is in progress.
+                type: string
+              lastHandledBackups:
+                description: LastHandledBackups is the newest backup that an afterBackup
+                  trigger used. Only newer backups start a run.
+                items:
+                  description: HandledBackup identifies the backup picked for one
+                    source.
+                  properties:
+                    createdAt:
+                      description: CreatedAt is the time the backup completed.
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name is the backup name.
+                      type: string
+                    sourcePVC:
+                      description: SourcePVC is the source this entry belongs to.
+                      type: string
+                  required:
+                  - createdAt
+                  - name
+                  - sourcePVC
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - sourcePVC
+                x-kubernetes-list-type: map
+              lastRun:
+                description: LastRun is the outcome of the most recent run.
+                properties:
+                  reason:
+                    description: Reason explains the result.
+                    type: string
+                  result:
+                    description: Result is the outcome of the run.
+                    enum:
+                    - Succeeded
+                    - Failed
+                    type: string
+                  time:
+                    description: Time is when the run finished.
+                    format: date-time
+                    type: string
+                required:
+                - result
+                - time
+                type: object
+              lastRunNowValue:
+                description: LastRunNowValue is the last value of the run-now annotation
+                  that started a run.
+                type: string
+              lastSuccess:
+                description: LastSuccess is the time of the last run that passed.
+                  It drives the success metric.
+                format: date-time
+                type: string
+              nextRun:
+                description: NextRun is when the next cron run is scheduled.
+                format: date-time
+                type: string
+              pendingBackups:
+                description: |-
+                  PendingBackups are the backups of the queued run, one per source. The run waits for the run in progress.
+                  It applies to overlap policy Queue.
+                items:
+                  description: HandledBackup identifies the backup picked for one
+                    source.
+                  properties:
+                    createdAt:
+                      description: CreatedAt is the time the backup completed.
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name is the backup name.
+                      type: string
+                    sourcePVC:
+                      description: SourcePVC is the source this entry belongs to.
+                      type: string
+                  required:
+                  - createdAt
+                  - name
+                  - sourcePVC
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - sourcePVC
+                x-kubernetes-list-type: map
+              pendingRunSource:
+                description: PendingRunSource is the trigger source of the queued
+                  run. It keeps the name of the queued Restore stable across reconciles.
+                type: string
+              retainedResources:
+                description: RetainedResources lists objects kept after a failed run.
+                  They help debugging.
+                items:
+                  type: string
+                type: array
+              retryAt:
+                description: RetryAt is when the next attempt of the run in progress
+                  is created.
+                format: date-time
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+        x-kubernetes-validations:
+        - message: name must be at most 50 characters
+          rule: size(self.metadata.name) <= 50
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -1,0 +1,20 @@
+# One manual Kopiur backup per PVC. A SnapshotSchedule creates them on a schedule.
+# Kopiur labels every Snapshot with kopiur.home-operations.com/config=<policy>, manual or
+# scheduled. The RestoreTest backupSelector matches that label.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: html-1
+spec:
+  policyRef:
+    name: html
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: mysql-1
+spec:
+  policyRef:
+    name: mysql
+  deletionPolicy: Retain

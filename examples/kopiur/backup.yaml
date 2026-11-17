@@ -1,0 +1,68 @@
+# Kopiur backup: one S3 repository, one SnapshotPolicy per PVC.
+# Each backup takes a CSI snapshot of the PVC, then copies it to the repository.
+# The Secret kopiur-repo-creds holds AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and KOPIA_PASSWORD.
+# The endpoint and snapshot class are the kind dev cluster names. Replace them.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: primary
+spec:
+  backend:
+    s3:
+      bucket: kopiur
+      prefix: wordpress/
+      endpoint: versitygw.storage.svc.cluster.local:7070
+      region: us-east-1
+      tls:
+        disableTls: true
+      auth:
+        secretRef:
+          name: kopiur-repo-creds
+  encryption:
+    passwordSecretRef:
+      name: kopiur-repo-creds
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: html
+spec:
+  repository:
+    kind: Repository
+    name: primary
+  sources:
+    - pvc:
+        name: html
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-hostpath-snapclass
+  retention:
+    keepDaily: 7
+  mover:
+    securityContext:
+      runAsUser: 33
+      runAsGroup: 33
+      runAsNonRoot: true
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: mysql
+spec:
+  repository:
+    kind: Repository
+    name: primary
+  sources:
+    - pvc:
+        name: mysql
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-hostpath-snapclass
+  retention:
+    keepDaily: 7
+  mover:
+    securityContext:
+      runAsUser: 999
+      runAsGroup: 999
+      runAsNonRoot: true

@@ -1,0 +1,53 @@
+# RestoreCheck for rabbitmq 3.13 (management image). Files only: mnesia dir and message store.
+# Canary contract: queue bret.canary holds BRET_CANARY_MESSAGES messages.
+# Seed the canary before the backup.
+# Node name: the test runs as rabbit@localhost. This is a harness workaround.
+# A real check must run with the source node name (RABBITMQ_NODENAME). Otherwise, mnesia will not load.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreCheck
+metadata:
+  name: rabbitmq
+spec:
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /var/lib/rabbitmq
+
+  initContainers: []
+
+  containers:
+    - name: check
+      image: rabbitmq:3.13-management
+      securityContext:
+        runAsUser: 999
+      env:
+        - name: RABBITMQ_NODENAME
+      # Must equal the source node. mnesia is tied to it.
+          value: rabbit@localhost
+        - name: BRET_CANARY_MESSAGES
+          value: "1"
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          # Start the broker in the background and stop it on exit.
+          rabbitmq-server -detached
+          trap 'rabbitmqctl stop >/dev/null 2>&1 || true' EXIT
+          # Epmd registration lags the detach; wait for the node to answer before the CLI calls.
+          for i in $(seq 1 120); do
+            rabbitmq-diagnostics -q ping >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          # Node must boot, report running, and raise no local alarms.
+          rabbitmqctl await_startup --timeout 180
+          rabbitmq-diagnostics -q check_running
+          rabbitmq-diagnostics -q check_local_alarms
+
+          # Canary queue must hold the seeded message count.
+          count=$(rabbitmqctl list_queues -q name messages \
+              | awk '$1 == "bret.canary" {print $2}')
+          test "$count" = "$BRET_CANARY_MESSAGES"
+
+  volumes: []

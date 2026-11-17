@@ -1,0 +1,43 @@
+package controller
+
+import "k8s.io/apimachinery/pkg/api/resource"
+
+const (
+	testNamespace  = "default"
+	testApp        = "postgres"
+	testMountPath  = "/var/lib/postgresql/data"
+	testCheckName  = "check"
+	testLabelKey   = "app"
+	testLabelValue = "pg"
+
+	testDataName      = "data"
+	testDataPath      = "/data"
+	testDataClaim     = "r1-data"
+	testBackupName    = "backup"
+	testStatusKey     = "status"
+	testWorkArea      = "Work Area"
+	testWorkAreaClaim = "r1-scratch-work-area"
+	testSize1Gi       = "1Gi"
+	testSize5Gi       = "5Gi"
+	testSize10Gi      = "10Gi"
+	testPVCKeyA       = "ns/a"
+	testPVCKeyB       = "ns/b"
+	testRepoSecret    = "repo-secret"
+	testImage         = "busybox"
+	testScratchPath   = "/scratch"
+	testTrue          = "true"
+	testVolumes       = "volumes"
+	testHourlyCron    = "0 * * * *"
+	testOther         = "other"
+	testVeleroNS      = "velero-system"
+	testSpecKey       = "spec"
+	testPVCKey        = "pvc"
+)
+
+func quantityPtr(s string) *resource.Quantity {
+	q := resource.MustParse(s)
+
+	return &q
+}
+
+const testMatchLabels = "matchLabels"

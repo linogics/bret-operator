@@ -1,0 +1,28 @@
+# The smallest working RestoreCheck: the short form with one volume. For two volumes see
+# checks/wordpress/restorecheck.yaml. The volume is restored to /data. The check recomputes the SHA-256 of the canary file.
+# Canary contract: /data/canary.txt holds the payload. /data/canary.sha256 holds its hash.
+# The seed for this check is seed.yaml in this folder.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreCheck
+metadata:
+  name: minimal
+spec:
+  restoredVolumes:
+    - sourcePVC: data           # The PVC in the backed-up namespace.
+      mountPath: /data
+  containers:
+    - name: check
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          test -f /data/canary.txt
+          expected="$(cat /data/canary.sha256)"
+          actual="$(sha256sum /data/canary.txt | cut -d ' ' -f 1)"
+          test "$actual" = "$expected"
+          echo "canary ok"

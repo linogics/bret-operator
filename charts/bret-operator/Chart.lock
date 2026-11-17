@@ -1,0 +1,6 @@
+dependencies:
+- name: bret-operator-crds
+  repository: file://../bret-operator-crds
+  version: 0.1.0
+digest: sha256:60274d02b97c654fc89a870e3a11f753435d72994f5385d0b48bfc99af68fc6a
+generated: "2026-11-15T11:50:51.765172305Z"

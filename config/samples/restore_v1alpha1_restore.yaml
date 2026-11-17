@@ -1,0 +1,20 @@
+apiVersion: bret.linogics.io/v1alpha1
+kind: Restore
+metadata:
+  labels:
+    app.kubernetes.io/name: bret-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: restore-sample
+spec:
+  provider: kopiur
+  sources:
+    - sourcePVC: html
+      backupRef:
+        name: html-backup
+      size: 20Gi
+    - sourcePVC: pgdata
+      backupRef:
+        name: pgdata-backup
+      size: 10Gi
+  restoreCheckRef:
+    name: restorecheck-sample

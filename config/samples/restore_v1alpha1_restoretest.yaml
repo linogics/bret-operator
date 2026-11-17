@@ -1,0 +1,24 @@
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreTest
+metadata:
+  labels:
+    app.kubernetes.io/name: bret-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: restoretest-sample
+spec:
+  provider: kopiur
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-html
+      size: 20Gi
+    - sourcePVC: pgdata
+      backupSelector:
+        labels:
+          app.kubernetes.io/name: nextcloud-pgdata
+      size: 10Gi
+  restoreCheckRef:
+    name: restorecheck-sample
+  triggers:
+    manual: true

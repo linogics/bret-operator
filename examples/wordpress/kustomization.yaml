@@ -1,0 +1,12 @@
+# WordPress + MariaDB with two PVCs: html (the WordPress docroot) and mysql (the database).
+# The seed Job writes a canary: a file under wp-content/uploads and a post whose content is
+# the SHA-256 of that file. The RestoreCheck reads both from the restored PVCs.
+# No namespace here: pass it with kubectl apply -k ... -n <namespace>.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - secret.yaml
+  - mariadb.yaml
+  - wordpress.yaml
+  - seed-job.yaml
+  - ../../checks/wordpress

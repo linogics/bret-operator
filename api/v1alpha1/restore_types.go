@@ -1,0 +1,190 @@
+package v1alpha1
+
+import (
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+// Provider is the backup tool that performs a restore.
+// +kubebuilder:validation:Enum=velero;volsync;kopiur
+type Provider string
+
+const (
+	// ProviderVelero restores with Velero.
+	ProviderVelero Provider = "velero"
+	// ProviderVolSync restores with VolSync.
+	ProviderVolSync Provider = "volsync"
+	// ProviderKopiur restores with Kopiur.
+	ProviderKopiur Provider = "kopiur"
+)
+
+// RestorePhase is the lifecycle phase of a Restore.
+// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;Canceled
+type RestorePhase string
+
+const (
+	// RestorePhasePending means the restore has not started yet.
+	RestorePhasePending RestorePhase = "Pending"
+	// RestorePhaseRunning means the restore is in progress.
+	RestorePhaseRunning RestorePhase = "Running"
+	// RestorePhaseSucceeded means the restore and check finished successfully.
+	RestorePhaseSucceeded RestorePhase = "Succeeded"
+	// RestorePhaseFailed means the restore failed after all attempts.
+	RestorePhaseFailed RestorePhase = "Failed"
+	// RestorePhaseCanceled means the restore was stopped before it finished.
+	RestorePhaseCanceled RestorePhase = "Canceled"
+)
+
+// BackupRef points to a backup object in the provider's namespace.
+type BackupRef struct {
+	// Name is the name of the backup object.
+	Name string `json:"name"`
+	// Namespace is the namespace of the backup object.
+	Namespace string `json:"namespace,omitempty"`
+}
+
+// RestoreSource identifies one backup a Restore reads from and the scratch volume it writes into.
+type RestoreSource struct {
+	// SourcePVC is the name of the PVC in the backed-up namespace that this source restores.
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	// +kubebuilder:validation:MaxLength=63
+	SourcePVC string `json:"sourcePVC"`
+	// BackupRef is the backup to restore. Velero sources all name the same Backup.
+	BackupRef BackupRef `json:"backupRef"`
+	// RestoreAsOf restores the newest snapshot taken at or before this time. VolSync only.
+	// Unset restores the newest snapshot.
+	RestoreAsOf *metav1.Time `json:"restoreAsOf,omitempty"`
+	// RestoreTarget is the scratch volume to restore into.
+	RestoreTarget `json:",inline"`
+}
+
+// VeleroOptions narrows what a Velero restore brings back.
+// +kubebuilder:validation:XValidation:rule="!(has(self.labelSelector) && has(self.orLabelSelectors))",message="labelSelector and orLabelSelectors are mutually exclusive"
+type VeleroOptions struct {
+	// LabelSelector selects the namespace objects to restore.
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+	// OrLabelSelectors select the namespace objects to restore, any one may match.
+	OrLabelSelectors []*metav1.LabelSelector `json:"orLabelSelectors,omitempty"`
+}
+
+// Condition reasons for a Restore that cannot resolve its scratch size.
+const (
+	// ReasonSizeUnknown means the source size is unknown. target.size is not set.
+	ReasonSizeUnknown = "SizeUnknown"
+	// ReasonInsufficientCapacity means target.size is smaller than the source size.
+	ReasonInsufficientCapacity = "InsufficientCapacity"
+)
+
+// AutoExpand derives the scratch size from the source size.
+// The formula is: clamp(source * (100 + percentage) / 100, min, max).
+// +kubebuilder:validation:XValidation:rule="self.percentage > 0",message="percentage must be greater than 0"
+// +kubebuilder:validation:XValidation:rule="self.percentage <= 1000",message="percentage must not be greater than 1000"
+// +kubebuilder:validation:XValidation:rule="!has(self.min) || !has(self.max) || quantity(self.min).compareTo(quantity(self.max)) <= 0",message="min must not be greater than max"
+type AutoExpand struct {
+	// Percentage is the headroom added to the source size, in percent.
+	Percentage int32 `json:"percentage"`
+	// Min is the lower bound of the derived size.
+	Min *resource.Quantity `json:"min,omitempty"`
+	// Max is the upper bound of the derived size.
+	Max *resource.Quantity `json:"max,omitempty"`
+}
+
+// RestoreTarget describes the scratch volume a Restore writes into.
+type RestoreTarget struct {
+	// StorageClassName is the storage class of the scratch volume.
+	StorageClassName string `json:"storageClassName,omitempty"`
+	// Size is the capacity of the scratch volume. The source size sets it when unset.
+	Size *resource.Quantity `json:"size,omitempty"`
+	// AutoExpand derives the size from the source size when Size is unset.
+	AutoExpand *AutoExpand `json:"autoExpand,omitempty"`
+}
+
+// RestoreSpec defines the desired state of Restore.
+// +kubebuilder:validation:XValidation:rule="self.sources.all(s, self.sources.exists_one(o, o.sourcePVC == s.sourcePVC))",message="sourcePVC must be unique across sources"
+// +kubebuilder:validation:XValidation:rule="self.provider != 'velero' || self.sources.all(s, s.backupRef == self.sources[0].backupRef && !has(s.size) && !has(s.autoExpand) && !has(s.storageClassName))",message="provider velero needs the same backupRef on every source and no size, autoExpand or storageClassName"
+// +kubebuilder:validation:XValidation:rule="self.provider == 'velero' || !has(self.velero)",message="spec.velero is only allowed with provider velero"
+// +kubebuilder:validation:XValidation:rule="self.provider == 'volsync' || self.sources.all(s, !has(s.restoreAsOf))",message="restoreAsOf is only allowed with provider volsync"
+type RestoreSpec struct {
+	// Provider is the backup tool that performs the restore.
+	Provider Provider `json:"provider"`
+	// Sources are the backups to restore from, each with its scratch volume.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=10
+	Sources []RestoreSource `json:"sources"`
+	// RestoreCheckRef is the RestoreCheck that checks the restored data.
+	RestoreCheckRef RestoreCheckRef `json:"restoreCheckRef"`
+	// RestoreWindow is the deadline for this attempt. It covers the restore, image pulls and the check.
+	// +kubebuilder:default="45m"
+	RestoreWindow metav1.Duration `json:"restoreWindow,omitempty"`
+	// Velero narrows what a Velero restore brings back. Velero only.
+	Velero *VeleroOptions `json:"velero,omitempty"`
+	// KeepOnFailure keeps the check pod, scratch volume and native restore object after a failed attempt.
+	// +kubebuilder:default=false
+	KeepOnFailure bool `json:"keepOnFailure,omitempty"`
+}
+
+// ProviderRef identifies the native object created by the provider.
+type ProviderRef struct {
+	// Kind is the kind of the native object.
+	Kind string `json:"kind,omitempty"`
+	// Name is the name of the native object.
+	Name string `json:"name,omitempty"`
+	// Namespace is the namespace of the native object.
+	Namespace string `json:"namespace,omitempty"`
+}
+
+// RestoreStatus defines the observed state of Restore.
+type RestoreStatus struct {
+	// Phase is the current lifecycle phase.
+	Phase RestorePhase `json:"phase,omitempty"`
+	// Attempt is the number of the current attempt, starting at 1.
+	Attempt int32 `json:"attempt,omitempty"`
+	// StartTime is when the first attempt started.
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	// Deadline is when the current attempt times out.
+	Deadline *metav1.Time `json:"deadline,omitempty"`
+	// ProviderRefs are the native objects created by the provider.
+	ProviderRefs []ProviderRef `json:"providerRefs,omitempty"`
+	// ResolvedSizes maps each sourcePVC to the scratch size resolved on the first reconcile. Later reconciles reuse it.
+	// Velero uses the empty key.
+	ResolvedSizes map[string]resource.Quantity `json:"resolvedSizes,omitempty"`
+	// Message is a human-readable detail about the current phase.
+	Message string `json:"message,omitempty"`
+	// Conditions are the latest observations of the restore state.
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=restore
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) <= 63",message="name must be at most 63 characters"
+// +kubebuilder:printcolumn:name="Provider",type=string,JSONPath=`.spec.provider`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Attempt",type=integer,JSONPath=`.status.attempt`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+
+// Restore is one restore run. It is manual or started by a RestoreTest.
+type Restore struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the desired state of the restore.
+	Spec RestoreSpec `json:"spec"`
+	// Status is the observed state of the restore.
+	Status RestoreStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// RestoreList contains a list of Restore.
+type RestoreList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Restore `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&Restore{}, &RestoreList{})
+}

@@ -1,0 +1,23 @@
+# Restore: one manual restore test of the Velero Backup wordpress-1.
+# One Velero Backup holds every PVC of the namespace, so all sources name the same backupRef.
+# bret restores only PVCs and PVs, into a scratch namespace bret-scratch-<hash>, under their
+# source names. Velero picks the size and storage class, so sources have no size fields.
+apiVersion: bret.linogics.io/v1alpha1
+kind: Restore
+metadata:
+  name: wordpress-manual
+spec:
+  provider: velero
+  sources:
+    - sourcePVC: html
+      backupRef:
+        name: wordpress-1   # A Velero Backup in the Velero namespace.
+    - sourcePVC: mysql
+      backupRef:
+        name: wordpress-1
+  velero:                   # Optional. Restore only the PVCs with these labels.
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: wordpress
+  restoreCheckRef:
+    name: wordpress

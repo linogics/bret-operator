@@ -1,0 +1,32 @@
+# RestoreTest: restore the newest Completed Velero Backup that covers this namespace.
+# Every source has the same backupSelector, because one Backup holds both PVCs.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreTest
+metadata:
+  name: wordpress
+spec:
+  provider: velero
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        labels:
+          velero.io/schedule-name: wordpress
+    - sourcePVC: mysql
+      backupSelector:
+        labels:
+          velero.io/schedule-name: wordpress
+  velero:
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: wordpress
+  restoreCheckRef:
+    name: wordpress
+  triggers:
+    cron: "17 3 * * *"
+    afterBackup:
+      delay: 30m
+    manual: true
+  restoreWindow: 45m
+  retries:
+    count: 1
+    backoff: 10m

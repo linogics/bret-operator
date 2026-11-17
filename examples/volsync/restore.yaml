@@ -1,0 +1,20 @@
+# Restore: one manual restore test of the newest restic snapshot of each ReplicationSource.
+# backupRef names the ReplicationSource. restoreAsOf (optional) pins an older snapshot.
+# Restored claims: <restore>-<sourcePVC>, here wordpress-manual-html and wordpress-manual-mysql.
+apiVersion: bret.linogics.io/v1alpha1
+kind: Restore
+metadata:
+  name: wordpress-manual
+spec:
+  provider: volsync
+  sources:
+    - sourcePVC: html
+      backupRef:
+        name: html                       # The ReplicationSource of the html PVC.
+      storageClassName: csi-hostpath-sc
+    - sourcePVC: mysql
+      backupRef:
+        name: mysql
+      storageClassName: csi-hostpath-sc
+  restoreCheckRef:
+    name: wordpress

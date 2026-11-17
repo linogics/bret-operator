@@ -1,0 +1,95 @@
+# Seed for restorecheck.yaml in this folder. Two PVCs, named by the restoredVolumes keys: config and media.
+# Config is /config, media is /media, both uid 1000 at the PVC root.
+# Starts jellyfin on a fresh config so it creates library.db and jellyfin.db, writes the media
+# canary, then kill -9 so the backup is crash-consistent.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: config
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 1000:1000 /config /media"
+      volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: media
+          mountPath: /media
+  containers:
+    - name: seed
+      image: jellyfin/jellyfin:10.9.11
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          canary=/media/bret-canary
+
+          # Start the server in the background. First boot writes the config and library.db.
+          /jellyfin/jellyfin --datadir /config >/tmp/seed-jf.log 2>&1 &
+          pid=$!
+
+          # Wait for the health endpoint to report Healthy (up to 150 s).
+          for i in $(seq 1 150); do
+            curl -fs http://127.0.0.1:8096/health 2>/dev/null | grep -q Healthy && break
+            sleep 1
+          done
+          curl -fs http://127.0.0.1:8096/health | grep -q Healthy
+          test -f /config/data/library.db || test -f /config/library.db
+
+          # Canary media file and its checksum file.
+          mkdir -p "$canary"
+          printf '%s' 'seed-canary-payload-not-secret' > "$canary/canary.txt"
+          (cd "$canary" && sha256sum canary.txt > canary.sha256)
+          sync
+
+          # Crash-consistent point: no clean shutdown.
+          kill -9 "$pid"
+          sleep 2
+      volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: media
+          mountPath: /media
+  volumes:
+    - name: config
+      persistentVolumeClaim:
+        claimName: config
+    - name: media
+      persistentVolumeClaim:
+        claimName: media

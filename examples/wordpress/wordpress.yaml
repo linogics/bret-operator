@@ -1,0 +1,67 @@
+# WordPress keeps its docroot, wp-config.php and wp-content, on the html PVC. Apache serves it as uid 33.
+# On first start the image copies WordPress into the empty docroot and writes wp-config.php.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: html
+  labels:
+    app.kubernetes.io/name: wordpress
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+spec:
+  selector:
+    app.kubernetes.io/name: wordpress
+  ports:
+    - port: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wordpress
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wordpress
+    spec:
+      containers:
+        - name: wordpress
+          image: wordpress:6.6-php8.3-apache
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: mariadb
+          envFrom:
+            - secretRef:
+                name: wordpress-db
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            exec:
+              command:
+                - test
+                - -f
+                - /var/www/html/wp-config.php
+            periodSeconds: 5
+          volumeMounts:
+            - name: html
+              mountPath: /var/www/html
+      volumes:
+        - name: html
+          persistentVolumeClaim:
+            claimName: html

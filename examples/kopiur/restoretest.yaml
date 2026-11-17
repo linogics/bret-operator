@@ -1,0 +1,30 @@
+# RestoreTest: restore the newest Kopiur Snapshot of each PVC and run the check.
+# Each backupSelector matches the policy label Kopiur sets on every Snapshot.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreTest
+metadata:
+  name: wordpress
+spec:
+  provider: kopiur
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        labels:
+          kopiur.home-operations.com/config: html
+      storageClassName: csi-hostpath-sc
+    - sourcePVC: mysql
+      backupSelector:
+        labels:
+          kopiur.home-operations.com/config: mysql
+      storageClassName: csi-hostpath-sc
+  restoreCheckRef:
+    name: wordpress
+  triggers:
+    cron: "17 3 * * *"   # 03:17 UTC every day.
+    afterBackup:
+      delay: 30m         # Also 30 minutes after every source has a new backup.
+    manual: true         # On demand with the bret.linogics.io/run-now annotation.
+  restoreWindow: 45m
+  retries:
+    count: 1
+    backoff: 10m

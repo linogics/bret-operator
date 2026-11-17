@@ -1,0 +1,66 @@
+# Postgres data dir: PGDATA is <mount>/pgdata.
+# The pgdata-perms init container sets 0700. Postgres refuses 2770 after a restore.
+# RestoreCheck for postgres. Database only. One PVC.
+# Canary contract: table bret_canary(id int, payload text, sha256 text) in db "app".
+# Row id=1 holds sha256 = hex(sha256(payload)). Seed it before the backup.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreCheck
+metadata:
+  name: postgres
+spec:
+  restoredVolumes:
+    - sourcePVC: data
+      mountPath: /var/lib/postgresql/data
+
+  initContainers:
+    - name: pgdata-perms
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          # Postgres refuses a data dir that is not 0700 or 0750. Restore can leave it wider.
+          test -f "$PGDATA/PG_VERSION"
+          chmod 0700 "$PGDATA"
+
+  containers:
+    - name: check
+      image: postgres:17.12
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          # Crash recovery on the restored files is part of the test.
+          pg_ctl -D "$PGDATA" -l /tmp/pg.log -o "-k /tmp -c listen_addresses=''" -w -t 150 start
+          trap 'pg_ctl -D "$PGDATA" -m fast stop || true' EXIT
+
+          # Structural check of every btree index and heap page, all databases.
+          # amcheck is an extension. Create it in the scratch copy, not in the source.
+          sql="select datname from pg_database where datallowconn"
+          for db in $(psql -h /tmp -U postgres -tAc "$sql"); do
+            psql -h /tmp -U postgres -d "$db" -qc "create extension if not exists amcheck"
+            pg_amcheck -h /tmp -U postgres -d "$db" --heapallindexed
+          done
+
+          # Canary row: payload must still hash to the stored sha256.
+          sql="select count(*) from bret_canary where id = 1"
+          sql="$sql and encode(sha256(payload::bytea), 'hex') = sha256"
+          test "$(psql -h /tmp -U postgres -d app -tAc "$sql")" = 1
+
+  volumes: []

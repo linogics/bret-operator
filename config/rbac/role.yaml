@@ -1,0 +1,135 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - secrets
+  verbs:
+  - create
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - delete
+  - get
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - bret.linogics.io
+  resources:
+  - restorechecks
+  - restores
+  - restoretests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - bret.linogics.io
+  resources:
+  - restorechecks/finalizers
+  - restores/finalizers
+  - restoretests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - bret.linogics.io
+  resources:
+  - restorechecks/status
+  - restores/status
+  - restoretests/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
+  - restores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
+  - snapshotpolicies
+  verbs:
+  - get
+- apiGroups:
+  - kopiur.home-operations.com
+  resources:
+  - snapshots
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - velero.io
+  resources:
+  - backups
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - velero.io
+  resources:
+  - restores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - volsync.backube
+  resources:
+  - replicationdestinations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - volsync.backube
+  resources:
+  - replicationsources
+  verbs:
+  - get
+  - list
+  - watch

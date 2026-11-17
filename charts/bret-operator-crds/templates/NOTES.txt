@@ -1,0 +1,4 @@
+bret-operator CRDs {{ .Chart.Version }} are installed.
+
+Kinds: restores, restoretests, restorechecks (bret.linogics.io/v1alpha1).
+Helm installs CRDs once. It does not upgrade or delete them.

@@ -1,0 +1,22 @@
+# Restore: one manual restore test of the Kopiur Snapshots html-1 and mysql-1.
+# One source per PVC. The check in restoreCheckRef runs once both PVCs are restored.
+# Restored claims: <restore>-<sourcePVC>, here wordpress-manual-html and wordpress-manual-mysql.
+apiVersion: bret.linogics.io/v1alpha1
+kind: Restore
+metadata:
+  name: wordpress-manual
+spec:
+  provider: kopiur
+  sources:
+    - sourcePVC: html
+      backupRef:
+        name: html-1                     # A Kopiur Snapshot of the html PVC.
+      storageClassName: csi-hostpath-sc  # Storage class for the scratch volume.
+    - sourcePVC: mysql
+      backupRef:
+        name: mysql-1
+      storageClassName: csi-hostpath-sc
+      autoExpand:                        # Optional. Default: the source size.
+        percentage: 25
+  restoreCheckRef:
+    name: wordpress

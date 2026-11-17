@@ -1,0 +1,77 @@
+# Seed for restorecheck.yaml in this folder. Config is /config, uid 1000 (PVC root).
+# Starts HA on a fresh config so it creates home-assistant_v2.db, writes the canary, then
+# kill -9 so the backup is crash-consistent.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 1000:1000 /config"
+      volumeMounts:
+        - name: data
+          mountPath: /config
+  containers:
+    - name: seed
+      image: homeassistant/home-assistant:2024.9.0
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          canary=/config/bret-canary
+
+          # Start HA in the background. First boot writes the config and the recorder DB.
+          python3 -m homeassistant --config /config --skip-pip >/tmp/seed-ha.log 2>&1 &
+          pid=$!
+
+          # HTTP API answers 401 without a token once the app is up (up to 240 s).
+          code=000
+          for i in $(seq 1 240); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/ || true)
+            [ "$code" = 401 ] && break
+            sleep 1
+          done
+          test "$code" = 401
+          test -f /config/home-assistant_v2.db
+
+          # Canary file and its checksum file.
+          mkdir -p "$canary"
+          printf '%s' 'seed-canary-payload-not-secret' > "$canary/canary.txt"
+          (cd "$canary" && sha256sum canary.txt > canary.sha256)
+          sync
+
+          # Crash-consistent point: no clean shutdown.
+          kill -9 "$pid"
+          sleep 2
+      volumeMounts:
+        - name: data
+          mountPath: /config
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

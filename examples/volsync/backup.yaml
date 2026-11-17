@@ -1,0 +1,42 @@
+# VolSync backup: one ReplicationSource per PVC, each with its own restic repository in S3.
+# A shared repository races on init, so each PVC has its own Secret (restic-html, restic-mysql)
+# with RESTIC_REPOSITORY, RESTIC_PASSWORD, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+# Each sync takes a CSI snapshot, then copies it with restic. The schedule runs nightly. For one
+# backup now, patch spec.trigger to {manual: <id>}. The snapshot class is the kind dev name.
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: html
+spec:
+  sourcePVC: html
+  trigger:
+    schedule: "0 2 * * *"
+  restic:
+    repository: restic-html
+    copyMethod: Snapshot
+    volumeSnapshotClassName: csi-hostpath-snapclass
+    retain:
+      daily: 7
+    moverSecurityContext:
+      runAsUser: 33
+      runAsGroup: 33
+      fsGroup: 33
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: mysql
+spec:
+  sourcePVC: mysql
+  trigger:
+    schedule: "0 2 * * *"
+  restic:
+    repository: restic-mysql
+    copyMethod: Snapshot
+    volumeSnapshotClassName: csi-hostpath-snapclass
+    retain:
+      daily: 7
+    moverSecurityContext:
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999

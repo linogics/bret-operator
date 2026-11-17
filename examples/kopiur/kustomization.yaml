@@ -1,0 +1,7 @@
+# WordPress backed up with Kopiur. Apply with: kubectl apply -k examples/kopiur -n <namespace>
+# Needs the Secret kopiur-repo-creds first (see docs/providers/kopiur.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../wordpress
+  - backup.yaml

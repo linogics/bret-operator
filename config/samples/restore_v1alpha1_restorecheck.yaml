@@ -1,0 +1,20 @@
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreCheck
+metadata:
+  labels:
+    app.kubernetes.io/name: bret-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: restorecheck-sample
+spec:
+  restoredVolumes:
+    - sourcePVC: html
+      mountPath: /var/www/html
+    - sourcePVC: pgdata
+      mountPath: /var/lib/postgresql/data
+  containers:
+    - name: check
+      image: busybox:1.37
+      command:
+        - /bin/sh
+        - -c
+        - test -d /var/www/html && test -d /var/lib/postgresql/data

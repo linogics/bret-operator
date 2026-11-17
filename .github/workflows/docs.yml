@@ -1,0 +1,29 @@
+name: Docs
+
+# Regenerates the API reference (docs/reference/api.md) and the chart README from source,
+# then fails if the committed files differ. Fix with: make docs && git add docs charts
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  generated-docs:
+    name: Generated docs are up to date
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Regenerate and compare
+        run: make docs-check

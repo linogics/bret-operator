@@ -1,0 +1,89 @@
+# Seed for restorecheck.yaml in this folder. Datadir is /var/lib/mysql (uid 999), the PVC root.
+# Writes the canary, then kill -9 mysqld so the backup is crash-consistent.
+# The check must recover from the redo log on boot.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+spec:
+  restartPolicy: Never
+  initContainers:
+    - name: chown-data
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - "chown 999:999 /var/lib/mysql"
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+  containers:
+    - name: seed
+      image: mysql:8.4
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+
+          sock=/tmp/mysql.sock
+          payload=canary-payload-42
+
+          # Fresh datadir, then the server on a socket only.
+          mysqld --initialize-insecure --user=mysql --datadir=/var/lib/mysql >/tmp/init.log 2>&1
+          mysqld --user=mysql --datadir=/var/lib/mysql --socket="$sock" \
+              --skip-networking --mysqlx=OFF >/tmp/mysqld.log 2>&1 &
+          pid=$!
+
+          # Wait for the server (up to 150 s).
+          for i in $(seq 1 150); do
+            mysqladmin -S "$sock" ping >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          # Canary row: payload and its sha256.
+          mysql -S "$sock" -u root -e "create database bret"
+          mysql -S "$sock" -u root -D bret -e "
+            create table canary(id int primary key, payload text, sha256 char(64));
+            insert into canary values (1, '$payload', sha2('$payload', 256));"
+
+          # Filler rows 1..1000 so the backup holds more than the canary.
+          # MySQL has no sequence table: cross join three digit tables.
+          digits="select 0 n union all select 1 union all select 2 union all select 3
+            union all select 4 union all select 5 union all select 6 union all select 7
+            union all select 8 union all select 9"
+          mysql -S "$sock" -u root -D bret -e "
+            create table filler as
+            select t.n as id, md5(t.n) as h
+            from (
+              select a.n + b.n * 10 + c.n * 100 + 1 as n
+              from ($digits) a, ($digits) b, ($digits) c
+            ) t"
+
+          # Crash-consistent point: no clean shutdown.
+          kill -9 "$pid"
+          sleep 2
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

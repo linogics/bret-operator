@@ -1,0 +1,107 @@
+# Default values for bret-operator.
+
+# -- Number of manager replicas. Leader election keeps one replica active.
+replicaCount: 1
+
+image:
+  # -- Container image repository.
+  repository: ghcr.io/linogics/bret-operator
+  # -- Image tag. Defaults to the chart appVersion when empty.
+  tag: ""
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for private registries.
+imagePullSecrets: []
+
+# -- Override the chart name.
+nameOverride: ""
+
+# -- Override the full release name.
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create the service account used by the manager.
+  create: true
+  # -- Name of the service account. Generated from the release name when empty.
+  name: ""
+  # -- Annotations added to the service account.
+  annotations: {}
+
+# -- Extra labels added to all resources and pods.
+commonLabels: {}
+
+# -- Extra annotations added to the manager pod.
+podAnnotations: {}
+
+# -- Extra labels added to the manager pod.
+podLabels: {}
+
+# -- Pod security context. The default follows the restricted Pod Security Standard.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container security context.
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# -- Manager resources.
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+# -- Node selector for the manager pod.
+nodeSelector: {}
+
+# -- Tolerations for the manager pod.
+tolerations: []
+
+# -- Affinity for the manager pod.
+affinity: {}
+
+providers:
+  kopiur:
+    # -- Enable the Kopiur provider.
+    enabled: true
+  velero:
+    # -- Enable the Velero provider. Adds the velero.io rights and the cluster-wide namespace rights
+    # for the scratch namespace. Pod and PVC rights are cluster-wide with Velero on, otherwise they
+    # are bound per watched namespace. Also adds cluster-wide get and create on Secrets and
+    # ConfigMaps: the operator copies those a check names into the scratch namespace.
+    enabled: false
+    # -- Velero install namespace. The operator creates its Velero objects here (env VELERO_NAMESPACE).
+    # With watchNamespaces set, the velero.io rights are bound here even if it is not listed.
+    namespace: velero
+  volsync:
+    # -- Enable the VolSync provider.
+    enabled: false
+
+# -- Namespaces the manager watches. Empty means cluster-wide. Otherwise the restore rights are bound per namespace with a Role.
+watchNamespaces: []
+
+# -- How often a running attempt is checked again, for example 30s. Minimum 5s.
+# Lower values show results sooner, but cost one API read per running attempt per poll.
+pollInterval: 30s
+
+metrics:
+  # -- Serve Prometheus metrics. When false the metrics endpoint is disabled.
+  enabled: true
+  # -- Serve metrics over HTTPS with token authentication and authorization.
+  secure: true
+  # -- Port of the metrics endpoint.
+  port: 8443
+
+# -- Extra command line arguments for the manager binary, for example `--zap-log-level=debug`.
+extraArgs: []
+
+# -- Extra environment variables for the manager container.
+extraEnv: []

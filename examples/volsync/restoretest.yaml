@@ -1,0 +1,29 @@
+# RestoreTest: restore each PVC from its ReplicationSource and run the check.
+# The backup is the last sync (status.lastSyncTime). bret pins the restore to that time,
+# so a sync during the run does not change what is tested.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreTest
+metadata:
+  name: wordpress
+spec:
+  provider: volsync
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        name: html       # The ReplicationSource. labels must match exactly one.
+      storageClassName: csi-hostpath-sc
+    - sourcePVC: mysql
+      backupSelector:
+        name: mysql
+      storageClassName: csi-hostpath-sc
+  restoreCheckRef:
+    name: wordpress
+  triggers:
+    cron: "17 3 * * *"
+    afterBackup:
+      delay: 30m
+    manual: true
+  restoreWindow: 45m
+  retries:
+    count: 1
+    backoff: 10m

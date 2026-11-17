@@ -1,0 +1,109 @@
+package controller
+
+import (
+	"context"
+	"strings"
+
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
+
+	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
+)
+
+var _ = Describe("RestoreTest Controller", func() {
+	Context("When reconciling a resource", func() {
+		const resourceName = "test-resource"
+
+		ctx := context.Background()
+
+		typeNamespacedName := types.NamespacedName{
+			Name:      resourceName,
+			Namespace: testNamespace,
+		}
+		restoretest := &restorev1alpha1.RestoreTest{}
+
+		BeforeEach(func() {
+			By("creating the custom resource for the Kind RestoreTest")
+
+			err := k8sClient.Get(ctx, typeNamespacedName, restoretest)
+			if err != nil && errors.IsNotFound(err) {
+				resource := &restorev1alpha1.RestoreTest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      resourceName,
+						Namespace: testNamespace,
+					},
+					Spec: restorev1alpha1.RestoreTestSpec{
+						Provider: restorev1alpha1.ProviderVelero,
+						Sources: []restorev1alpha1.RestoreTestSource{{
+							SourcePVC:      testDataName,
+							BackupSelector: restorev1alpha1.BackupSelector{Name: testBackupName},
+						}},
+						RestoreCheckRef: restorev1alpha1.RestoreCheckRef{Name: testCheckName},
+						RestoreWindow:   metav1.Duration{Duration: 45 * time.Minute},
+					},
+				}
+				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+			}
+		})
+
+		AfterEach(func() {
+			resource := &restorev1alpha1.RestoreTest{}
+			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Cleanup the specific resource instance RestoreTest")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+		It("should successfully reconcile the resource", func() {
+			By("Reconciling the created resource")
+
+			controllerReconciler := &RestoreTestReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				Recorder: record.NewFakeRecorder(10),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			// Example: If you expect a certain status condition after reconciliation, verify it here.
+		})
+
+		It("should limit the name so the Restore name fits a label value", func() {
+			base := &restorev1alpha1.RestoreTest{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, base)).To(Succeed())
+
+			for _, tc := range []struct {
+				name    string
+				accepts bool
+			}{
+				{strings.Repeat("a", 50), true},
+				{strings.Repeat("a", 51), false},
+			} {
+				long := &restorev1alpha1.RestoreTest{
+					ObjectMeta: metav1.ObjectMeta{Name: tc.name, Namespace: testNamespace},
+					Spec:       *base.Spec.DeepCopy(),
+				}
+
+				err := k8sClient.Create(ctx, long)
+				if tc.accepts {
+					Expect(err).NotTo(HaveOccurred())
+					Expect(k8sClient.Delete(ctx, long)).To(Succeed())
+				} else {
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("name must be at most 50 characters"))
+				}
+			}
+		})
+	})
+})

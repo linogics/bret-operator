@@ -1,0 +1,78 @@
+# Shell and PHP in block scalars are the content, not prose.
+# yamllint disable rule:line-length
+# Installs WordPress and writes the canary the RestoreCheck reads:
+# wp-content/uploads/bret-canary.txt, and a post bret-canary whose content is the file's SHA-256.
+# It runs next to the WordPress Deployment on the same html PVC (ReadWriteOnce, one node).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsUser: 33
+        runAsGroup: 33
+      containers:
+        - name: seed
+          image: wordpress:6.6-php8.3-apache
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: mariadb
+            - name: WP_ADMIN_PASS
+              value: example-wordpress-admin-not-secret
+          envFrom:
+            - secretRef:
+                name: wordpress-db
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+
+              # The WordPress Deployment writes wp-config.php on first start.
+              test -f /var/www/html/wp-config.php
+
+              mkdir -p /var/www/html/wp-content/uploads
+              printf '%s' 'example-canary-payload' > /var/www/html/wp-content/uploads/bret-canary.txt
+              sha=$(sha256sum /var/www/html/wp-content/uploads/bret-canary.txt | cut -d ' ' -f 1)
+
+              cat > /tmp/seed.php <<'PHP'
+              <?php
+              $_SERVER['HTTP_HOST'] = 'wordpress';
+              $_SERVER['SERVER_NAME'] = 'wordpress';
+              $_SERVER['REQUEST_METHOD'] = 'GET';
+              $_SERVER['REQUEST_URI'] = '/';
+              // wp-load exits 0 when the database is down, so fail here first and let the Job retry.
+              new mysqli(getenv('WORDPRESS_DB_HOST'), getenv('WORDPRESS_DB_USER'), getenv('WORDPRESS_DB_PASSWORD'), getenv('WORDPRESS_DB_NAME'));
+              define('WP_INSTALLING', true);
+              require '/var/www/html/wp-load.php';
+              require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+              if (!is_blog_installed()) {
+                  $r = wp_install('Bret Canary', 'bret', 'bret@example.invalid', true, '', getenv('WP_ADMIN_PASS'));
+                  if (is_wp_error($r)) { fwrite(STDERR, $r->get_error_message() . "\n"); exit(1); }
+              }
+              $old = get_page_by_path('bret-canary', OBJECT, 'post');
+              if ($old) { wp_delete_post($old->ID, true); }
+              $id = wp_insert_post(array(
+                  'post_title' => 'bret-canary',
+                  'post_name' => 'bret-canary',
+                  'post_content' => getenv('CANARY_SHA'),
+                  'post_status' => 'publish',
+                  'post_author' => 1,
+              ), true);
+              if (is_wp_error($id)) { fwrite(STDERR, $id->get_error_message() . "\n"); exit(1); }
+              echo "canary post $id\n";
+              PHP
+
+              CANARY_SHA="$sha" php /tmp/seed.php
+              sync
+          volumeMounts:
+            - name: html
+              mountPath: /var/www/html
+      volumes:
+        - name: html
+          persistentVolumeClaim:
+            claimName: html
