@@ -1,4 +1,7 @@
-# Writing RestoreChecks
+---
+title: Write a check
+description: Write a RestoreCheck that proves restored data is usable.
+---
 
 A `RestoreCheck` is the check. It is a pod template. The operator creates a pod from it,
 mounts the restored volume, and runs it. The pod's exit code is the verdict. The operator does
@@ -10,8 +13,8 @@ not read logs.
 You may use any image and any language: bash, Python, a Go binary, `psql`, `php occ`, `mysqlcheck`,
 or anything else that exits with a code. The check runs in its own image, not in the application image.
 
-Start with [checks/wordpress/restorecheck.yaml](../checks/wordpress/restorecheck.yaml): an app with
-two volumes. [checks/minimal/restorecheck.yaml](../checks/minimal/restorecheck.yaml) is the
+Start with [checks/wordpress/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/wordpress/restorecheck.yaml): an app with
+two volumes. [checks/minimal/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/minimal/restorecheck.yaml) is the
 short form with one volume. Both work.
 
 ## Anatomy
@@ -69,7 +72,7 @@ check pod <restore>-check
 
 - Pod `Succeeded`: pass. Pod `Failed`: fail. The operator reads the pod phase.
 - An init container that exits non-zero fails the attempt before the checks run.
-- A check that hangs is stopped by `restoreWindow` (see [restoretest-guide.md](restoretest-guide.md)).
+- A check that hangs is stopped by `restoreWindow` (see [restoretest-guide.md](/guides/restore-tests/)).
 - Test each check with a broken input. Make the expected value wrong once, and confirm exit 1.
 
 ## Restored volumes
@@ -82,7 +85,7 @@ Each `restoredVolumes` entry has two fields:
 
 A `Restore` or `RestoreTest` must have one source with the same `sourcePVC` for every entry. If
 the sets differ, the `Restore` ends Failed with `SourceMissing`. See
-[concepts.md](concepts.md#which-pvc-gets-restored).
+[concepts.md](/concepts/volumes/#which-pvc-gets-restored).
 
 Key rule: the mount path must be the path the application used in production. Absolute paths in
 the application's config then still resolve on the restored copy.
@@ -97,7 +100,7 @@ spec:
 ```
 
 All volumes come from the same backup point. For a database plus files this is the point: see
-[data-and-database.md](data-and-database.md).
+[data-and-database.md](/guides/data-and-database/).
 
 ## Mover UID
 
@@ -130,13 +133,13 @@ Rules:
 - The operator deletes scratch PVCs with the attempt. With `keepOnFailure`, it keeps them.
 - `size` is required. Set it to what the check needs, not what the source had.
 - The operator does not compare `size` with the source. `InsufficientCapacity` is about the
-  restored volume only. See [concepts.md](concepts.md#scratch-volume-size).
+  restored volume only. See [concepts.md](/concepts/volumes/#scratch-volume-size).
 
 ## Native sidecars
 
 A check often needs a database server that runs next to it. For example, Keycloak or Nextcloud
 check against Postgres. Use a native sidecar: an init container with `restartPolicy: Always`, as
-`postgres` in the diagram under [Anatomy](#anatomy). Kubernetes 1.29 or newer is required.
+`postgres` in the diagram under [Anatomy](/guides/write-a-check/#anatomy). Kubernetes 1.29 or newer is required.
 
 ```yaml
 spec:
@@ -161,7 +164,7 @@ unchanged.
 2. The check reads the canary from the restored data and recomputes the SHA-256.
 3. The check passes only if the hashes match.
 
-Postgres example (from [checks/postgres/restorecheck.yaml](../checks/postgres/restorecheck.yaml)):
+Postgres example (from [checks/postgres/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/postgres/restorecheck.yaml)):
 
 ```sql
 select count(*) from bret_canary
@@ -177,18 +180,32 @@ A check can read a Secret, for example for a database password, an admin token, 
 key. The diagram shows where the check pod runs, and so where the Secret must be. Here your
 namespace is `data`.
 
-```text
-Kopiur, VolSync: one namespace         Velero: two namespaces
-
-┌ data ───────────────────────┐        ┌ data ───────────────────────┐
-│ RestoreTest                 │        │ RestoreTest                 │
-│ RestoreCheck                │        │ RestoreCheck                │
-│ Restore                     │        │ Restore                     │
-│ check pod ──reads─► Secret  │        │ Secret ──copied by operator─┼─┐
-└─────────────────────────────┘        └─────────────────────────────┘ │
-                                       ┌ bret-scratch-<hash> ────────┐ │
-                                       │ check pod ──reads─► Secret ◄┼─┘
-                                       └─────────────────────────────┘
+```d2 title="Where the check pod runs and where its Secret must be, per provider"
+direction: right
+one: "Kopiur, VolSync: one namespace" {
+  data: data {
+    rt: RestoreTest
+    rc: RestoreCheck
+    r: Restore
+    pod: check pod
+    secret: Secret
+    pod -> secret: reads
+  }
+}
+two: "Velero: two namespaces" {
+  data: data {
+    rt: RestoreTest
+    rc: RestoreCheck
+    r: Restore
+    secret: Secret
+  }
+  scratch: "bret-scratch-<hash>" {
+    pod: check pod
+    secret: Secret
+    pod -> secret: reads
+  }
+  data.secret -> scratch.secret: copied by operator
+}
 ```
 
 For every provider, create the Secret in the namespace of your `RestoreTest`. You do not need
@@ -236,7 +253,7 @@ Rules:
 - With Velero, the operator copies only Secrets and ConfigMaps named in `imagePullSecrets`, `env`
   and `envFrom`. Secret and ConfigMap volumes are rejected with `ProviderUnsupported`, and so are
   pull secrets that only the `default` ServiceAccount lists. The full list of what a Velero check
-  must not set is in [providers/velero.md](providers/velero.md#3-write-the-check).
+  must not set is in [providers/velero.md](/providers/velero/walkthrough/#3-write-the-check).
 
 ## Pod security
 
@@ -268,7 +285,7 @@ Two rules for database checks:
   `chmod 0700 "$PGDATA"`. Your data must live in `<mount>/pgdata`, which is the `PGDATA` in the
   check.
 
-The backup side needs the same UID. See [providers/](providers/README.md) for the
+The backup side needs the same UID. See [providers/](/providers/) for the
 mover security context of each tool.
 
 ## Images and tags
@@ -280,7 +297,7 @@ mover security context of each tool.
 
 ## Testing a check
 
-Read [testing-checks.md](testing-checks.md). Short version:
+Read [testing-checks.md](/guides/test-a-check/). Short version:
 
 ```bash
 # Run a check against restored PVCs you already have
@@ -292,5 +309,5 @@ hack/check-test/roundtrip.sh minimal checks/minimal/seed.yaml checks/minimal/res
 
 ## Catalog
 
-[checks/README.md](../checks/README.md) lists the app checks, the volumes each one
+[checks/README.md](/guides/check-catalog/) lists the app checks, the volumes each one
 needs, the canary it uses, and its test status.

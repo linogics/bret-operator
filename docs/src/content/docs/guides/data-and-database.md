@@ -1,4 +1,7 @@
-# Apps with data and a database
+---
+title: Data and database
+description: Apps with files and a database, restored from one point in time.
+---
 
 Some apps keep state in two places: files and a database, or a database plus a separate file
 store. Both parts must come from the same backup point. This page explains why, and how to do it.
@@ -7,7 +10,7 @@ store. Both parts must come from the same backup point. This page explains why, 
 
 A `RestoreCheck` lists every volume in `restoredVolumes`. A `Restore` or `RestoreTest` restores
 one source per volume in one attempt, and the check pod mounts them all. The `sourcePVC` values tie
-the two together. See [concepts.md](concepts.md#which-pvc-gets-restored).
+the two together. See [concepts.md](/concepts/volumes/#which-pvc-gets-restored).
 
 The checks for apps with several volumes are `checks/nextcloud/restorecheck.yaml`, `checks/wordpress/restorecheck.yaml`,
 `checks/jellyfin/restorecheck.yaml` and `checks/pihole/restorecheck.yaml`.
@@ -16,14 +19,18 @@ The checks for apps with several volumes are `checks/nextcloud/restorecheck.yaml
 
 The timeline shows how two backups taken at different times drift apart.
 
-```text
-10:00  DB backup ────────┐
-10:03  user uploads file │  row + file written
-10:05  files backup ─────┤
-                         ▼
-restore:  file exists, no DB row     (files newer than DB)
-swap the order: DB row, file missing
+```d2 title="Timeline of a DB backup and a files backup drifting apart"
+shape: sequence_diagram
+db: DB backup
+app: app
+files: files backup
+db -> db: "10:00 DB backed up"
+app -> app: "10:03 user uploads file\n(row + file written)"
+files -> files: "10:05 files backed up"
 ```
+
+On restore the file exists but the DB row is missing, because the files are newer than the DB.
+Swap the order and the DB row exists but the file is missing.
 
 Symptoms seen in the apps:
 
@@ -54,7 +61,7 @@ Symptoms seen in the apps:
 4. **Write checks that cross-reference.** A DB row must point to a file that exists, and the
    file must match the row.
 5. **Each restored workload holds its PVC alone.** Scale restored workloads to 0 before the
-   check pod mounts the PVCs (RWO). See [best-practices.md](best-practices.md).
+   check pod mounts the PVCs (RWO). See [best-practices.md](/guides/best-practices/).
 
 ## Worked example: Nextcloud
 
@@ -64,7 +71,7 @@ Files plus Postgres, two PVCs.
 - Files: `/var/www/html/data`. The rows that say which files exist and their sizes are in
   `oc_filecache` in Postgres.
 - Restore: two sources, `html` and `pgdata`, in one `Restore` or `RestoreTest`. Example:
-  [examples/kopiur/restoretest.yaml](../examples/kopiur/restoretest.yaml).
+  [examples/kopiur/restoretest.yaml](https://github.com/linogics/bret-operator/blob/main/examples/kopiur/restoretest.yaml).
 - Repair if drift happens: `occ files:scan` can fix listings but may drop or duplicate
   entries.
 - Check (`checks/nextcloud/restorecheck.yaml`): `occ status` shows installed, `occ integrity:check-core`

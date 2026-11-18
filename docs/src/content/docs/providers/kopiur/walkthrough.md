@@ -1,14 +1,7 @@
-# Kopiur
-
-Kopiur backs up one PVC per `Snapshot` with Kopia. bret restores each `Snapshot` into a scratch
-PVC and runs the check against all of them.
-
-Tested with Kopiur 0.11.0 on kind with Kubernetes 1.37. Upstream issue
-`kopiur#233` affects restores and is still open.
-
-Install Kopiur with its Helm chart into `kopiur-system`, as the Kopiur docs describe.
-
-Enable the provider in the bret chart with `providers.kopiur.enabled`. It is on by default.
+---
+title: Kopiur walkthrough
+description: WordPress and MariaDB backed up with Kopiur, restored and checked by bret.
+---
 
 ## 1. Deploy WordPress + MariaDB
 
@@ -25,11 +18,11 @@ kubectl apply -k examples/kopiur -n wordpress
 kubectl -n wordpress wait --for=condition=Complete job/seed --timeout=15m
 ```
 
-The app itself is in [examples/wordpress/](../../examples/wordpress/).
+The app itself is in [examples/wordpress/](https://github.com/linogics/bret-operator/tree/main/examples/wordpress).
 
 ## 2. Back up
 
-[examples/kopiur/backup.yaml](../../examples/kopiur/backup.yaml): one `Repository` in S3, and
+[examples/kopiur/backup.yaml](https://github.com/linogics/bret-operator/blob/main/examples/kopiur/backup.yaml): one `Repository` in S3, and
 one `SnapshotPolicy` per PVC. A backup takes a CSI snapshot of the PVC (`copyMethod: Snapshot`),
 then copies it into the repository.
 
@@ -111,7 +104,7 @@ with `pvcSelector`, which makes one `Snapshot` per matching PVC.
 The `mover` block is needed for every volume that the default mover UID 65532 cannot read. Set
 it to the owner of the data: 33 for the WordPress docroot, 999 for MariaDB.
 
-Take one backup by hand with [examples/kopiur/snapshot.yaml](../../examples/kopiur/snapshot.yaml).
+Take one backup by hand with [examples/kopiur/snapshot.yaml](https://github.com/linogics/bret-operator/blob/main/examples/kopiur/snapshot.yaml).
 For regular backups, create a `SnapshotSchedule` with a `policyRef` to each policy. Kopiur
 labels every `Snapshot`, manual or scheduled, with `kopiur.home-operations.com/config: <policy>`.
 The `RestoreTest` below selects on that label, so it finds scheduled backups too.
@@ -147,15 +140,15 @@ kubectl -n wordpress wait --for=jsonpath='{.status.phase}'=Succeeded snapshot --
 ## 3. Write the check
 
 The check is the same for every tool:
-[checks/wordpress/restorecheck.yaml](../../checks/wordpress/restorecheck.yaml). It mounts
+[checks/wordpress/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/wordpress/restorecheck.yaml). It mounts
 `html` and `mysql`, starts MariaDB as a sidecar, and compares the canary post with the canary
 file. The annotation `bret.linogics.io/mover-uid` gives the restore mover of each volume its UID.
-How to write a check: [checks.md](../checks.md).
+How to write a check: [checks.md](/guides/write-a-check/).
 
 ## 4. Restore by hand, then a RestoreTest
 
 A `Restore` names one `Snapshot` per source:
-[examples/kopiur/restore.yaml](../../examples/kopiur/restore.yaml).
+[examples/kopiur/restore.yaml](https://github.com/linogics/bret-operator/blob/main/examples/kopiur/restore.yaml).
 
 ```yaml
 # Restore: one manual restore test of the Kopiur Snapshots html-1 and mysql-1.
@@ -187,11 +180,11 @@ kubectl apply -f examples/kopiur/restore.yaml -n wordpress
 kubectl -n wordpress wait --for=jsonpath='{.status.phase}'=Succeeded restore/wordpress-manual --timeout=15m
 ```
 
-To see a failure, apply [examples/kopiur/negative/restore.yaml](../../examples/kopiur/negative/restore.yaml).
+To see a failure, apply [examples/kopiur/negative/restore.yaml](https://github.com/linogics/bret-operator/blob/main/examples/kopiur/negative/restore.yaml).
 It restores only `html`. It ends `Failed` with reason `SourceMissing`.
 
 A `RestoreTest` picks the newest `Snapshot` of each source and repeats the test:
-[examples/kopiur/restoretest.yaml](../../examples/kopiur/restoretest.yaml).
+[examples/kopiur/restoretest.yaml](https://github.com/linogics/bret-operator/blob/main/examples/kopiur/restoretest.yaml).
 
 ```yaml
 # RestoreTest: restore the newest Kopiur Snapshot of each PVC and run the check.
@@ -232,7 +225,7 @@ kubectl -n wordpress annotate --overwrite restoretest/wordpress bret.linogics.io
 kubectl -n wordpress get restoretest wordpress
 ```
 
-All fields: [restoretest-guide.md](../restoretest-guide.md).
+All fields: [restoretest-guide.md](/guides/restore-tests/).
 
 ## 5. How bret picks backups
 
@@ -296,32 +289,3 @@ spec:
 The restore is done when the Kopiur `Restore` has `status.phase: Completed` and its `Ready`
 condition has reason `RestoreSucceeded`. Kopiur says `Completed`, not `Succeeded`. Do not confuse
 these words with bret's phases.
-
-## 6. Troubleshooting
-
-### Kopiur restore: `MissingCredentialsSecret`
-
-- **Cause:** the restore runs in a namespace without the repository credentials Secret.
-- **Fix:** keep the Secret in the namespace of the `Restore`. See
-  [The Kopiur-native restore](#the-kopiur-native-restore).
-
-### Kopiur snapshot: `PermissionDenied`, `cannot create iterator: unable to read directory`
-
-- **Symptom:** `kopia snapshot create ... permission denied` on a database directory.
-- **Cause:** the snapshot mover runs as UID 65532 by default. The data directory is owned by the
-  database UID with mode 0700.
-- **Fix:** set `spec.mover.securityContext.runAsUser` on the `SnapshotPolicy` to the database UID
-  (999 for MariaDB and Postgres 17).
-
-### Kopiur snapshot stays `Pending`, `WaitingForStagedPvcBind`
-
-- **Symptom:** the condition says the staged PVC is waiting to bind. `kubectl get pvc` shows the
-  staged PVC `Bound` a few seconds later.
-- **Cause:** a reconcile lag. The controller retries on its own.
-- **Fix:** wait. If it stays Pending past the staging deadline in the condition message, read the
-  controller logs in `kopiur-system`.
-
-### RestoreTest stays at `BackupNotFound`
-
-- **Cause:** no `Succeeded` `Snapshot` matches the `backupSelector` of the named source.
-- **Fix:** check the labels with `kubectl get snapshot --show-labels`, and the phase.

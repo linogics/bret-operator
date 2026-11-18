@@ -1,4 +1,7 @@
-# Releasing
+---
+title: Releasing
+description: How to cut a release and what it publishes.
+---
 
 A release is a git tag. Pushing a tag that matches `v*.*.*` runs `.github/workflows/release.yml`.
 The workflow publishes three kinds of artifact. All of them have the same version.
@@ -23,10 +26,10 @@ the whole release, so renew it before it runs out.
 1. `main` is green. The Tests, Lint, Docs and Helm chart workflows pass.
 2. Generated files are current. `make docs-check` and `make helm-lint` pass locally.
 3. Review CRD changes. Helm does not upgrade CRDs. Note any schema change in the release
-   notes. Tell users to apply the CRDs first (see [installation.md](installation.md#upgrading)).
+   notes. Tell users to apply the CRDs first (see [installation.md](/start/installation/#upgrading)).
 4. The version you tag is a valid semantic version. Use `-rc.1` suffixes for pre-releases. The
    workflow marks those as pre-releases on GitHub.
-5. The check catalog status in [checks/README.md](../checks/README.md) matches what you
+5. The check catalog status in [checks/README.md](/guides/check-catalog/) matches what you
    claim in the release notes.
 
 ## Cut the release

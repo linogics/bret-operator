@@ -1,36 +1,7 @@
-# Velero
-
-Velero backs up a whole namespace in one `Backup`, with the PVC data moved to S3. bret restores
-the PVCs of that `Backup` into a scratch namespace and runs the check against them.
-
-Tested with Velero 1.18 (Helm chart 12.2.5) and the AWS plugin on kind with Kubernetes 1.37.
-
-Install:
-
-```bash
-velero install \
-  --provider aws \
-  --plugins velero/velero-plugin-for-aws:v1.14.4 \
-  --bucket velero \
-  --secret-file ./velero-credentials \
-  --backup-location-config "region=us-east-1,s3ForcePathStyle=true,s3Url=https://s3.example.internal" \
-  --use-node-agent \
-  --use-volume-snapshots=false \
-  --features=EnableCSI \
-  --wait
-```
-
-`velero-credentials` is an AWS-style credentials file. Do not commit it:
-
-```ini
-[default]
-aws_access_key_id = <access key>
-aws_secret_access_key = <secret key>
-```
-
-Enable the provider in the bret chart with `providers.velero.enabled: true`. The Velero install
-namespace is `providers.velero.namespace`, default `velero`. The chart passes it to the operator
-as `VELERO_NAMESPACE`.
+---
+title: Velero walkthrough
+description: WordPress and MariaDB backed up with Velero, restored and checked by bret.
+---
 
 ## 1. Deploy WordPress + MariaDB
 
@@ -43,7 +14,7 @@ kubectl apply -k examples/velero -n wordpress
 kubectl -n wordpress wait --for=condition=Complete job/seed --timeout=15m
 ```
 
-The app itself is in [examples/wordpress/](../../examples/wordpress/). Its PVCs carry the label
+The app itself is in [examples/wordpress/](https://github.com/linogics/bret-operator/tree/main/examples/wordpress). Its PVCs carry the label
 `app.kubernetes.io/name: wordpress`.
 
 ## 2. Back up
@@ -69,7 +40,7 @@ Velero sets `velero.io/schedule-name: wordpress` on every `Backup` it creates, w
 ## 3. Write the check
 
 The check is the same for every tool:
-[checks/wordpress/restorecheck.yaml](../../checks/wordpress/restorecheck.yaml). With Velero
+[checks/wordpress/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/wordpress/restorecheck.yaml). With Velero
 the check pod runs in the scratch namespace. bret copies the Secrets and ConfigMaps the check
 names in `imagePullSecrets`, `env` and `envFrom` (here `wordpress-db`) into it first.
 
@@ -80,12 +51,12 @@ A check for Velero must not set any of these; such a check fails with `ProviderU
 - a hostPath volume
 
 Pull secrets of the `default` ServiceAccount are not copied. List the pull secret in the check's
-`imagePullSecrets`. How to write a check: [checks.md](../checks.md).
+`imagePullSecrets`. How to write a check: [checks.md](/guides/write-a-check/).
 
 ## 4. Restore by hand, then a RestoreTest
 
 A `Restore` lists every PVC as a source. All sources name the same Velero `Backup`:
-[examples/velero/restore.yaml](../../examples/velero/restore.yaml).
+[examples/velero/restore.yaml](https://github.com/linogics/bret-operator/blob/main/examples/velero/restore.yaml).
 
 ```yaml
 # Restore: one manual restore test of the Velero Backup wordpress-1.
@@ -135,11 +106,11 @@ while it restores the pod that mounted the volume, and bret restores no pods. A 
 with file system backup, or a `Backup` with `snapshotVolumes: false`, ends the `Restore` as
 `Failed` with `BackupUnsupported` before Velero starts.
 
-To see a failure, apply [examples/velero/negative/restore.yaml](../../examples/velero/negative/restore.yaml).
+To see a failure, apply [examples/velero/negative/restore.yaml](https://github.com/linogics/bret-operator/blob/main/examples/velero/negative/restore.yaml).
 It lists only `html`. It ends `Failed` with reason `SourceMissing`.
 
 A `RestoreTest` picks the newest `Backup` and repeats the test:
-[examples/velero/restoretest.yaml](../../examples/velero/restoretest.yaml).
+[examples/velero/restoretest.yaml](https://github.com/linogics/bret-operator/blob/main/examples/velero/restoretest.yaml).
 
 ```yaml
 # RestoreTest: restore the newest Completed Velero Backup that covers this namespace.
@@ -182,7 +153,7 @@ kubectl -n wordpress annotate --overwrite restoretest/wordpress bret.linogics.io
 kubectl -n wordpress get restoretest wordpress
 ```
 
-All fields: [restoretest-guide.md](../restoretest-guide.md).
+All fields: [restoretest-guide.md](/guides/restore-tests/).
 
 ## 5. How bret picks backups
 
@@ -204,19 +175,27 @@ All fields: [restoretest-guide.md](../restoretest-guide.md).
 
 What bret creates. Here the `Restore` is in the namespace `wordpress`:
 
-```text
-┌ velero ───────────────┐   ┌ wordpress (your ns) ───┐
-│ Backup      (read)    │   │ RestoreTest            │
-│ Restore     (created) │◄──│ Restore                │
-└──────────┬────────────┘   │ RestoreCheck           │
-           │                └───────────┬────────────┘
-           ▼                            │ copies pod-security labels
-┌ bret-scratch-<hash> ──────────────────▼────────────┐
-│ restored PVC + PV   (only those of "wordpress")    │
-│ check pod           + copied Secrets, ConfigMaps   │
-└────────────────────────────────────────────────────┘
-  hash = first 12 hex of sha256("<namespace>/<name>")
+```d2 title="Objects bret reads and creates for a Velero restore"
+direction: down
+velero: velero namespace {
+  backup: Backup (read)
+  restore: Restore (created)
+}
+app: wordpress (your namespace) {
+  rt: RestoreTest
+  r: Restore
+  rc: RestoreCheck
+}
+scratch: "bret-scratch-<hash>" {
+  pvc: "restored PVC + PV\n(only those of wordpress)"
+  pod: "check pod\n+ copied Secrets, ConfigMaps"
+}
+app.r -> velero.restore: creates
+velero.restore -> scratch.pvc: restores
+app -> scratch: copies pod-security labels
 ```
+
+`<hash>` is the first 12 hex characters of `sha256("<namespace>/<name>")`.
 
 - The Velero `Restore` restores only PVCs and PVs (`includedResources`), only of the `Restore`
   namespace (`includedNamespaces`), into `bret-scratch-<hash>` (`namespaceMapping`). Deployments
@@ -227,28 +206,3 @@ What bret creates. Here the `Restore` is in the namespace `wordpress`:
   `PartiallyFailed` and `FailedValidation` fail the attempt.
 - The operator copies the `pod-security.kubernetes.io/*` labels to the scratch namespace before
   the check pod starts.
-
-## 6. Troubleshooting
-
-### Velero backup is gone after the source cluster is lost
-
-- **Symptom:** the restore works only while the snapshot still exists in the cluster.
-- **Cause:** the backup was created without data movement.
-- **Fix:** create backups with `--snapshot-move-data` (or `snapshotMoveData: true` on the
-  `Schedule`).
-
-### Restore warning `ConfigMap:kube-root-ca.crt already exists`
-
-- **Cause:** every namespace already has this ConfigMap.
-- **Fix:** none needed. The warning is harmless.
-
-### RestoreTest stays at `BackupNotFound`
-
-- **Cause:** no `Completed` `Backup` with the selected labels covers the namespace.
-- **Fix:** check `kubectl -n velero get backup --show-labels`, the phase, and
-  `spec.includedNamespaces` / `spec.excludedNamespaces` of the newest `Backup`.
-
-### Restore fails with `RestoredVolumeMissing`
-
-- **Cause:** a `sourcePVC` was not in the `Backup`, or `spec.velero` filtered it out.
-- **Fix:** check that the PVC carried the selected labels when the backup ran.

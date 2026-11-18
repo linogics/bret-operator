@@ -1,19 +1,7 @@
-# VolSync
-
-VolSync backs up one PVC per `ReplicationSource` with restic. bret treats the last sync of a
-`ReplicationSource` as its backup, restores it into a scratch PVC with a `ReplicationDestination`,
-and runs the check against all restored PVCs.
-
-Tested with VolSync 0.17.0 and restic on kind with Kubernetes 1.37.
-
-Install:
-
-```bash
-helm repo add backube https://backube.github.io/helm-charts/
-helm install volsync backube/volsync --namespace volsync-system --create-namespace
-```
-
-Enable the provider in the bret chart with `providers.volsync.enabled: true`.
+---
+title: VolSync walkthrough
+description: WordPress and MariaDB backed up with VolSync, restored and checked by bret.
+---
 
 ## 1. Deploy WordPress + MariaDB
 
@@ -33,11 +21,11 @@ kubectl apply -k examples/volsync -n wordpress
 kubectl -n wordpress wait --for=condition=Complete job/seed --timeout=15m
 ```
 
-The app itself is in [examples/wordpress/](../../examples/wordpress/).
+The app itself is in [examples/wordpress/](https://github.com/linogics/bret-operator/tree/main/examples/wordpress).
 
 ## 2. Back up
 
-[examples/volsync/backup.yaml](../../examples/volsync/backup.yaml): one `ReplicationSource` per
+[examples/volsync/backup.yaml](https://github.com/linogics/bret-operator/blob/main/examples/volsync/backup.yaml): one `ReplicationSource` per
 PVC. A sync takes a CSI snapshot of the PVC (`copyMethod: Snapshot`), then copies it to the
 restic repository in S3.
 
@@ -104,14 +92,14 @@ MariaDB. The default mover UID cannot read a database data dir (`permission deni
 ## 3. Write the check
 
 The check is the same for every tool:
-[checks/wordpress/restorecheck.yaml](../../checks/wordpress/restorecheck.yaml). The annotation
+[checks/wordpress/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/wordpress/restorecheck.yaml). The annotation
 `bret.linogics.io/mover-uid` gives the restore mover of each volume its UID; without it the mover
-uses the first container's `runAsUser`, then 65534. How to write a check: [checks.md](../checks.md).
+uses the first container's `runAsUser`, then 65534. How to write a check: [checks.md](/guides/write-a-check/).
 
 ## 4. Restore by hand, then a RestoreTest
 
 A `Restore` names one `ReplicationSource` per source:
-[examples/volsync/restore.yaml](../../examples/volsync/restore.yaml). Without `restoreAsOf` it
+[examples/volsync/restore.yaml](https://github.com/linogics/bret-operator/blob/main/examples/volsync/restore.yaml). Without `restoreAsOf` it
 restores the newest restic snapshot.
 
 ```yaml
@@ -142,11 +130,11 @@ kubectl apply -f examples/volsync/restore.yaml -n wordpress
 kubectl -n wordpress wait --for=jsonpath='{.status.phase}'=Succeeded restore/wordpress-manual --timeout=15m
 ```
 
-To see a failure, apply [examples/volsync/negative/restore.yaml](../../examples/volsync/negative/restore.yaml).
+To see a failure, apply [examples/volsync/negative/restore.yaml](https://github.com/linogics/bret-operator/blob/main/examples/volsync/negative/restore.yaml).
 It restores only `html`. It ends `Failed` with reason `SourceMissing`.
 
 A `RestoreTest` picks the last sync of each source and repeats the test:
-[examples/volsync/restoretest.yaml](../../examples/volsync/restoretest.yaml).
+[examples/volsync/restoretest.yaml](https://github.com/linogics/bret-operator/blob/main/examples/volsync/restoretest.yaml).
 
 ```yaml
 # RestoreTest: restore each PVC from its ReplicationSource and run the check.
@@ -186,7 +174,7 @@ kubectl -n wordpress annotate --overwrite restoretest/wordpress bret.linogics.io
 kubectl -n wordpress get restoretest wordpress
 ```
 
-All fields: [restoretest-guide.md](../restoretest-guide.md).
+All fields: [restoretest-guide.md](/guides/restore-tests/).
 
 ## 5. How bret picks backups
 
@@ -209,17 +197,28 @@ VolSync has no object per backup. The backup is the last sync of a `ReplicationS
 
 What bret creates:
 
-```text
-┌ backup namespace ─────────┐      ┌ Restore namespace ───────────┐
-│ ReplicationSource         │      │ repository Secret (must be   │
-│   restic.repository ──────┼─────►│   here)                      │
-│   sourcePVC ──────────────┼─────►│ ReplicationDestination       │
-└───────────────────────────┘      │ scratch PVC ─► check pod     │
- backupRef.namespace,              └──────────────────────────────┘
- else the Restore namespace
-
-mover UID:  annotation bret.linogics.io/mover-uid ─► first container runAsUser ─► 65534
+```d2 title="Objects bret reads and creates for a VolSync restore"
+direction: right
+backup: "backup namespace\n(backupRef.namespace, else the Restore namespace)" {
+  rs: ReplicationSource {
+    repo: restic.repository
+    src: sourcePVC
+  }
+}
+restore: Restore namespace {
+  secret: "repository Secret\n(must be here)"
+  rd: ReplicationDestination
+  pvc: scratch PVC
+  pod: check pod
+  rd -> pvc
+  pvc -> pod
+}
+backup.rs.repo -> restore.secret
+backup.rs.src -> restore.rd
 ```
+
+Mover UID: the annotation `bret.linogics.io/mover-uid`, else `runAsUser` of the first check
+container, else `65534`.
 
 - The `ReplicationDestination` uses a restic mover and the repository Secret of the
   `ReplicationSource`. The Secret must be in the `Restore` namespace; otherwise the `Restore`
@@ -228,27 +227,3 @@ mover UID:  annotation bret.linogics.io/mover-uid ─► first container runAsUs
   `Restore` fails with `SourceMismatch`.
 - The check runs when the `ReplicationDestination` reports `status.latestImage.kind:
   PersistentVolumeClaim`.
-
-## 6. Troubleshooting
-
-### VolSync mover: `permission denied` on the data directory
-
-- **Cause:** the mover runs as the default non-database UID.
-- **Fix:** set `moverSecurityContext` in the `ReplicationSource` to the owner UID, and the
-  `bret.linogics.io/mover-uid` annotation on the check for the restore.
-
-### VolSync: `permission denied` after changing the mover UID
-
-- **Cause:** the cache PVC was created by the old mover UID.
-- **Fix:** delete the cache PVC. VolSync creates a new one.
-
-### RestoreTest stops at `BackupSelectorAmbiguous`
-
-- **Cause:** the `labels` of a source match more than one `ReplicationSource`.
-- **Fix:** use `backupSelector.name`, or labels that only one `ReplicationSource` carries.
-
-### Restore fails with `RepositoryMissing`
-
-- **Cause:** the `ReplicationSource` has no `spec.restic.repository`, or its Secret is not in the
-  `Restore` namespace.
-- **Fix:** keep the repository Secret next to the `Restore`.

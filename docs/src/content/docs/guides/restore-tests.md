@@ -1,16 +1,19 @@
-# RestoreTest guide
+---
+title: Schedule restore tests
+description: Schedule, select backups for and tune RestoreTests.
+---
 
 A `RestoreTest` says what to restore, when, how often to retry, and what to keep. This page
 explains each field with an example. The complete field list is in
-[reference/api.md](reference/api.md).
+[reference/api.md](/reference/api/).
 
 A `RestoreTest` name can have at most 50 characters. The names of its `Restore` objects add up to 13 characters and must fit a 63-character label value.
 
 ## A complete example
 
-The Kopiur WordPress example, [examples/kopiur/restoretest.yaml](../examples/kopiur/restoretest.yaml).
+The Kopiur WordPress example, [examples/kopiur/restoretest.yaml](https://github.com/linogics/bret-operator/blob/main/examples/kopiur/restoretest.yaml).
 The same test for VolSync and Velero differs only in `provider`, the `backupSelector` and the
-scratch volume fields: see [providers/](providers/README.md).
+scratch volume fields: see [providers/](/providers/).
 
 ```yaml
 # RestoreTest: restore the newest Kopiur Snapshot of each PVC and run the check.
@@ -50,7 +53,7 @@ spec:
 ### provider
 
 One of `velero`, `volsync`, `kopiur`. The tool that made the backups. The operator uses the same
-tool to restore them. Setup for each tool: [providers/](providers/README.md).
+tool to restore them. Setup for each tool: [providers/](/providers/).
 
 A test for a provider that is disabled in the chart gets the condition reason
 `ProviderUnsupported` and starts no run.
@@ -59,7 +62,7 @@ A test for a provider that is disabled in the chart gets the condition reason
 
 One entry per PVC that the app has. Each run restores all of them together. The `sourcePVC` values
 must be exactly the `sourcePVC` values of the `restoredVolumes` in the `RestoreCheck`, or the `Restore`
-ends Failed with `SourceMissing`. See [concepts.md](concepts.md#which-pvc-gets-restored).
+ends Failed with `SourceMissing`. See [concepts.md](/concepts/volumes/#which-pvc-gets-restored).
 
 Each source has a `sourcePVC`, a `backupSelector` and the scratch volume fields (below).
 
@@ -93,7 +96,7 @@ What `name` and `labels` select depends on the provider:
 Each run restores the newest backup of every source. For Velero every source must have the same
 `backupSelector`, because one `Backup` holds all PVCs. For VolSync the run is pinned to the picked
 sync time with `restoreAsOf`. The details are under "How bret picks backups" on each tool page in
-[providers/](providers/README.md).
+[providers/](/providers/).
 
 If a source has no matching backup, the test sets the reason `BackupNotFound`. The message names
 the sources without a backup.
@@ -101,14 +104,14 @@ the sources without a backup.
 ### restoreCheckRef
 
 `name` of a `RestoreCheck` in the same namespace as the `RestoreTest`. The `RestoreCheck` is the
-pod template that checks the restored data. See [checks.md](checks.md).
+pod template that checks the restored data. See [checks.md](/guides/write-a-check/).
 
 ### Scratch volume per source
 
 Each source is restored into its own scratch volume. The fields are in the source itself, next to
 `backupSelector`: `size`, `storageClassName` and `autoExpand`. All are optional. Without `size`
 and `autoExpand`, the source size and the default headroom decide. The size rules are in
-[concepts.md](concepts.md#scratch-volume-size).
+[concepts.md](/concepts/volumes/#scratch-volume-size).
 
 ### triggers
 
@@ -126,7 +129,7 @@ A manual run needs no CLI:
 kubectl -n wordpress annotate restoretest wordpress bret.linogics.io/run-now="$(date +%s)" --overwrite
 ```
 
-The flow from a trigger to a run result is in [concepts.md](concepts.md#trigger-flow).
+The flow from a trigger to a run result is in [concepts.md](/concepts/lifecycle/#trigger-flow).
 
 Pick the times on purpose. A test that starts while the backup is still writing can fail for no
 good reason. Leave some margin after the backup window, as the `delay` above does.
@@ -293,4 +296,4 @@ spec:
 A `RestoreTest` lives in the namespace of the application that it tests. Its pods and volumes go there
 too. The operator watches all namespaces by default. The chart value `watchNamespaces` (a list)
 limits the operator to those namespaces. Empty means cluster-wide. See
-[concepts.md](concepts.md#scope).
+[concepts.md](/concepts/overview/#scope).

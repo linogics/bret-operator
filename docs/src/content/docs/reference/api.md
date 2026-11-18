@@ -1,4 +1,7 @@
-# API Reference
+---
+title: API reference
+description: Generated field reference for RestoreCheck, Restore and RestoreTest.
+---
 
 ## Packages
 - [bret.linogics.io/v1alpha1](#bretlinogicsiov1alpha1)

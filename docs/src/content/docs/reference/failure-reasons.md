@@ -1,12 +1,15 @@
-# Troubleshooting
+---
+title: Failure reasons
+description: Every failure reason bret reports, what it means and how to fix it.
+---
 
 Each entry gives the exact text you see, the cause, and the fix. Errors were seen on kind with
 Kubernetes 1.37, Velero 1.18, VolSync 0.17.0, Kopiur 0.11.0 and PostgreSQL 17.12.
 
 ## Backups and restores
 
-Errors of a backup tool are on its page: [Kopiur](providers/kopiur.md#6-troubleshooting),
-[VolSync](providers/volsync.md#6-troubleshooting), [Velero](providers/velero.md#6-troubleshooting).
+Errors of a backup tool are on its page: [Kopiur](/providers/kopiur/limitations/#troubleshooting),
+[VolSync](/providers/volsync/limitations/#troubleshooting), [Velero](/providers/velero/limitations/#troubleshooting).
 
 ## Checks
 
@@ -39,7 +42,7 @@ Fix the cause first, or every retry fails the same way.
 
 - **`SourceMissing`:** the `sourcePVC` values of the check (`restoredVolumes`) and of the
   `Restore` or `RestoreTest` (`sources`) differ. Add the missing entry on either side. See
-  [concepts.md](concepts.md#which-pvc-gets-restored).
+  [concepts.md](/concepts/volumes/#which-pvc-gets-restored).
 - **`SourceMismatch`** (Kopiur, VolSync): the backup holds another PVC than the `sourcePVC` of its
   source. Point the source at the backup of that PVC. A Kopiur `SnapshotPolicy` with several `pvc:`
   entries backs up only the first one. Use one policy per PVC or `pvcSelector`.
@@ -63,12 +66,12 @@ Fix the cause first, or every retry fails the same way.
   - No condition and no Events: the namespace is not in `watchNamespaces`, so the operator ignores
     the object. Add the namespace to the chart value. Or `spec.triggers` is not set, or no trigger
     is due yet. Then wait, or start a manual run. See
-    [restoretest-guide.md](restoretest-guide.md#triggers).
+    [restoretest-guide.md](/guides/restore-tests/#triggers).
   - `ProviderUnsupported`: the provider of `spec.provider` is disabled in the chart
     (`providers.<name>.enabled`).
   - `BackupNotFound`: a source has no finished backup that matches its `backupSelector`. The
     message names those sources. What counts as finished, and where the operator looks, is under
-    "How bret picks backups" on the tool page in [providers/](providers/README.md).
+    "How bret picks backups" on the tool page in [providers/](/providers/).
   - `BackupSelectorAmbiguous` (VolSync): the `labels` of a source match more than one
     `ReplicationSource`. Use `name`, or labels that one `ReplicationSource` carries.
   - A source mismatch is not a `Ready` reason of the `RestoreTest`. The run ends `Failed` and

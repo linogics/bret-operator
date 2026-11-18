@@ -1,7 +1,10 @@
-# Installation
+---
+title: Installation
+description: Install and upgrade bret with the Helm chart or plain manifests.
+---
 
 This page installs the bret CRDs and the manager. Install a backup tool first. See
-[providers/](providers/README.md).
+[providers/](/providers/).
 
 ## Requirements
 
@@ -49,7 +52,7 @@ Expected: the deployment is `1/1 Available`, and three CRDs are listed:
 
 ### Values you will likely change
 
-The full table is in [charts/bret-operator/README.md](../charts/bret-operator/README.md).
+The full table is in [charts/bret-operator/README.md](https://github.com/linogics/bret-operator/blob/main/charts/bret-operator/README.md).
 
 | Value | Default | Change it when |
 |---|---|---|

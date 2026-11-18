@@ -1,4 +1,7 @@
-# Development
+---
+title: Development
+description: Build, test, lint, generate docs and the local kind setup.
+---
 
 ## Prerequisites
 
@@ -48,7 +51,7 @@ Install the CSI hostpath driver for snapshots. Tested with csi-driver-host-path 
 external-snapshotter v8.7.0. Create a `VolumeSnapshotClass` named `csi-hostpath-snapclass` and a
 `StorageClass` named `csi-hostpath-sc`.
 
-Install the backup tools you test with. See [providers/](providers/README.md). The
+Install the backup tools you test with. See [providers/](/providers/). The
 check harness expects an S3-compatible endpoint named `versitygw.storage.svc.cluster.local:7070`
 with buckets `kopiur`, `velero` and `volsync`. Versity Gateway with the posix backend works for this.
 
@@ -68,7 +71,7 @@ kind delete cluster --name bret-dev
 ## Check tests
 
 Check tests need a cluster with Kopiur and the S3 endpoint above. Read
-[testing-checks.md](testing-checks.md). Run one app:
+[testing-checks.md](/guides/test-a-check/). Run one app:
 
 ```bash
 TIMEOUT=900 bash hack/check-test/roundtrip.sh postgres

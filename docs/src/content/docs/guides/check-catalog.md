@@ -1,4 +1,7 @@
-# RestoreChecks
+---
+title: Check catalog
+description: Ready-made RestoreChecks for common apps and their test status.
+---
 
 One folder per app. Each holds the same files:
 
