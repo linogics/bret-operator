@@ -1,6 +1,6 @@
 name: Docs
 
-# Regenerates the API reference (docs/reference/api.md) and the chart README from source,
+# Regenerates the API reference (docs/src/content/docs/reference/api.md) and the chart README from source,
 # then fails if the committed files differ. Fix with: make docs && git add docs charts
 
 on:
