@@ -112,8 +112,8 @@ spec:
     manual: true
 ```
 
-Without `size`, the scratch PVC gets the size of the source PVC. `autoExpand` adds headroom, here
-20 percent. Details:
+Without `size`, bret sizes the scratch PVC from the source with `autoExpand`: by default 10
+percent headroom and at least 1Gi. Here the headroom is 20 percent. Details:
 [Scratch volume size](/concepts/volumes/#scratch-volume-size).
 
 ## 7. Run it once and read the result
