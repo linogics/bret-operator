@@ -129,6 +129,12 @@ A selector matches the labels stored in the backup, so a label added after the b
 count. Every `sourcePVC` must be among the restored PVCs; otherwise the `Restore` ends `Failed`
 with `RestoredVolumeMissing`, naming the PVC.
 
+The backup must hold the volume data as a snapshot: CSI snapshots, best with
+`--snapshot-move-data`, or native volume snapshots. Velero writes file system backup data only
+while it restores the pod that mounted the volume, and bret restores no pods. A source PVC saved
+with file system backup, or a `Backup` with `snapshotVolumes: false`, ends the `Restore` as
+`Failed` with `BackupUnsupported` before Velero starts.
+
 To see a failure, apply [examples/velero/negative/restore.yaml](../../examples/velero/negative/restore.yaml).
 It lists only `html`. It ends `Failed` with reason `SourceMissing`.
 

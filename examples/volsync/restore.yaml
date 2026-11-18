@@ -4,7 +4,7 @@
 #
 # Restore: one manual restore test of the newest restic snapshot of each ReplicationSource.
 # backupRef names the ReplicationSource. restoreAsOf (optional) pins an older snapshot.
-# Restored claims: <restore>-<sourcePVC>, here wordpress-manual-html and wordpress-manual-mysql.
+# Restored claims: <restore>-<sourcePVC>-<hash>, here wordpress-manual-html-<hash> and wordpress-manual-mysql-<hash>.
 apiVersion: bret.linogics.io/v1alpha1
 kind: Restore
 metadata:

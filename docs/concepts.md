@@ -67,12 +67,13 @@ RestoreCheck.restoredVolumes[].sourcePVC ◄──── same set ────�
 
 | Provider | What a source restores | Restored claim | Namespace |
 |---|---|---|---|
-| `kopiur` | The PVC in one `Snapshot`. One `Snapshot` holds one PVC. | `<restore>-<sourcePVC>` | The `Restore` namespace. |
-| `volsync` | The PVC of one `ReplicationSource`. | `<restore>-<sourcePVC>` | The `Restore` namespace. |
+| `kopiur` | The PVC in one `Snapshot`. One `Snapshot` holds one PVC. | `<restore>-<sourcePVC>-<hash>` | The `Restore` namespace. |
+| `volsync` | The PVC of one `ReplicationSource`. | `<restore>-<sourcePVC>-<hash>` | The `Restore` namespace. |
 | `velero` | Its `sourcePVC` from the one `Backup` that all sources name. `spec.velero` can narrow the restore with label selectors. | The source PVC name, for example `html` and `pgdata`. | `bret-scratch-<hash>`. |
 
-- A Kopiur or VolSync claim name is `<restore>-<sourcePVC>`. When that is longer than 63
-  characters, the operator shortens it and adds a hash.
+- A Kopiur or VolSync claim name is `<restore>-<sourcePVC>-<hash>`. The hash of the pair keeps
+  the names of two `Restore` objects apart, for example `db` with `data-x` and `db-data` with `x`.
+  When the name is longer than 63 characters, the operator shortens it.
 - Velero restores all PVCs of the `Restore` namespace from the `Backup`. The optional selectors
   in `spec.velero` match the labels stored in the backup. `labelSelector` and `orLabelSelectors`
   are exclusive.
@@ -91,6 +92,11 @@ condition is `False` with that reason, a Warning Event is written, and no check 
   did not match it, or the backup does not contain it.
 - `CheckRefMissing` (Velero): a Secret or ConfigMap that the check needs is not in the `Restore`
   namespace, so the operator cannot copy it into the scratch namespace.
+- `BackupUnsupported` (Velero): the backup holds no volume data that a PVC restore brings back.
+  The PVC was saved with file system backup (Velero writes that data only when it restores the
+  pod), or the `Backup` has `snapshotVolumes: false`. The restore would give an empty volume.
+- `BackupNotFound` (VolSync): the mover found no snapshot at or before `restoreAsOf`, so the
+  restored volume is empty.
 
 A one-volume app has one entry on each side. It works the same way.
 
@@ -205,7 +211,12 @@ the operator's phases.
 ### restoreWindow
 
 `restoreWindow` is a deadline per attempt. It covers the native restore, the image pulls and
-the check pod. The default is `45m`. Set it higher for large volumes or slow image pulls.
+the check pod. The default is `45m`. The minimum is `1m`. Set it higher for large volumes or slow
+image pulls. A check pod that finished before the deadline counts, even when the operator sees it
+after the deadline.
+
+The `spec` of a `Restore` cannot change after creation, so its status always belongs to the backups
+in its spec. To test another backup, create a new `Restore`.
 
 ### keepOnFailure
 
