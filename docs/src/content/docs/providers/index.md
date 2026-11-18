@@ -1,45 +1,79 @@
 ---
 title: Backup providers
-description: Velero, VolSync and Kopiur compared, and how to pick one.
+description: Velero, VolSync and Kopiur compared, what each can and cannot do with bret, and how to pick one.
 ---
 
-bret restores with a backup tool that you already run: Kopiur, VolSync or Velero. Each tool has
-its own page. Every page walks through the same WordPress + MariaDB example, which has two PVCs:
+bret restores with a backup tool that you already run: Velero, VolSync or Kopiur. It never moves
+backup data itself. It creates the restore object of the tool, waits for it, then runs your check.
 
-- `html`: the WordPress docroot, `wp-config.php` and `wp-content`. Owned by uid 33.
-- `mysql`: the MariaDB data dir. Owned by uid 999.
+```d2 title="bret drives the restore object of one of three backup tools, all reading from S3"
+direction: down
+bret: bret Restore
+velero: "Velero\nRestore"
+volsync: "VolSync\nReplicationDestination"
+kopiur: "Kopiur\nRestore"
+s3: "S3 bucket" {shape: cylinder}
+scratch: "scratch PVCs + check pod"
+bret -> velero: creates
+bret -> volsync: creates
+bret -> kopiur: creates
+s3 -> velero: backup data
+s3 -> volsync
+s3 -> kopiur
+velero -> scratch: restores
+volsync -> scratch
+kopiur -> scratch
+```
 
-| Page | Backup object | One backup holds |
-|---|---|---|
-| [Kopiur](/providers/kopiur/) | Kopiur `Snapshot` | one PVC |
-| [VolSync](/providers/volsync/) | VolSync `ReplicationSource` (its last sync) | one PVC |
-| [Velero](/providers/velero/) | Velero `Backup` | every PVC of the namespace |
+## Compare providers
 
-Each page has the same steps:
+| | Velero | VolSync | Kopiur |
+|---|---|---|---|
+| Maturity in bret | Supported | Supported | Alpha |
+| Helm switch | `providers.velero.enabled`, off by default | `providers.volsync.enabled`, off by default | `providers.kopiur.enabled`, on by default |
+| Backup object bret reads | `Backup`, phase `Completed` | `ReplicationSource`, its `status.lastSyncTime` | `Snapshot`, phase `Succeeded` |
+| One backup holds | Every PVC of the namespace | One PVC | One PVC |
+| Restore object bret creates | `velero.io/v1` `Restore` | `ReplicationDestination` with a manual trigger | `kopiur.home-operations.com/v1alpha1` `Restore` |
+| What gets restored | PVCs and PVs only, no other resources | One PVC per source | One PVC per source |
+| Where the restored PVCs live | Scratch namespace `bret-scratch-<hash>` | The `Restore` namespace | The `Restore` namespace |
+| All PVCs from one point in time | Yes, one `Backup` | No, one sync per PVC | No, one `Snapshot` per PVC |
+| Restore an older backup by hand | `backupRef` names any `Backup` | `restoreAsOf` picks the newest restic snapshot at or before a time | `backupRef` names any `Snapshot` |
+| Scratch size | Velero restores at the original size and storage class | `size` or `autoExpand` | `size` or `autoExpand` |
+| Secrets for the check | Copied by bret into the scratch namespace | Read from the `Restore` namespace | Read from the `Restore` namespace |
+| Block mode volumes | Not supported | Not supported | Not supported |
+| Throughput limits | Concurrency only, see [throttling](/providers/shared-setup/#throttle-restore-throughput) | Mover CPU and memory only | Kopia bandwidth and ops cap per repository |
+| Tested with | Velero 1.18.2 (chart 12.2.5), AWS plugin v1.14.4 | VolSync 0.17.0 | Kopiur 0.11.0 |
 
-1. Deploy WordPress + MariaDB.
-2. Back up: a CSI snapshot of each PVC, then a copy to S3.
-3. Write the check.
-4. Restore by hand, then create a `RestoreTest`.
-5. How bret picks backups.
-6. Troubleshooting.
+Block mode: the check pod mounts every restored volume as a file system, so a `volumeMode: Block`
+PVC cannot be checked.
 
-The example files are in [examples/](https://github.com/linogics/bret-operator/tree/main/examples): `examples/wordpress/` is the app and the
-check, `examples/<tool>/` adds the backup setup, a `Restore`, a `RestoreTest`, and a negative
-`Restore` under `negative/`. The files were tested on a kind cluster with
-`hack/check-test/operator-roundtrip.sh <tool>` (see [Test a check by hand](/guides/test-a-check/)).
-
+Each provider has its own section with an overview, a walkthrough and its limitations:
+[Velero](/providers/velero/), [VolSync](/providers/volsync/), [Kopiur](/providers/kopiur/).
+Setup that applies to all three (CSI snapshots, S3, point in time, throttling) is on
+[Shared setup](/providers/shared-setup/).
 
 ## Which tool to choose
 
 | Need | Pick |
 |---|---|
 | Whole-namespace backups, many resource types, one tool for the cluster | Velero |
+| All PVCs of an app from one point in time, without quiescing the app | Velero |
 | Per-volume backups with restic, scheduled by the volume | VolSync |
 | Per-volume backups with Kopia, deduplication, and a repository you manage | Kopiur |
 
 All three work with the same check. The check does not care which tool made the data.
 
-Enable a tool in the Helm chart with `providers.<name>.enabled`. Kopiur is on by default. Velero
-and VolSync are off by default. A `Restore` or `RestoreTest` for a disabled tool stops with reason
-`ProviderUnsupported`.
+A `Restore` or `RestoreTest` for a disabled provider stops with reason `ProviderUnsupported`.
+
+## The walkthrough example
+
+Every walkthrough uses the same WordPress + MariaDB app, which has two PVCs:
+
+- `html`: the WordPress docroot, `wp-config.php` and `wp-content`. Owned by uid 33.
+- `mysql`: the MariaDB data dir. Owned by uid 999.
+
+The example files are in [examples/](https://github.com/linogics/bret-operator/tree/main/examples):
+`examples/wordpress/` is the app and the check, `examples/<tool>/` adds the backup setup, a
+`Restore`, a `RestoreTest`, and a negative `Restore` under `negative/`. The files were tested on a
+kind cluster with `hack/check-test/operator-roundtrip.sh <tool>` (see
+[Test a check by hand](/guides/test-a-check/)).

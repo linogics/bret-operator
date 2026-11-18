@@ -13,16 +13,16 @@ This page installs the bret CRDs and the manager. Install a backup tool first. S
 | Kubernetes | 1.29 or newer | Native sidecars in checks (`initContainers` with `restartPolicy: Always`). |
 | Helm | 3.14 or newer (the release is tested with 3.22.1) | Installs the chart. |
 | CSI driver with snapshot support | any | `copyMethod: Snapshot` needs a `VolumeSnapshotClass`. |
-| Backup tool | Velero 1.18, VolSync 0.17, or Kopiur 0.10 | The operator drives its restore objects. |
+| Backup tool | Velero 1.18, VolSync 0.17, or Kopiur 0.11 | The operator drives its restore objects. |
 
 ## Verified versions
 
 | Component | Version |
 |---|---|
-| Velero | v1.18.4 |
+| Velero | v1.18.2 (chart 12.2.5) |
 | Velero AWS plugin | v1.14.4 |
 | VolSync | 0.17.0 |
-| Kopiur | 0.10.21 |
+| Kopiur | 0.11.0 |
 | PostgreSQL | 17.12 |
 | kind node image | v1.37.0 |
 | csi-driver-host-path | v1.19.0 |
