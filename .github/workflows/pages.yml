@@ -65,6 +65,9 @@ jobs:
             exit 1
           fi
 
+      - name: Docs cover every reason and metric
+        run: hack/docs-facts.sh
+
       - name: Install dependencies
         working-directory: docs
         run: npm ci

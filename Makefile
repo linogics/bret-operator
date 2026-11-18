@@ -227,6 +227,10 @@ docs: crd-ref-docs helm-docs ## Regenerate the API reference (docs/src/content/d
 	$(CRD_REF_DOCS) --source-path=./api/v1alpha1 --config=docs/reference/crd-ref-docs.yaml --renderer=markdown --templates-dir=docs/reference/templates/markdown --output-path=docs/src/content/docs/reference/api.md
 	$(HELM_DOCS) --chart-search-root=charts
 
+.PHONY: docs-facts
+docs-facts: ## Fail if the docs site misses a reason or metric the code can emit.
+	hack/docs-facts.sh
+
 .PHONY: docs-check
 docs-check: docs ## Fail if generated docs or chart files are out of date (CI gate).
 	@if [ -n "$$(git status --porcelain -- docs/reference docs/src/content/docs/reference/api.md charts)" ]; then \
