@@ -106,12 +106,18 @@ jobs:
         run: |
           prerelease_flag=""
           case "$VERSION" in *-*) prerelease_flag="--prerelease" ;; esac
+
+          # GitHub's note format is fixed, so rewrite "* title by @user in url" to "* [title](url) by @user".
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$GITHUB_REF_NAME" --jq .body \
+            | sed -E 's|^\* (.*) by (@[^ ]+) in (https://[^ ]+)$|* [\1](\3) by \2|' \
+            > dist/notes.md
+
           gh release create "$GITHUB_REF_NAME" \
             "dist/install.yaml#install.yaml" \
             "dist/bret-operator-$VERSION.tgz" \
             "dist/bret-operator-crds-$VERSION.tgz" \
             --title "bret-operator $VERSION" \
-            --generate-notes \
+            --notes-file dist/notes.md \
             $prerelease_flag
 
       # Last step so a Hub API failure cannot block the release. Token needs Read, Write, Delete scope.
