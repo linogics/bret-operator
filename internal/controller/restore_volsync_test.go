@@ -242,15 +242,15 @@ func TestVolSyncTwoSources(t *testing.T) {
 		rd := &unstructured.Unstructured{}
 		rd.SetGroupVersionKind(replicationDestinationGVK)
 
-		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: "r1-volsync-" + pvc}, rd); err != nil {
+		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: volsyncName(newTestRestore(), pvc)}, rd); err != nil {
 			t.Fatalf("RD of %s: %v", pvc, err)
 		}
 
-		if got, _, _ := unstructured.NestedString(rd.Object, "spec", "restic", "destinationPVC"); got != "r1-"+pvc {
-			t.Fatalf("destinationPVC = %q, want r1-%s", got, pvc)
+		if got, _, _ := unstructured.NestedString(rd.Object, "spec", "restic", "destinationPVC"); got != restoredClaimName(newTestRestore(), pvc) {
+			t.Fatalf("destinationPVC = %q, want %s", got, restoredClaimName(newTestRestore(), pvc))
 		}
 
-		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: "r1-" + pvc}, &corev1.PersistentVolumeClaim{}); err != nil {
+		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: restoredClaimName(newTestRestore(), pvc)}, &corev1.PersistentVolumeClaim{}); err != nil {
 			t.Fatalf("PVC of %s: %v", pvc, err)
 		}
 	}
