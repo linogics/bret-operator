@@ -50,7 +50,7 @@ export default defineConfig({
 						{ label: 'Compare providers', slug: 'providers' },
 						{ label: 'Shared setup', slug: 'providers/shared-setup' },
 						provider('Velero', 'velero', true),
-						provider('VolSync', 'volsync'),
+						provider('VolSync', 'volsync', true),
 						provider('Kopiur', 'kopiur'),
 					],
 				},
