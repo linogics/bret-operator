@@ -22,6 +22,8 @@ bret checks this before Velero starts. A `Backup` with `snapshotVolumes: false`,
 with a `PodVolumeBackup` in the `Backup`, ends the `Restore` `Failed` with reason
 [`BackupUnsupported`](/reference/failure-reasons/#backupunsupported).
 
+### Annotations `backup-volumes` and `backup-volumes-excludes`
+
 If your `Schedule` uses file system backup:
 
 - With opt-in (the pod annotation `backup.velero.io/backup-volumes: <volume names>`), remove the

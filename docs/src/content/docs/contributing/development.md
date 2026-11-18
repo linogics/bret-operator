@@ -93,7 +93,7 @@ Check tests do not run in CI. They need a cluster and several gigabytes of image
 | `examples/` | WordPress + MariaDB (`wordpress/`) and per tool (`kopiur/`, `volsync/`, `velero/`) the backup setup, a `Restore`, a `RestoreTest` and a negative `Restore`. |
 | `hack/check-test/` | Check harness. The seeds live in `checks/<app>/seed.yaml`. |
 | `hack/helm/sync_rbac.py` | Copies RBAC rules into the chart. |
-| `docs/` | This documentation. `docs/reference/api.md` is generated. |
+| `docs/` | This documentation site (Astro Starlight). `docs/src/content/docs/reference/api.md` is generated. |
 
 ## Conventions
 

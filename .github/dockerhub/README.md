@@ -39,10 +39,11 @@ Plain manifests are attached to each
 
 ## Docs
 
-- [Getting started](https://github.com/linogics/bret-operator/blob/main/docs/getting-started.md)
-- [Installation](https://github.com/linogics/bret-operator/blob/main/docs/installation.md)
-- [Backup providers](https://github.com/linogics/bret-operator/blob/main/docs/providers/README.md)
-- [Checks](https://github.com/linogics/bret-operator/blob/main/docs/checks.md)
+- [Documentation](https://bret-operator.linogics.io/)
+- [Quickstart](https://bret-operator.linogics.io/start/quickstart/)
+- [Installation](https://bret-operator.linogics.io/start/installation/)
+- [Backup providers](https://bret-operator.linogics.io/providers/)
+- [Write a check](https://bret-operator.linogics.io/guides/write-a-check/)
 
 ## License
 
