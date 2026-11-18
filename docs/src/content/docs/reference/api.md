@@ -328,7 +328,7 @@ _Appears in:_
 | `backupRef` _[BackupRef](#backupref)_ | BackupRef is the backup to restore. Velero sources all name the same Backup. |  |  |
 | `restoreAsOf` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | RestoreAsOf restores the newest snapshot taken at or before this time. VolSync only.<br />Unset restores the newest snapshot. |  |  |
 | `storageClassName` _string_ | StorageClassName is the storage class of the scratch volume. |  |  |
-| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. The source size sets it when unset. |  |  |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. When unset, AutoExpand derives it from the source size. |  |  |
 | `autoExpand` _[AutoExpand](#autoexpand)_ | AutoExpand derives the size from the source size when Size is unset. |  |  |
 
 
@@ -391,7 +391,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `storageClassName` _string_ | StorageClassName is the storage class of the scratch volume. |  |  |
-| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. The source size sets it when unset. |  |  |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. When unset, AutoExpand derives it from the source size. |  |  |
 | `autoExpand` _[AutoExpand](#autoexpand)_ | AutoExpand derives the size from the source size when Size is unset. |  |  |
 
 
@@ -432,7 +432,7 @@ _Appears in:_
 | `sourcePVC` _string_ | SourcePVC is the name of the PVC in the backed-up namespace. |  | MaxLength: 63 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
 | `backupSelector` _[BackupSelector](#backupselector)_ | BackupSelector chooses which backups the restore reads from. |  |  |
 | `storageClassName` _string_ | StorageClassName is the storage class of the scratch volume. |  |  |
-| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. The source size sets it when unset. |  |  |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the capacity of the scratch volume. When unset, AutoExpand derives it from the source size. |  |  |
 | `autoExpand` _[AutoExpand](#autoexpand)_ | AutoExpand derives the size from the source size when Size is unset. |  |  |
 
 

@@ -96,7 +96,7 @@ on the object that shows it, except `RestoreNameInUse`, which is only a conditio
 
 | Object | Condition | Reasons |
 |---|---|---|
-| `Restore` | `Ready` | `Succeeded`, `Failed`, `Canceled` at the end, or a failure reason |
+| `Restore` | `Ready` | `Running` while an attempt runs, `Succeeded`, `Failed`, `Canceled` at the end, or a failure reason |
 | `RestoreTest` | `Ready` | `Running`, the result of the last run (`Succeeded` or `Failed`), or a failure reason |
 | `RestoreTest` | `BackupsPending` | `WaitingForBackups` |
 | `RestoreCheck` | `Ready` | `Valid` or `Invalid` |

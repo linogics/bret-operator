@@ -77,7 +77,8 @@ is not retried.
 ## `InsufficientCapacity`
 
 - **Shows on:** `Restore`, ends `Failed`.
-- **Means:** `size` is smaller than the size of the source.
+- **Means:** `size`, or the `autoExpand` result (for example a `max` below the source), is smaller
+  than the size of the source.
 - **Fix:** raise `size`, or drop it and let `autoExpand` size the volume. See
   [Scratch volume size](/concepts/volumes/#scratch-volume-size).
 

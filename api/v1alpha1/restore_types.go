@@ -93,7 +93,7 @@ type AutoExpand struct {
 type RestoreTarget struct {
 	// StorageClassName is the storage class of the scratch volume.
 	StorageClassName string `json:"storageClassName,omitempty"`
-	// Size is the capacity of the scratch volume. The source size sets it when unset.
+	// Size is the capacity of the scratch volume. When unset, AutoExpand derives it from the source size.
 	Size *resource.Quantity `json:"size,omitempty"`
 	// AutoExpand derives the size from the source size when Size is unset.
 	AutoExpand *AutoExpand `json:"autoExpand,omitempty"`

@@ -44,7 +44,7 @@ The check is the same for every tool:
 the check pod runs in the scratch namespace. bret copies the Secrets and ConfigMaps the check
 names in `imagePullSecrets`, `env` and `envFrom` (here `wordpress-db`) into it first.
 
-A check for Velero must not set any of these; such a check fails with `ProviderUnsupported`:
+A check for Velero must not set any of these. Such a check fails with `ProviderUnsupported`:
 
 - `serviceAccountName`
 - a configMap, secret, projected or persistentVolumeClaim volume
@@ -97,7 +97,7 @@ mutually exclusive:
   carry different labels.
 
 A selector matches the labels stored in the backup, so a label added after the backup does not
-count. Every `sourcePVC` must be among the restored PVCs; otherwise the `Restore` ends `Failed`
+count. Every `sourcePVC` must be among the restored PVCs. Otherwise the `Restore` ends `Failed`
 with `RestoredVolumeMissing`, naming the PVC.
 
 The backup must hold the volume data as a snapshot: CSI snapshots, best with
@@ -167,7 +167,7 @@ All fields: [Schedule restore tests](/guides/restore-tests/).
 - **Namespace coverage:** a `Backup` counts only when it covers the `RestoreTest` namespace:
   `spec.includedNamespaces` is empty, contains `*`, or contains the namespace, and
   `spec.excludedNamespaces` does not contain it. A run never tests a `Backup` without your data.
-- **Completion time:** `status.completionTimestamp`. The newest wins; equal times are ordered by
+- **Completion time:** `status.completionTimestamp`. The newest wins. Equal times are ordered by
   name.
 - **afterBackup:** a run starts when a newer `Backup` than the one of the last run
   (`status.lastHandledBackups`) exists. All entries name the same `Backup`. A `Backup` that

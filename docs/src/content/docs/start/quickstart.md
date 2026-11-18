@@ -5,7 +5,7 @@ description: From an empty kind cluster to a first passing restore test with Kop
 
 This tutorial takes you from an empty cluster to a restore test that runs on a schedule. It uses
 WordPress + MariaDB with two PVCs: `html` (the docroot) and `mysql` (the database). It works the
-same with Kopiur, VolSync or Velero. Only the backup step differs; it is on the page of your tool.
+same with Kopiur, VolSync or Velero. Only the backup step differs. It is on the page of your tool.
 
 1. Install the operator.
 2. Deploy the example app and back it up, as your tool's page shows.

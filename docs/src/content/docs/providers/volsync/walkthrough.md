@@ -93,7 +93,7 @@ MariaDB. The default mover UID cannot read a database data dir (`permission deni
 
 The check is the same for every tool:
 [checks/wordpress/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/wordpress/restorecheck.yaml). The annotation
-`bret.linogics.io/mover-uid` gives the restore mover of each volume its UID; without it the mover
+`bret.linogics.io/mover-uid` gives the restore mover of each volume its UID. Without it the mover
 uses the first container's `runAsUser`, then 65534. How to write a check: [Write a check](/guides/write-a-check/).
 
 ## 4. Restore by hand, then a RestoreTest
@@ -221,7 +221,7 @@ Mover UID: the annotation `bret.linogics.io/mover-uid`, else `runAsUser` of the 
 container, else `65534`.
 
 - The `ReplicationDestination` uses a restic mover and the repository Secret of the
-  `ReplicationSource`. The Secret must be in the `Restore` namespace; otherwise the `Restore`
+  `ReplicationSource`. The Secret must be in the `Restore` namespace. Otherwise the `Restore`
   fails with `RepositoryMissing`.
 - If `spec.sourcePVC` of the `ReplicationSource` is not the `sourcePVC` of the source, the
   `Restore` fails with `SourceMismatch`.

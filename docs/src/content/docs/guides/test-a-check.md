@@ -109,8 +109,8 @@ lives in `VELERO_NS` (default `velero`). `KEEP=1` keeps the namespace.
 
 1. Recreate the namespace, create the S3 Secrets with `kubectl create secret`, and
    `kubectl apply -k examples/<tool>`. Wait for the Deployments and the `seed` Job.
-2. Back up both PVCs: Kopiur applies `snapshot.yaml`; VolSync patches a manual trigger into
-   both `ReplicationSources`; Velero runs `velero backup create wordpress-1 --snapshot-move-data`.
+2. Back up both PVCs: Kopiur applies `snapshot.yaml`, VolSync patches a manual trigger into
+   both `ReplicationSources`, and Velero runs `velero backup create wordpress-1 --snapshot-move-data`.
 3. Without `negative`: apply `restore.yaml` and wait for `Succeeded`, then apply
    `restoretest.yaml`, set the run-now annotation, and wait for `lastRun.result: Succeeded`.
 4. With `negative`: apply `negative/restore.yaml` (only `html`) and wait for `Failed`. It prints

@@ -98,7 +98,7 @@ spec:
 ```
 
 **One `Snapshot` holds one PVC.** A `SnapshotPolicy` with several `pvc:` sources backs up only
-the first one; the others are silently skipped. Use one policy per PVC, as above, or one policy
+the first one. The others are silently skipped. Use one policy per PVC, as above, or one policy
 with `pvcSelector`, which makes one `Snapshot` per matching PVC.
 
 The `mover` block is needed for every volume that the default mover UID 65532 cannot read. Set
@@ -169,7 +169,7 @@ spec:
       backupRef:
         name: mysql-1
       storageClassName: csi-hostpath-sc
-      autoExpand:                        # Optional. Default: the source size.
+      autoExpand:                        # Optional. Default: 10 percent, at least 1Gi.
         percentage: 25
   restoreCheckRef:
     name: wordpress
@@ -234,7 +234,7 @@ All fields: [Schedule restore tests](/guides/restore-tests/).
   labels. Use labels that only the `Snapshots` of one PVC carry, such as
   `kopiur.home-operations.com/config: <policy>` with one policy per PVC.
 - **Counts when:** `status.phase` is `Succeeded`.
-- **Completion time:** `lastTransitionTime` of the `Ready=True` condition. The newest wins; equal
+- **Completion time:** `lastTransitionTime` of the `Ready=True` condition. The newest wins. Equal
   times are ordered by name.
 - **afterBackup:** a run starts when every source has a `Snapshot` newer than the one of the
   last run (`status.lastHandledBackups`). Snapshots older than the `RestoreTest` do not count.

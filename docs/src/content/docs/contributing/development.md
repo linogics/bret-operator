@@ -21,10 +21,10 @@ kustomize, crd-ref-docs and helm-docs into `bin/`.
 
 ```bash
 make build           # manifests, generate, fmt, vet, then bin/manager
-make test            # unit tests and envtest; writes cover.out
+make test            # unit tests and envtest, writes cover.out
 make lint            # golangci-lint v2.15.0 with the repo's .golangci.yml
 make lint-fix        # same, with auto-fixes
-make yamllint        # strict yamllint on tracked YAML; flow lists are forbidden, see .yamllint.yaml
+make yamllint        # strict yamllint on tracked YAML. No flow lists, see .yamllint.yaml
 ```
 
 After you change a type in `api/v1alpha1/`:
