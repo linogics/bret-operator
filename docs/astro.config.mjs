@@ -4,10 +4,11 @@ import starlight from '@astrojs/starlight';
 import d2 from 'astro-d2';
 import starlightLinksValidator from 'starlight-links-validator';
 
-const provider = (name, dir) => ({
+const provider = (name, dir, existing) => ({
 	label: name,
 	items: [
 		{ label: 'Overview', slug: `providers/${dir}` },
+		...(existing ? [{ label: 'Existing setup', slug: `providers/${dir}/existing-deployment` }] : []),
 		{ label: 'Walkthrough', slug: `providers/${dir}/walkthrough` },
 		{ label: 'Limitations', slug: `providers/${dir}/limitations` },
 	],
@@ -48,7 +49,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Compare providers', slug: 'providers' },
 						{ label: 'Shared setup', slug: 'providers/shared-setup' },
-						provider('Velero', 'velero'),
+						provider('Velero', 'velero', true),
 						provider('VolSync', 'volsync'),
 						provider('Kopiur', 'kopiur'),
 					],
