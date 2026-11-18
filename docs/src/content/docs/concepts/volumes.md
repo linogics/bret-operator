@@ -10,7 +10,7 @@ An app often has more than one PVC. The default example here is nextcloud with t
 (or `RestoreTest`) has one source for each. `sourcePVC` is the key that ties them together.
 
 ```d2 title="RestoreCheck volumes and Restore sources matched by sourcePVC"
-direction: right
+direction: down
 check: "RestoreCheck.restoredVolumes[]" {
   html: "html -> /var/www/html"
   pgdata: "pgdata -> /var/lib/postgresql/data"

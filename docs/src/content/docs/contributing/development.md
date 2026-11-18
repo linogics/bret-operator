@@ -71,7 +71,7 @@ kind delete cluster --name bret-dev
 ## Check tests
 
 Check tests need a cluster with Kopiur and the S3 endpoint above. Read
-[testing-checks.md](/guides/test-a-check/). Run one app:
+[Test a check by hand](/guides/test-a-check/). Run one app:
 
 ```bash
 TIMEOUT=900 bash hack/check-test/roundtrip.sh postgres

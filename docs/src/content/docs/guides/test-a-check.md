@@ -27,7 +27,7 @@ controllers, so you can test today.
 - A `VolumeSnapshotClass` named `csi-hostpath-snapclass` and a `StorageClass` named
   `csi-hostpath-sc`. Change the names in `roundtrip.sh` and the seeds if yours differ.
 - The test cluster setup is described in
-  [development.md](/contributing/development/) for the local setup.
+  [Development](/contributing/development/) for the local setup.
 
 ## Run one check against existing PVCs
 
@@ -145,11 +145,11 @@ of each. Common cases:
 
 | Symptom | Likely cause |
 |---|---|
-| `init ... exit=` non-zero, `permission denied` in the init log | UID mismatch or a Postgres-style data dir mode. See [checks.md](/guides/write-a-check/#pod-security). |
+| `init ... exit=` non-zero, `permission denied` in the init log | UID mismatch or a Postgres-style data dir mode. See [Write a check](/guides/write-a-check/#pod-security). |
 | Pod stays `Pending` with `persistentvolumeclaim ... not found` | Restored PVC not created or wrong claim name. Check the `KEY=PVC` pairs. |
 | `pg_amcheck: no relations to check` | The extension is not installed in the scratch copy. The Postgres check now creates `amcheck` first. |
 | `another server might be running; trying to start server anyway` | Harmless. A crash-consistent copy has a stale `postmaster.pid`. |
-| Restore never reaches `Completed` | Read the Kopiur `Restore` conditions and the mover pod logs. See [troubleshooting.md](/reference/failure-reasons/). |
+| Restore never reaches `Completed` | Read the Kopiur `Restore` conditions and the mover pod logs. See [Failure reasons](/reference/failure-reasons/). |
 
 ## Images
 
@@ -164,5 +164,5 @@ nerdctl --namespace k8s.io pull postgres:17.12
 
 ## Status of the app checks
 
-See [checks/README.md](/guides/check-catalog/). Each `checks/<app>/README.md` records whether
+See [Check catalog](/guides/check-catalog/). Each `checks/<app>/README.md` records whether
 the round trip passed, the negative test result, and the open issues.

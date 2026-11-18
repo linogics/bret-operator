@@ -143,7 +143,7 @@ The check is the same for every tool:
 [checks/wordpress/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/wordpress/restorecheck.yaml). It mounts
 `html` and `mysql`, starts MariaDB as a sidecar, and compares the canary post with the canary
 file. The annotation `bret.linogics.io/mover-uid` gives the restore mover of each volume its UID.
-How to write a check: [checks.md](/guides/write-a-check/).
+How to write a check: [Write a check](/guides/write-a-check/).
 
 ## 4. Restore by hand, then a RestoreTest
 
@@ -225,7 +225,7 @@ kubectl -n wordpress annotate --overwrite restoretest/wordpress bret.linogics.io
 kubectl -n wordpress get restoretest wordpress
 ```
 
-All fields: [restoretest-guide.md](/guides/restore-tests/).
+All fields: [Schedule restore tests](/guides/restore-tests/).
 
 ## 5. How bret picks backups
 

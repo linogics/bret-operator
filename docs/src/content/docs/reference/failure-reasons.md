@@ -42,7 +42,7 @@ Fix the cause first, or every retry fails the same way.
 
 - **`SourceMissing`:** the `sourcePVC` values of the check (`restoredVolumes`) and of the
   `Restore` or `RestoreTest` (`sources`) differ. Add the missing entry on either side. See
-  [concepts.md](/concepts/volumes/#which-pvc-gets-restored).
+  [Volumes and scratch space](/concepts/volumes/#which-pvc-gets-restored).
 - **`SourceMismatch`** (Kopiur, VolSync): the backup holds another PVC than the `sourcePVC` of its
   source. Point the source at the backup of that PVC. A Kopiur `SnapshotPolicy` with several `pvc:`
   entries backs up only the first one. Use one policy per PVC or `pvcSelector`.
@@ -66,7 +66,7 @@ Fix the cause first, or every retry fails the same way.
   - No condition and no Events: the namespace is not in `watchNamespaces`, so the operator ignores
     the object. Add the namespace to the chart value. Or `spec.triggers` is not set, or no trigger
     is due yet. Then wait, or start a manual run. See
-    [restoretest-guide.md](/guides/restore-tests/#triggers).
+    [Schedule restore tests](/guides/restore-tests/#triggers).
   - `ProviderUnsupported`: the provider of `spec.provider` is disabled in the chart
     (`providers.<name>.enabled`).
   - `BackupNotFound`: a source has no finished backup that matches its `backupSelector`. The

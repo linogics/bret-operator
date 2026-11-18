@@ -5,7 +5,7 @@ description: Schedule, select backups for and tune RestoreTests.
 
 A `RestoreTest` says what to restore, when, how often to retry, and what to keep. This page
 explains each field with an example. The complete field list is in
-[reference/api.md](/reference/api/).
+[API reference](/reference/api/).
 
 A `RestoreTest` name can have at most 50 characters. The names of its `Restore` objects add up to 13 characters and must fit a 63-character label value.
 
@@ -62,7 +62,7 @@ A test for a provider that is disabled in the chart gets the condition reason
 
 One entry per PVC that the app has. Each run restores all of them together. The `sourcePVC` values
 must be exactly the `sourcePVC` values of the `restoredVolumes` in the `RestoreCheck`, or the `Restore`
-ends Failed with `SourceMissing`. See [concepts.md](/concepts/volumes/#which-pvc-gets-restored).
+ends Failed with `SourceMissing`. See [Volumes and scratch space](/concepts/volumes/#which-pvc-gets-restored).
 
 Each source has a `sourcePVC`, a `backupSelector` and the scratch volume fields (below).
 
@@ -104,14 +104,14 @@ the sources without a backup.
 ### restoreCheckRef
 
 `name` of a `RestoreCheck` in the same namespace as the `RestoreTest`. The `RestoreCheck` is the
-pod template that checks the restored data. See [checks.md](/guides/write-a-check/).
+pod template that checks the restored data. See [Write a check](/guides/write-a-check/).
 
 ### Scratch volume per source
 
 Each source is restored into its own scratch volume. The fields are in the source itself, next to
 `backupSelector`: `size`, `storageClassName` and `autoExpand`. All are optional. Without `size`
 and `autoExpand`, the source size and the default headroom decide. The size rules are in
-[concepts.md](/concepts/volumes/#scratch-volume-size).
+[Volumes and scratch space](/concepts/volumes/#scratch-volume-size).
 
 ### triggers
 
@@ -129,7 +129,7 @@ A manual run needs no CLI:
 kubectl -n wordpress annotate restoretest wordpress bret.linogics.io/run-now="$(date +%s)" --overwrite
 ```
 
-The flow from a trigger to a run result is in [concepts.md](/concepts/lifecycle/#trigger-flow).
+The flow from a trigger to a run result is in [Restore test lifecycle](/concepts/lifecycle/#trigger-flow).
 
 Pick the times on purpose. A test that starts while the backup is still writing can fail for no
 good reason. Leave some margin after the backup window, as the `delay` above does.
@@ -296,4 +296,4 @@ spec:
 A `RestoreTest` lives in the namespace of the application that it tests. Its pods and volumes go there
 too. The operator watches all namespaces by default. The chart value `watchNamespaces` (a list)
 limits the operator to those namespaces. Empty means cluster-wide. See
-[concepts.md](/concepts/overview/#scope).
+[How bret works](/concepts/overview/#scope).

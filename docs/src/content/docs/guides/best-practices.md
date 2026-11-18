@@ -19,7 +19,7 @@ Rules for backups and restore tests.
 - A crash-consistent backup of a live database is useful, but it is not proof of recovery. The
   tested Postgres 17 backup recovered on boot and passed the SQL check. The load was light. Test
   under heavy write load before you rely on it.
-- Seed the canary before the backup. The check depends on it. See [checks.md](/guides/write-a-check/#canary-convention).
+- Seed the canary before the backup. The check depends on it. See [Write a check](/guides/write-a-check/#canary-convention).
 
 ## Restore tests
 
@@ -71,11 +71,11 @@ Rules for backups and restore tests.
 - The provider tools read object storage credentials, not the operator. The operator reads
   backup metadata only.
 - Pin tool and image versions. Use pinned image tags in checks. Check tags marked unverified in
-  [checks/README.md](/guides/check-catalog/) need a test run before use.
+  [Check catalog](/guides/check-catalog/) need a test run before use.
 - Upstream issue `kopiur#233` affects Kopiur restores. Review its results with care.
 
 ## Data apps
 
 - Restore all parts of one app from **one backup point**. Files and the database must come from
-  the same point. See [data-and-database.md](/guides/data-and-database/).
+  the same point. See [Data and database](/guides/data-and-database/).
 - Check that the parts point at each other. A DB row must point to a file that exists.

@@ -94,7 +94,7 @@ MariaDB. The default mover UID cannot read a database data dir (`permission deni
 The check is the same for every tool:
 [checks/wordpress/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/wordpress/restorecheck.yaml). The annotation
 `bret.linogics.io/mover-uid` gives the restore mover of each volume its UID; without it the mover
-uses the first container's `runAsUser`, then 65534. How to write a check: [checks.md](/guides/write-a-check/).
+uses the first container's `runAsUser`, then 65534. How to write a check: [Write a check](/guides/write-a-check/).
 
 ## 4. Restore by hand, then a RestoreTest
 
@@ -174,7 +174,7 @@ kubectl -n wordpress annotate --overwrite restoretest/wordpress bret.linogics.io
 kubectl -n wordpress get restoretest wordpress
 ```
 
-All fields: [restoretest-guide.md](/guides/restore-tests/).
+All fields: [Schedule restore tests](/guides/restore-tests/).
 
 ## 5. How bret picks backups
 
@@ -198,7 +198,7 @@ VolSync has no object per backup. The backup is the last sync of a `ReplicationS
 What bret creates:
 
 ```d2 title="Objects bret reads and creates for a VolSync restore"
-direction: right
+direction: down
 backup: "backup namespace\n(backupRef.namespace, else the Restore namespace)" {
   rs: ReplicationSource {
     repo: restic.repository

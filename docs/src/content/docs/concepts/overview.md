@@ -4,7 +4,7 @@ description: The problem bret solves, its three objects and what it does and doe
 ---
 
 This page explains what bret does and the rules it follows. The schema is in
-[reference/api.md](/reference/api/).
+[API reference](/reference/api/).
 
 ## The problem
 
@@ -21,6 +21,38 @@ on a schedule, checks the restored data, and tells you when the check fails.
 
 A typical setup has one `RestoreCheck` per application. It also has one `RestoreTest` for that
 app, with one source per PVC.
+
+The diagram shows how the objects refer to each other. Solid arrows create an object, dashed
+arrows only name it. Objects in the namespace of the `Restore` get it as their owner, so deleting
+the `Restore` deletes them. Objects in other namespaces (the Velero scratch namespace) are found by
+name and label and removed by the `bret.linogics.io/cleanup` finalizer.
+
+```d2 title="How RestoreTest, Restore, RestoreCheck and the objects bret creates refer to each other"
+direction: down
+rt: RestoreTest
+rc: RestoreCheck
+r: "Restore\n(one per attempt)"
+yours: "Restore namespace" {
+  grid-columns: 1
+  native: "VolSync or Kopiur\nrestore object"
+  pvc: scratch PVC
+  pod: check pod
+}
+velero: "Velero only" {
+  grid-columns: 1
+  vr: "Velero Restore\nin the Velero namespace"
+  scratch: "bret-scratch-<hash>" {
+    grid-columns: 1
+    pvc: restored PVC
+    pod: check pod
+  }
+}
+rt -> r: creates
+rt -> rc: names {style.stroke-dash: 4}
+r -> rc: names {style.stroke-dash: 4}
+r -> yours: "creates, owns"
+r -> velero: creates
+```
 
 ## What the operator does, and what it does not do
 

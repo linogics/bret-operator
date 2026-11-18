@@ -15,6 +15,26 @@ hero:
       variant: minimal
 ---
 
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<CardGrid>
+	<Card title="Proves a backup restores" icon="approve-check">
+		A backup you never restored is not proven. bret restores it on a schedule, into a scratch
+		volume, never the app volume.
+	</Card>
+	<Card title="Your check, your rules" icon="pencil">
+		A check is a pod template. Exit code 0 means the restored data is good. Ready-made checks
+		exist for common apps.
+	</Card>
+	<Card title="Works with your backup tool" icon="puzzle">
+		Velero, VolSync or Kopiur. bret drives their restore objects and does not move data
+		itself.
+	</Card>
+	<Card title="Results where you look" icon="information">
+		Status on the custom resource, Kubernetes Events and Prometheus metrics for alerts.
+	</Card>
+</CardGrid>
+
 ## How it fits together
 
 bret does not move backup data. It drives the restore object of Velero, VolSync or Kopiur. Then it
@@ -23,12 +43,14 @@ runs your check and records the result.
 ```d2 title="Flow from your objects through bret and the provider to the check result"
 direction: down
 you: You create {
+  grid-columns: 3
   rc: "RestoreCheck\ncheck pod template"
   rt: "RestoreTest\nschedule, policy, retries"
   r: "Restore\none attempt"
 }
 bret: bret controllers
 provider: "Provider restore object (one of)" {
+  grid-columns: 3
   velero: Velero Restore
   volsync: VolSync ReplicationDestination
   kopiur: Kopiur Restore
@@ -36,6 +58,7 @@ provider: "Provider restore object (one of)" {
 scratch: "Scratch volume (PVC)\nnever the app volume"
 check: "Check pod <restore>-check\nexit code 0 = pass"
 results: Results {
+  grid-columns: 1
   status: "status: Restore phase, RestoreTest lastRun"
   events: "Events: RestoreStarted, CheckPassed, ..."
   metrics: "Prometheus: bret_restore_runs_total, ..."
@@ -46,3 +69,12 @@ provider -> scratch
 scratch -> check
 check -> results
 ```
+
+## Where to go next
+
+<CardGrid>
+	<LinkCard title="Quickstart" description="From an empty kind cluster to a first passing restore test." href="/start/quickstart/" />
+	<LinkCard title="Add bret to an existing setup" description="Pick your backup tool and follow its checklist." href="/providers/" />
+	<LinkCard title="API reference" description="Every field of RestoreCheck, Restore and RestoreTest." href="/reference/api/" />
+	<LinkCard title="Failure reasons" description="What each reason means and how to fix it." href="/reference/failure-reasons/" />
+</CardGrid>

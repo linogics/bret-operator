@@ -72,7 +72,7 @@ check pod <restore>-check
 
 - Pod `Succeeded`: pass. Pod `Failed`: fail. The operator reads the pod phase.
 - An init container that exits non-zero fails the attempt before the checks run.
-- A check that hangs is stopped by `restoreWindow` (see [restoretest-guide.md](/guides/restore-tests/)).
+- A check that hangs is stopped by `restoreWindow` (see [Schedule restore tests](/guides/restore-tests/)).
 - Test each check with a broken input. Make the expected value wrong once, and confirm exit 1.
 
 ## Restored volumes
@@ -85,7 +85,7 @@ Each `restoredVolumes` entry has two fields:
 
 A `Restore` or `RestoreTest` must have one source with the same `sourcePVC` for every entry. If
 the sets differ, the `Restore` ends Failed with `SourceMissing`. See
-[concepts.md](/concepts/volumes/#which-pvc-gets-restored).
+[Volumes and scratch space](/concepts/volumes/#which-pvc-gets-restored).
 
 Key rule: the mount path must be the path the application used in production. Absolute paths in
 the application's config then still resolve on the restored copy.
@@ -100,7 +100,7 @@ spec:
 ```
 
 All volumes come from the same backup point. For a database plus files this is the point: see
-[data-and-database.md](/guides/data-and-database/).
+[Data and database](/guides/data-and-database/).
 
 ## Mover UID
 
@@ -133,7 +133,7 @@ Rules:
 - The operator deletes scratch PVCs with the attempt. With `keepOnFailure`, it keeps them.
 - `size` is required. Set it to what the check needs, not what the source had.
 - The operator does not compare `size` with the source. `InsufficientCapacity` is about the
-  restored volume only. See [concepts.md](/concepts/volumes/#scratch-volume-size).
+  restored volume only. See [Volumes and scratch space](/concepts/volumes/#scratch-volume-size).
 
 ## Native sidecars
 
@@ -181,19 +181,22 @@ key. The diagram shows where the check pod runs, and so where the Secret must be
 namespace is `data`.
 
 ```d2 title="Where the check pod runs and where its Secret must be, per provider"
-direction: right
+grid-columns: 1
 one: "Kopiur, VolSync: one namespace" {
   data: data {
+    grid-columns: 3
     rt: RestoreTest
     rc: RestoreCheck
     r: Restore
     pod: check pod
     secret: Secret
-    pod -> secret: reads
   }
+  data.pod -> data.secret: reads
 }
 two: "Velero: two namespaces" {
+  direction: down
   data: data {
+    grid-columns: 2
     rt: RestoreTest
     rc: RestoreCheck
     r: Restore
@@ -253,7 +256,7 @@ Rules:
 - With Velero, the operator copies only Secrets and ConfigMaps named in `imagePullSecrets`, `env`
   and `envFrom`. Secret and ConfigMap volumes are rejected with `ProviderUnsupported`, and so are
   pull secrets that only the `default` ServiceAccount lists. The full list of what a Velero check
-  must not set is in [providers/velero.md](/providers/velero/walkthrough/#3-write-the-check).
+  must not set is in [Velero walkthrough](/providers/velero/walkthrough/#3-write-the-check).
 
 ## Pod security
 
@@ -297,7 +300,7 @@ mover security context of each tool.
 
 ## Testing a check
 
-Read [testing-checks.md](/guides/test-a-check/). Short version:
+Read [Test a check by hand](/guides/test-a-check/). Short version:
 
 ```bash
 # Run a check against restored PVCs you already have
@@ -309,5 +312,5 @@ hack/check-test/roundtrip.sh minimal checks/minimal/seed.yaml checks/minimal/res
 
 ## Catalog
 
-[checks/README.md](/guides/check-catalog/) lists the app checks, the volumes each one
+[Check catalog](/guides/check-catalog/) lists the app checks, the volumes each one
 needs, the canary it uses, and its test status.

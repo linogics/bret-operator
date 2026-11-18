@@ -51,7 +51,7 @@ A check for Velero must not set any of these; such a check fails with `ProviderU
 - a hostPath volume
 
 Pull secrets of the `default` ServiceAccount are not copied. List the pull secret in the check's
-`imagePullSecrets`. How to write a check: [checks.md](/guides/write-a-check/).
+`imagePullSecrets`. How to write a check: [Write a check](/guides/write-a-check/).
 
 ## 4. Restore by hand, then a RestoreTest
 
@@ -153,7 +153,7 @@ kubectl -n wordpress annotate --overwrite restoretest/wordpress bret.linogics.io
 kubectl -n wordpress get restoretest wordpress
 ```
 
-All fields: [restoretest-guide.md](/guides/restore-tests/).
+All fields: [Schedule restore tests](/guides/restore-tests/).
 
 ## 5. How bret picks backups
 

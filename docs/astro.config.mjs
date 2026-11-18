@@ -17,7 +17,7 @@ export default defineConfig({
 	site: 'https://bret-operator.linogics.io',
 	integrations: [
 		// d2 must run before starlight so diagrams exist when pages render.
-		d2({ layout: 'elk', theme: { default: '0', dark: '200' } }),
+		d2({ layout: 'elk', pad: 20, theme: { default: '0', dark: '200' } }),
 		starlight({
 			title: 'bret',
 			description: 'bret tests your Kubernetes backups by restoring them and running a check.',

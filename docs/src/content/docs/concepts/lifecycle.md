@@ -3,6 +3,33 @@ title: Restore test lifecycle
 description: Phases, attempts, retries, restore windows, overlap policy and triggers.
 ---
 
+## One run, step by step
+
+The sequence shows one attempt that passes. It starts when a trigger fires on the `RestoreTest`.
+
+```d2 title="Sequence of one restore attempt from trigger to result"
+shape: sequence_diagram
+rt: RestoreTest\ncontroller
+r: Restore\ncontroller
+p: backup tool
+k: Kubernetes
+pod: check pod
+rt -> rt: "pick newest\nbackups"
+rt -> r: "create Restore\n<test>-<run>-a<n>"
+r -> r: "Pending:\nfinalizer, sizes"
+r -> k: "scratch PVCs"
+r -> p: "native restore\nobject"
+r -> k: "RestoreStarted,\nRunning"
+p -> k: "restore data"
+p -> r: "done"
+r -> pod: "create, mount\nvolumes"
+pod -> r: "all exit 0"
+r -> k: "CheckPassed,\nSucceeded"
+r -> k: "metrics"
+r -> k: "cleanup"
+rt -> rt: "lastRun =\nSucceeded"
+```
+
 ## The restore test lifecycle
 
 The diagram shows the phases of one `Restore`, with the retry and keep rules that apply after it ends.
@@ -74,18 +101,18 @@ in its spec. To test another backup, create a new `Restore`.
 
 With `keepOnFailure: true` and the last attempt not `Succeeded`, the operator keeps the check pod,
 the native restore object and the scratch volume. Delete the `Restore` to remove them. Details:
-[restoretest-guide.md](/guides/restore-tests/#keeponfailure).
+[Schedule restore tests](/guides/restore-tests/#keeponfailure).
 
 ### overlapPolicy
 
 Applies when a trigger fires while a run is still going: `Skip` (default), `Queue` or `Replace`.
-Details: [restoretest-guide.md](/guides/restore-tests/#overlappolicy).
+Details: [Schedule restore tests](/guides/restore-tests/#overlappolicy).
 
 ## Triggers
 
 A `RestoreTest` uses any combination of three triggers: a schedule (`triggers.cron`), after a
 backup (`triggers.afterBackup.delay`), and manual (`triggers.manual` with the annotation
-`bret.linogics.io/run-now`). Details: [restoretest-guide.md](/guides/restore-tests/#triggers).
+`bret.linogics.io/run-now`). Details: [Schedule restore tests](/guides/restore-tests/#triggers).
 
 ### Trigger flow
 

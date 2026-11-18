@@ -10,7 +10,7 @@ store. Both parts must come from the same backup point. This page explains why, 
 
 A `RestoreCheck` lists every volume in `restoredVolumes`. A `Restore` or `RestoreTest` restores
 one source per volume in one attempt, and the check pod mounts them all. The `sourcePVC` values tie
-the two together. See [concepts.md](/concepts/volumes/#which-pvc-gets-restored).
+the two together. See [Volumes and scratch space](/concepts/volumes/#which-pvc-gets-restored).
 
 The checks for apps with several volumes are `checks/nextcloud/restorecheck.yaml`, `checks/wordpress/restorecheck.yaml`,
 `checks/jellyfin/restorecheck.yaml` and `checks/pihole/restorecheck.yaml`.
@@ -61,7 +61,7 @@ Symptoms seen in the apps:
 4. **Write checks that cross-reference.** A DB row must point to a file that exists, and the
    file must match the row.
 5. **Each restored workload holds its PVC alone.** Scale restored workloads to 0 before the
-   check pod mounts the PVCs (RWO). See [best-practices.md](/guides/best-practices/).
+   check pod mounts the PVCs (RWO). See [Best practices](/guides/best-practices/).
 
 ## Worked example: Nextcloud
 

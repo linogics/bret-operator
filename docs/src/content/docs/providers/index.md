@@ -11,9 +11,9 @@ its own page. Every page walks through the same WordPress + MariaDB example, whi
 
 | Page | Backup object | One backup holds |
 |---|---|---|
-| [kopiur.md](/providers/kopiur/) | Kopiur `Snapshot` | one PVC |
-| [volsync.md](/providers/volsync/) | VolSync `ReplicationSource` (its last sync) | one PVC |
-| [velero.md](/providers/velero/) | Velero `Backup` | every PVC of the namespace |
+| [Kopiur](/providers/kopiur/) | Kopiur `Snapshot` | one PVC |
+| [VolSync](/providers/volsync/) | VolSync `ReplicationSource` (its last sync) | one PVC |
+| [Velero](/providers/velero/) | Velero `Backup` | every PVC of the namespace |
 
 Each page has the same steps:
 
@@ -27,7 +27,7 @@ Each page has the same steps:
 The example files are in [examples/](https://github.com/linogics/bret-operator/tree/main/examples): `examples/wordpress/` is the app and the
 check, `examples/<tool>/` adds the backup setup, a `Restore`, a `RestoreTest`, and a negative
 `Restore` under `negative/`. The files were tested on a kind cluster with
-`hack/check-test/operator-roundtrip.sh <tool>` (see [testing-checks.md](/guides/test-a-check/)).
+`hack/check-test/operator-roundtrip.sh <tool>` (see [Test a check by hand](/guides/test-a-check/)).
 
 
 ## Which tool to choose

@@ -44,21 +44,21 @@ kubectl get crd restores.bret.linogics.io restoretests.bret.linogics.io restorec
 ```
 
 The deployment should show `1/1` ready. The three CRDs should be listed. More in
-[installation.md](/start/installation/).
+[Installation](/start/installation/).
 
 ## Step 2: Deploy the app and back it up
 
 Follow steps 1 and 2 on the page of your tool. They deploy the app into the namespace
 `wordpress`, seed a canary, and take one backup of both PVCs:
 
-- [providers/kopiur.md](/providers/kopiur/)
-- [providers/volsync.md](/providers/volsync/)
-- [providers/velero.md](/providers/velero/)
+- [Kopiur](/providers/kopiur/)
+- [VolSync](/providers/volsync/)
+- [Velero](/providers/velero/)
 
 The example also applies the check,
 [checks/wordpress/restorecheck.yaml](https://github.com/linogics/bret-operator/blob/main/checks/wordpress/restorecheck.yaml). It mounts both
 restored volumes, starts MariaDB next to WordPress, and checks that the canary post matches the
-canary file. For your own app, write a check as described in [checks.md](/guides/write-a-check/). Only
+canary file. For your own app, write a check as described in [Write a check](/guides/write-a-check/). Only
 cluster admins should create checks, because a check runs a pod with your chosen image.
 
 ## Step 3: Restore by hand
@@ -79,7 +79,7 @@ kubectl -n wordpress wait --for=jsonpath='{.status.phase}'=Failed restore/wordpr
 ```
 
 A check that always passes is not a check. To run a check without the operator, against PVCs you
-restored yourself, see [testing-checks.md](/guides/test-a-check/).
+restored yourself, see [Test a check by hand](/guides/test-a-check/).
 
 ## Step 4: Create a restore test
 
@@ -106,7 +106,7 @@ kubectl -n wordpress annotate restoretest wordpress \
   `result`, `time` and `reason`.
 - Events: `kubectl -n wordpress get events --field-selector involvedObject.kind=RestoreTest`
 - Metrics: the operator exposes Prometheus metrics on port 8443 (see
-  [installation.md](/start/installation/#metrics-scraping)). Metric names may change before v1.
+  [Installation](/start/installation/#metrics-scraping)). Metric names may change before v1.
 
 If a run failed and `keepOnFailure` is `true`, the failed pod, its PVCs and the restore objects
 stay. Read the pod logs first. Then delete them.
@@ -119,11 +119,11 @@ helm uninstall bret-operator -n bret-operator-system
 ```
 
 Delete the backups with your tool. Keep the CRDs if you plan to return. See
-[installation.md](/start/installation/#uninstalling) for how to remove them.
+[Installation](/start/installation/#uninstalling) for how to remove them.
 
 ## Next steps
 
-- Write a check for your own app: [checks.md](/guides/write-a-check/).
-- Set up schedules, retries and keep-on-failure: [restoretest-guide.md](/guides/restore-tests/).
-- Apps with a database and files: [data-and-database.md](/guides/data-and-database/).
-- Something broke: [troubleshooting.md](/reference/failure-reasons/).
+- Write a check for your own app: [Write a check](/guides/write-a-check/).
+- Set up schedules, retries and keep-on-failure: [Schedule restore tests](/guides/restore-tests/).
+- Apps with a database and files: [Data and database](/guides/data-and-database/).
+- Something broke: [Failure reasons](/reference/failure-reasons/).
