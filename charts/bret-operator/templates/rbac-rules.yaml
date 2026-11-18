@@ -127,6 +127,7 @@ rules:
   - velero.io
   resources:
   - backups
+  - podvolumebackups
   verbs:
   - get
   - list
@@ -142,6 +143,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - watch
 {{- end }}
 {{- if $.Values.providers.volsync.enabled }}
@@ -154,6 +156,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - watch
 {{- end }}
 {{- if $.Values.providers.volsync.enabled }}
@@ -273,6 +276,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - watch
 {{- end }}
 {{- if $.Values.providers.volsync.enabled }}
@@ -300,6 +304,7 @@ rules:
   - velero.io
   resources:
   - backups
+  - podvolumebackups
   verbs:
   - get
   - list
@@ -313,6 +318,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - watch
 {{- end }}
 ---
