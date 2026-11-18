@@ -34,6 +34,7 @@ const (
 	attemptLabel     = "bret.linogics.io/attempt"
 	// snapshotPollInterval is how often afterBackup looks for new snapshots. Snapshots are not watched.
 	snapshotPollInterval   = time.Minute
+	restoreBusyPoll        = 10 * time.Second
 	snapshotPhaseSucceeded = "Succeeded"
 )
 
@@ -45,6 +46,7 @@ const (
 	reasonBackupNotFound          = "BackupNotFound"
 	reasonWaitingBackups          = "WaitingForBackups"
 	reasonBackupSelectorAmbiguous = "BackupSelectorAmbiguous"
+	reasonRestoreBusy             = "RestoreNameInUse"
 
 	conditionBackupsPending = "BackupsPending"
 	reasonInvalidCron       = "InvalidCron"
@@ -109,6 +111,11 @@ func (r *RestoreTestReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	result, err := r.advance(ctx, test)
+	if errors.Is(err, errRestoreBusy) {
+		setTestReady(test, metav1.ConditionFalse, reasonRestoreBusy, err.Error())
+
+		result, err = ctrl.Result{RequeueAfter: restoreBusyPoll}, nil
+	}
 
 	// The gauge is set from status, so it survives an operator restart.
 	if test.Status.LastSuccess != nil {
@@ -382,14 +389,20 @@ func (r *RestoreTestReconciler) nextTrigger(ctx context.Context, test *restorev1
 
 	var wait time.Duration
 
+	var schedule cron.Schedule
+
 	if triggers.Cron != "" {
-		schedule, err := cron.ParseStandard(triggers.Cron)
+		var err error
+
+		schedule, err = cron.ParseStandard(triggers.Cron)
 		if err != nil {
+			// A bad cron must not stop the afterBackup trigger.
 			r.blockTest(test, reasonInvalidCron, fmt.Sprintf("parse cron %q: %v", triggers.Cron, err))
-
-			return nil, 0, nil
+			test.Status.NextRun = nil
 		}
+	}
 
+	if schedule != nil {
 		next := metav1.NewTime(schedule.Next(now.UTC()))
 
 		stale := test.Status.NextRun != nil && now.Before(test.Status.NextRun.Time) && !next.Time.Equal(test.Status.NextRun.Time)
@@ -742,7 +755,11 @@ func (r *RestoreTestReconciler) createRestore(
 	}
 
 	err = r.Create(ctx, restore)
-	if err != nil && !apierrors.IsAlreadyExists(err) {
+	if apierrors.IsAlreadyExists(err) {
+		err = r.ownAttempt(ctx, test, restore.Name)
+	}
+
+	if err != nil {
 		return err
 	}
 
@@ -750,6 +767,26 @@ func (r *RestoreTestReconciler) createRestore(
 	test.Status.RetryAt = nil
 
 	setTestReady(test, metav1.ConditionFalse, reasonRunning, "attempt "+strconv.Itoa(attempt)+" started")
+
+	return nil
+}
+
+// errRestoreBusy means the Restore name of the next attempt is taken by an object this run cannot use.
+var errRestoreBusy = errors.New("restore name is taken by a Restore that is being deleted or not owned by this RestoreTest")
+
+// ownAttempt accepts an existing Restore as this attempt only when this RestoreTest controls it and it is not
+// being deleted. A Restore of a deleted RestoreTest, or one a replaced run is still cleaning up, would report a
+// result this run never produced.
+func (r *RestoreTestReconciler) ownAttempt(ctx context.Context, test *restorev1alpha1.RestoreTest, name string) error {
+	existing := &restorev1alpha1.Restore{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: test.Namespace, Name: name}, existing); err != nil {
+		return err
+	}
+
+	owner := metav1.GetControllerOf(existing)
+	if owner == nil || owner.UID != test.UID || !existing.DeletionTimestamp.IsZero() {
+		return fmt.Errorf("%w: %s", errRestoreBusy, name)
+	}
 
 	return nil
 }
