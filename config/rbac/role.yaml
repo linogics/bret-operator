@@ -101,6 +101,7 @@ rules:
   - velero.io
   resources:
   - backups
+  - podvolumebackups
   verbs:
   - get
   - list
@@ -114,6 +115,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - watch
 - apiGroups:
   - volsync.backube
@@ -124,6 +126,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - watch
 - apiGroups:
   - volsync.backube

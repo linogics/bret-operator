@@ -105,6 +105,7 @@ type RestoreTestSpec struct {
 	Triggers *Triggers `json:"triggers,omitempty"`
 	// RestoreWindow is the deadline for each attempt.
 	// +kubebuilder:default="45m"
+	// +kubebuilder:validation:XValidation:rule="duration(self) == duration('0s') || duration(self) >= duration('1m')",message="restoreWindow must be at least 1m, 0s means the default"
 	RestoreWindow metav1.Duration `json:"restoreWindow"`
 	// Retries defines how failed attempts are retried.
 	// +kubebuilder:default={}

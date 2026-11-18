@@ -46,6 +46,11 @@ Fix the cause first, or every retry fails the same way.
 - **`RestoredVolumeMissing`** (Velero): a `sourcePVC` of the `Restore` was not restored. The
   `spec.velero` selector did not match the PVC, or the backup lacks it. Label the PVC and take a
   new backup.
+- **`BackupUnsupported`** (Velero): the PVC is in the backup only as file system backup, or the
+  `Backup` has `snapshotVolumes: false`. A PVC restore would come back empty. Back the PVC up with
+  CSI snapshots and `--snapshot-move-data`, or with native volume snapshots.
+- **`RestoreNameInUse`** (RestoreTest): the name of the next attempt is taken by a `Restore` that is
+  being deleted, or that another `RestoreTest` owns. The run starts once that `Restore` is gone.
 - **`CheckRefMissing`** (Velero): a Secret or ConfigMap that the check names in
   `imagePullSecrets`, `env` or `envFrom` is not in the `Restore` namespace. Create it there, or
   mark an env reference `optional: true`.

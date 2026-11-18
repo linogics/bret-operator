@@ -115,6 +115,7 @@ type RestoreSpec struct {
 	RestoreCheckRef RestoreCheckRef `json:"restoreCheckRef"`
 	// RestoreWindow is the deadline for this attempt. It covers the restore, image pulls and the check.
 	// +kubebuilder:default="45m"
+	// +kubebuilder:validation:XValidation:rule="duration(self) == duration('0s') || duration(self) >= duration('1m')",message="restoreWindow must be at least 1m, 0s means the default"
 	RestoreWindow metav1.Duration `json:"restoreWindow,omitempty"`
 	// Velero narrows what a Velero restore brings back. Velero only.
 	Velero *VeleroOptions `json:"velero,omitempty"`
@@ -170,7 +171,9 @@ type Restore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec is the desired state of the restore.
+	// Spec is the desired state of the restore. It cannot change after creation, so the status always
+	// describes the backups in the spec.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec is immutable, create a new Restore"
 	Spec RestoreSpec `json:"spec"`
 	// Status is the observed state of the restore.
 	Status RestoreStatus `json:"status,omitempty"`

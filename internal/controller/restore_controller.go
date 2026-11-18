@@ -106,6 +106,9 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	if !wasTerminal {
 		result, err = r.advance(ctx, restore)
+		if errors.Is(err, errObjectTerminating) {
+			result, err = ctrl.Result{RequeueAfter: r.pollInterval()}, nil
+		}
 	}
 
 	if statusErr := r.Status().Update(ctx, restore); statusErr != nil {
@@ -165,7 +168,15 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 	}
 
 	if restore.Status.Deadline != nil && !time.Now().Before(restore.Status.Deadline.Time) {
-		r.finish(restore, restorev1alpha1.RestorePhaseCanceled, reasonRestoreCanceled, "restore window expired")
+		// Polling sees a check that finished in time only after the deadline. Its result still counts.
+		done, err := r.finishedCheck(ctx, restore)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if !done {
+			r.finish(restore, restorev1alpha1.RestorePhaseCanceled, reasonRestoreCanceled, "restore window expired")
+		}
 
 		return ctrl.Result{}, nil
 	}
@@ -390,6 +401,40 @@ func (r *RestoreReconciler) check(
 	default:
 		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
+}
+
+// finishedCheck finishes the attempt from a check pod that already succeeded or failed, and reports whether it did.
+func (r *RestoreReconciler) finishedCheck(ctx context.Context, restore *restorev1alpha1.Restore) (bool, error) {
+	namespaces := []string{restore.Namespace}
+	if restore.Spec.Provider == restorev1alpha1.ProviderVelero {
+		namespaces = []string{veleroScratchName(restore)}
+	}
+
+	for _, ns := range namespaces {
+		pod := &corev1.Pod{}
+
+		err := r.Get(ctx, client.ObjectKey{Namespace: ns, Name: checkPodName(restore)}, pod)
+		if apierrors.IsNotFound(err) || err == nil && pod.Labels[restoreLabel] != restore.Name {
+			continue
+		}
+
+		if err != nil {
+			return false, err
+		}
+
+		switch pod.Status.Phase {
+		case corev1.PodSucceeded:
+			r.finish(restore, restorev1alpha1.RestorePhaseSucceeded, reasonRestoreSucceeded, "restore and check passed")
+
+			return true, nil
+		case corev1.PodFailed:
+			r.finish(restore, restorev1alpha1.RestorePhaseFailed, reasonRestoreFailed, "check pod failed")
+
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // startAttempt sets the first attempt to Pending with its window.

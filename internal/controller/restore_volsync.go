@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -17,7 +18,7 @@ import (
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
 
-// +kubebuilder:rbac:groups=volsync.backube,resources=replicationdestinations,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=volsync.backube,resources=replicationdestinations,verbs=get;list;watch;create;delete;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 
 // volsyncMoverUID is the mover user of the restic restore when the check sets none.
@@ -174,6 +175,16 @@ func (r *RestoreReconciler) reconcileVolSync(
 
 		refs = append(refs, restorev1alpha1.ProviderRef{Kind: replicationDestinationGVK.Kind, Name: rd.GetName(), Namespace: rd.GetNamespace()})
 		restored[src.SourcePVC] = restoredClaimName(restore, src.SourcePVC)
+
+		// The restic mover exits 0 and VolSync sets latestImage when no snapshot fits restoreAsOf
+		// (volsync mover-restic/entry.sh, do_restore). The volume is then empty.
+		logs, _, _ := unstructured.NestedString(rd.Object, "status", "latestMoverStatus", "logs")
+		if strings.Contains(logs, "No eligible snapshots found") {
+			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+			r.block(restore, reasonBackupNotFound, "VolSync found no snapshot at or before restoreAsOf for "+src.SourcePVC+", nothing was restored")
+
+			return ctrl.Result{}, nil
+		}
 
 		if kind, _, _ := unstructured.NestedString(rd.Object, "status", "latestImage", "kind"); kind == "PersistentVolumeClaim" {
 			ready++

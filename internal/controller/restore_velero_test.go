@@ -72,6 +72,10 @@ func TestVeleroCheckRunsInScratchNamespace(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			if err := unstructured.SetNestedField(vr.Object, int64(1), "status", "progress", "itemsRestored"); err != nil {
+				t.Fatal(err)
+			}
+
 			if err := c.Update(ctx, vr); err != nil {
 				t.Fatal(err)
 			}
@@ -385,6 +389,10 @@ func completedVelero(t *testing.T, bp *restorev1alpha1.RestoreCheck, pvcs ...str
 	}
 
 	if err := unstructured.SetNestedField(vr.Object, "Completed", "status", "phase"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := unstructured.SetNestedField(vr.Object, int64(1), "status", "progress", "itemsRestored"); err != nil {
 		t.Fatal(err)
 	}
 

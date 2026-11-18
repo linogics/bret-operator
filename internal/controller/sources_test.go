@@ -148,16 +148,16 @@ func TestKopiurTwoSources(t *testing.T) {
 		kopiur := &unstructured.Unstructured{}
 		kopiur.SetGroupVersionKind(kopiurRestoreGVK)
 
-		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: "r1-kopiur-" + pvc}, kopiur); err != nil {
+		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: kopiurName(newTestRestore(), pvc)}, kopiur); err != nil {
 			t.Fatalf("Kopiur restore of %s: %v", pvc, err)
 		}
 
 		claim := &corev1.PersistentVolumeClaim{}
-		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: "r1-" + pvc}, claim); err != nil {
+		if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: restoredClaimName(newTestRestore(), pvc)}, claim); err != nil {
 			t.Fatalf("PVC of %s: %v", pvc, err)
 		}
 
-		if ref := claim.Spec.DataSourceRef; ref == nil || ref.Name != "r1-kopiur-"+pvc {
+		if ref := claim.Spec.DataSourceRef; ref == nil || ref.Name != kopiurName(newTestRestore(), pvc) {
 			t.Fatalf("PVC %s dataSourceRef = %v", pvc, ref)
 		}
 	}
@@ -191,7 +191,7 @@ func TestKopiurTwoSources(t *testing.T) {
 		}
 	}
 
-	if !claims["r1-html"] || !claims["r1-pgdata"] {
+	if !claims[restoredClaimName(newTestRestore(), "html")] || !claims[restoredClaimName(newTestRestore(), "pgdata")] {
 		t.Fatalf("pod claims = %v, want r1-html and r1-pgdata", claims)
 	}
 }

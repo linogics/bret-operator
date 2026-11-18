@@ -160,7 +160,7 @@ A `Restore` names one `Snapshot` per source:
 ```yaml
 # Restore: one manual restore test of the Kopiur Snapshots html-1 and mysql-1.
 # One source per PVC. The check in restoreCheckRef runs once both PVCs are restored.
-# Restored claims: <restore>-<sourcePVC>, here wordpress-manual-html and wordpress-manual-mysql.
+# Restored claims: <restore>-<sourcePVC>-<hash>, here wordpress-manual-html-<hash> and wordpress-manual-mysql-<hash>.
 apiVersion: bret.linogics.io/v1alpha1
 kind: Restore
 metadata:

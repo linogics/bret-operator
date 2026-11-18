@@ -19,7 +19,8 @@ import (
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
 
-// +kubebuilder:rbac:groups=velero.io,resources=restores,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=velero.io,resources=restores,verbs=get;list;watch;create;delete;patch
+// +kubebuilder:rbac:groups=velero.io,resources=backups;podvolumebackups,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets;configmaps,verbs=get;create
 
 const (
@@ -28,11 +29,15 @@ const (
 
 	reasonRestoredVolumeMissing = "RestoredVolumeMissing"
 	reasonCheckRefMissing       = "CheckRefMissing"
+	reasonBackupUnsupported     = "BackupUnsupported"
+
+	veleroGroup = "velero.io"
 )
 
 var (
-	veleroRestoreGVK = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "Restore"}
-	veleroBackupGVK  = schema.GroupVersionKind{Group: "velero.io", Version: "v1", Kind: "Backup"}
+	veleroRestoreGVK = schema.GroupVersionKind{Group: veleroGroup, Version: "v1", Kind: "Restore"}
+	veleroBackupGVK  = schema.GroupVersionKind{Group: veleroGroup, Version: "v1", Kind: "Backup"}
+	veleroPVBGVK     = schema.GroupVersionKind{Group: veleroGroup, Version: "v1", Kind: "PodVolumeBackupList"}
 )
 
 // restoreHash is a short hash of namespace/name. The hash keeps the names of objects outside the Restore
@@ -274,6 +279,18 @@ func (r *RestoreReconciler) reconcileVelero(
 
 	switch {
 	case apierrors.IsNotFound(err):
+		problem, err := r.veleroBackupProblem(ctx, restore)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if problem != "" {
+			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+			r.block(restore, reasonBackupUnsupported, problem)
+
+			return ctrl.Result{}, nil
+		}
+
 		cur = r.veleroRestoreObject(restore)
 
 		if err := r.Create(ctx, cur); err != nil {
@@ -283,6 +300,11 @@ func (r *RestoreReconciler) reconcileVelero(
 		r.Recorder.Event(restore, corev1.EventTypeNormal, reasonRestoreStarted, "started Velero restore "+cur.GetName())
 	case err != nil:
 		return ctrl.Result{}, err
+	case cur.GetLabels()[restoreLabel] != restore.Name:
+		return ctrl.Result{}, fmt.Errorf("velero Restore %s/%s exists and does not belong to restore %s", cur.GetNamespace(), cur.GetName(), restore.Name)
+	case !cur.GetDeletionTimestamp().IsZero():
+		// The Velero Restore of an earlier Restore with this name. Its phase is not this attempt's.
+		return ctrl.Result{}, fmt.Errorf("%w: velero Restore %s/%s", errObjectTerminating, cur.GetNamespace(), cur.GetName())
 	default:
 		phase, _, _ = unstructured.NestedString(cur.Object, "status", "phase")
 	}
@@ -294,6 +316,14 @@ func (r *RestoreReconciler) reconcileVelero(
 
 	switch phase {
 	case veleroPhaseCompleted:
+		// Velero creates the scratch namespace only while it restores an item. Without items nothing will come.
+		if items, _, _ := unstructured.NestedInt64(cur.Object, "status", "progress", "itemsRestored"); items == 0 {
+			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
+			r.block(restore, reasonRestoredVolumeMissing, "Velero restore "+cur.GetName()+" completed without restoring any item")
+
+			return ctrl.Result{}, nil
+		}
+
 		return r.checkVelero(ctx, restore, bp)
 	case "Failed", "PartiallyFailed", "FailedValidation":
 		r.finish(restore, restorev1alpha1.RestorePhaseFailed, reasonRestoreFailed, "Velero restore "+phase)
@@ -412,4 +442,49 @@ func restoredVeleroClaims(pvcs []corev1.PersistentVolumeClaim, sources []restore
 	}
 
 	return claims, missing
+}
+
+// veleroBackupProblem explains why the Backup holds no volume data that a PVC-only restore can bring back.
+// Velero writes file system backup data only while it restores the pod that mounted the volume
+// (velero pkg/restore/restore.go, restorePodVolumeBackups). bret restores no pods, so such a PVC comes back empty.
+// A Backup with snapshotVolumes false holds no snapshot either, so its PVCs come back empty too.
+func (r *RestoreReconciler) veleroBackupProblem(ctx context.Context, restore *restorev1alpha1.Restore) (string, error) {
+	name := restore.Spec.Sources[0].BackupRef.Name
+
+	backup := &unstructured.Unstructured{}
+	backup.SetGroupVersionKind(veleroBackupGVK)
+	backup.SetNamespace(r.veleroNS())
+	backup.SetName(name)
+
+	if err := r.getObject(ctx, backup); err != nil {
+		// A missing Backup fails the Velero restore with a clear phase.
+		return "", client.IgnoreNotFound(err)
+	}
+
+	if snap, found, _ := unstructured.NestedBool(backup.Object, "spec", "snapshotVolumes"); found && !snap {
+		return "Velero Backup " + name + " has snapshotVolumes false, so it holds no volume data a PVC restore can bring back", nil
+	}
+
+	pvbs := &unstructured.UnstructuredList{}
+	pvbs.SetGroupVersionKind(veleroPVBGVK)
+
+	if err := r.listObjects(ctx, pvbs, client.InNamespace(r.veleroNS()), client.MatchingLabels{"velero.io/backup-name": name}); err != nil {
+		return "", err
+	}
+
+	sources := make(map[string]bool, len(restore.Spec.Sources))
+	for _, src := range restore.Spec.Sources {
+		sources[src.SourcePVC] = true
+	}
+
+	for _, pvb := range pvbs.Items {
+		ns, _, _ := unstructured.NestedString(pvb.Object, "spec", "tags", "ns")
+		pvc := pvb.GetAnnotations()["velero.io/pvc-name"]
+
+		if ns == restore.Namespace && sources[pvc] {
+			return "PVC " + pvc + " is in Velero Backup " + name + " as file system backup, which Velero restores only with its pod", nil
+		}
+	}
+
+	return "", nil
 }

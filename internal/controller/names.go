@@ -34,24 +34,31 @@ func boundedName(base, suffix string) string {
 	return cut + "-" + hash + suffix
 }
 
+// childName names an object of one Restore. The hash of the pair keeps "db"+"-data-x" apart from "db-data"+"-x".
+func childName(restore *restorev1alpha1.Restore, suffix string) string {
+	sum := sha256.Sum256([]byte(restore.Name + "/" + suffix))
+
+	return boundedName(restore.Name, suffix+"-"+hex.EncodeToString(sum[:])[:nameHashChars])
+}
+
 // restoredClaimName is the PVC that receives the restored data of one source.
 func restoredClaimName(restore *restorev1alpha1.Restore, sourcePVC string) string {
-	return boundedName(restore.Name, "-"+sourcePVC)
+	return childName(restore, "-"+sourcePVC)
 }
 
 // scratchClaimName is the PVC of one check scratch volume.
 func scratchClaimName(restore *restorev1alpha1.Restore, volume string) string {
-	return boundedName(restore.Name, "-scratch-"+dnsLabel(volume))
+	return childName(restore, "-scratch-"+dnsLabel(volume))
 }
 
 // kopiurName is the name of the Kopiur Restore of one source.
 func kopiurName(restore *restorev1alpha1.Restore, sourcePVC string) string {
-	return boundedName(restore.Name, "-kopiur-"+sourcePVC)
+	return childName(restore, "-kopiur-"+sourcePVC)
 }
 
 // volsyncName is the name of the VolSync ReplicationDestination of one source.
 func volsyncName(restore *restorev1alpha1.Restore, sourcePVC string) string {
-	return boundedName(restore.Name, "-volsync-"+sourcePVC)
+	return childName(restore, "-volsync-"+sourcePVC)
 }
 
 // restoredVolumeName is the pod volume name of one restored volume.

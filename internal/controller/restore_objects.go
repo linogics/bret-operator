@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -16,6 +17,9 @@ import (
 	restorev1alpha1 "github.com/linogics/bret-operator/api/v1alpha1"
 )
 
+// errObjectTerminating means an object of the attempt is still being deleted. The attempt waits for it.
+var errObjectTerminating = errors.New("object is being deleted")
+
 // retainedLabel marks objects kept after a failed attempt when keepOnFailure is set.
 const retainedLabel = "bret.linogics.io/retained"
 
@@ -26,6 +30,11 @@ func (r *RestoreReconciler) ensure(ctx context.Context, restore *restorev1alpha1
 	if err == nil {
 		if obj.GetLabels()[restoreLabel] != restore.Name {
 			return false, fmt.Errorf("%T %s/%s exists and does not belong to restore %s", obj, obj.GetNamespace(), obj.GetName(), restore.Name)
+		}
+
+		// A dying object of an earlier Restore with the same name must not count for this one.
+		if !obj.GetDeletionTimestamp().IsZero() {
+			return false, fmt.Errorf("%w: %T %s/%s", errObjectTerminating, obj, obj.GetNamespace(), obj.GetName())
 		}
 
 		return false, nil

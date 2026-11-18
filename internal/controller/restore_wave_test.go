@@ -185,6 +185,10 @@ func TestVeleroCopiesPodSecurityLabels(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := unstructured.SetNestedField(vr.Object, int64(1), "status", "progress", "itemsRestored"); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := c.Update(ctx, vr); err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +362,7 @@ func TestPreUpgradeRestoreWithoutSizeFails(t *testing.T) {
 	deadline := metav1.NewTime(started.Add(time.Hour))
 	stored.Status = restorev1alpha1.RestoreStatus{
 		Phase: restorev1alpha1.RestorePhaseRunning, Attempt: 1, StartTime: &started, Deadline: &deadline,
-		ProviderRefs: []restorev1alpha1.ProviderRef{{Kind: "Restore", Name: "r1-kopiur-" + testDataName, Namespace: testNamespace}},
+		ProviderRefs: []restorev1alpha1.ProviderRef{{Kind: "Restore", Name: kopiurName(newTestRestore(), testDataName), Namespace: testNamespace}},
 	}
 
 	if err := c.Status().Update(context.Background(), stored); err != nil {
