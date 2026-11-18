@@ -20,7 +20,7 @@ bret restores only PVCs and PVs, no pods. That decides which Velero backup modes
 
 bret checks this before Velero starts. A `Backup` with `snapshotVolumes: false`, or a source PVC
 with a `PodVolumeBackup` in the `Backup`, ends the `Restore` `Failed` with reason
-[`BackupUnsupported`](/reference/failure-reasons/).
+[`BackupUnsupported`](/reference/failure-reasons/#backupunsupported).
 
 If your `Schedule` uses file system backup:
 

@@ -11,7 +11,7 @@ Your app's PVCs already have restic `ReplicationSource` objects. Work through th
 - Give each PVC its own restic repository (its own Secret with its own `RESTIC_REPOSITORY`). A
   repository shared by two `ReplicationSource` objects races on init.
 - Only the restic mover is supported. bret reads `spec.restic.repository`. A
-  `ReplicationSource` without it fails with [`RepositoryMissing`](/reference/failure-reasons/).
+  `ReplicationSource` without it fails with [`RepositoryMissing`](/reference/failure-reasons/#repositorymissing).
 
 ## 2. The repository Secret must be in the Restore namespace
 
@@ -46,7 +46,7 @@ metadata:
 
 - **Object:** the `ReplicationSource` in the `RestoreTest` namespace.
 - **`backupSelector.name`** picks one. **`labels`** must match exactly one. More than one blocks
-  the test with [`BackupSelectorAmbiguous`](/reference/failure-reasons/), naming the matches.
+  the test with [`BackupSelectorAmbiguous`](/reference/failure-reasons/#backupselectorambiguous), naming the matches.
 - **The backup** is the last sync: `status.lastSyncTime`. A source that never synced blocks with
   `BackupNotFound`.
 - **afterBackup** starts a run when every source has a newer `lastSyncTime` than the last run.

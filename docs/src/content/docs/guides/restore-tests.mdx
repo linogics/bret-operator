@@ -3,6 +3,8 @@ title: Schedule restore tests
 description: Schedule, select backups for and tune RestoreTests.
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 A `RestoreTest` says what to restore, when, how often to retry, and what to keep. This page
 explains each field with an example. The complete field list is in
 [API reference](/reference/api/).
@@ -11,9 +13,13 @@ A `RestoreTest` name can have at most 50 characters. The names of its `Restore` 
 
 ## A complete example
 
-The Kopiur WordPress example, [examples/kopiur/restoretest.yaml](https://github.com/linogics/bret-operator/blob/main/examples/kopiur/restoretest.yaml).
-The same test for VolSync and Velero differs only in `provider`, the `backupSelector` and the
-scratch volume fields: see [providers/](/providers/).
+The WordPress example for each tool. The tests differ only in `provider`, the `backupSelector`
+and the scratch volume fields. Details per tool: [Backup providers](/providers/).
+
+<Tabs syncKey="provider">
+<TabItem label="Kopiur">
+
+[examples/kopiur/restoretest.yaml](https://github.com/linogics/bret-operator/blob/main/examples/kopiur/restoretest.yaml)
 
 ```yaml
 # RestoreTest: restore the newest Kopiur Snapshot of each PVC and run the check.
@@ -47,6 +53,86 @@ spec:
     count: 1
     backoff: 10m
 ```
+
+</TabItem>
+<TabItem label="VolSync">
+
+[examples/volsync/restoretest.yaml](https://github.com/linogics/bret-operator/blob/main/examples/volsync/restoretest.yaml)
+
+```yaml
+# RestoreTest: restore each PVC from its ReplicationSource and run the check.
+# The backup is the last sync (status.lastSyncTime). bret pins the restore to that time,
+# so a sync during the run does not change what is tested.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreTest
+metadata:
+  name: wordpress
+spec:
+  provider: volsync
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        name: html       # The ReplicationSource. labels must match exactly one.
+      storageClassName: csi-hostpath-sc
+    - sourcePVC: mysql
+      backupSelector:
+        name: mysql
+      storageClassName: csi-hostpath-sc
+  restoreCheckRef:
+    name: wordpress
+  triggers:
+    cron: "17 3 * * *"
+    afterBackup:
+      delay: 30m
+    manual: true
+  restoreWindow: 45m
+  retries:
+    count: 1
+    backoff: 10m
+```
+
+</TabItem>
+<TabItem label="Velero">
+
+[examples/velero/restoretest.yaml](https://github.com/linogics/bret-operator/blob/main/examples/velero/restoretest.yaml)
+
+```yaml
+# RestoreTest: restore the newest Completed Velero Backup that covers this namespace.
+# Every source has the same backupSelector, because one Backup holds both PVCs.
+apiVersion: bret.linogics.io/v1alpha1
+kind: RestoreTest
+metadata:
+  name: wordpress
+spec:
+  provider: velero
+  sources:
+    - sourcePVC: html
+      backupSelector:
+        labels:
+          velero.io/schedule-name: wordpress
+    - sourcePVC: mysql
+      backupSelector:
+        labels:
+          velero.io/schedule-name: wordpress
+  velero:
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: wordpress
+  restoreCheckRef:
+    name: wordpress
+  triggers:
+    cron: "17 3 * * *"
+    afterBackup:
+      delay: 30m
+    manual: true
+  restoreWindow: 45m
+  retries:
+    count: 1
+    backoff: 10m
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 

@@ -32,7 +32,7 @@ description: What bret cannot do with Velero, and fixes for known errors.
   system backup.
 - **Fix:** back the PVC up as a CSI snapshot. See
   [Volume data must be a snapshot](/providers/velero/existing-deployment/#1-volume-data-must-be-a-snapshot).
-  Reason: [Failure reasons](/reference/failure-reasons/).
+  Reason: [`BackupUnsupported`](/reference/failure-reasons/#backupunsupported).
 
 ### Velero backup is gone after the source cluster is lost
 
@@ -51,7 +51,7 @@ description: What bret cannot do with Velero, and fixes for known errors.
 - **Cause:** no `Completed` `Backup` with the selected labels covers the namespace.
 - **Fix:** check `kubectl -n velero get backup --show-labels`, the phase, and
   `spec.includedNamespaces` / `spec.excludedNamespaces` of the newest `Backup`.
-  Reason: [Failure reasons](/reference/failure-reasons/).
+  Reason: [`BackupNotFound`](/reference/failure-reasons/#backupnotfound).
 
 ### Restore fails with `RestoredVolumeMissing`
 
@@ -59,18 +59,18 @@ description: What bret cannot do with Velero, and fixes for known errors.
   Velero `Restore` completed without restoring any item.
 - **Fix:** check that the PVC carried the selected labels when the backup ran, and
   `velero restore describe <name> --details`.
-  Reason: [Failure reasons](/reference/failure-reasons/).
+  Reason: [`RestoredVolumeMissing`](/reference/failure-reasons/#restoredvolumemissing).
 
 ### Restore fails with `CheckRefMissing`
 
 - **Cause:** the check names a Secret or ConfigMap that is not in the `Restore` namespace, so
   bret cannot copy it.
 - **Fix:** create it, or mark the reference `optional: true`.
-  Reason: [Failure reasons](/reference/failure-reasons/).
+  Reason: [`CheckRefMissing`](/reference/failure-reasons/#checkrefmissing).
 
 ### Restore fails with `RestoreFailed`
 
 - **Cause:** the Velero `Restore` ended `Failed`, `PartiallyFailed` or `FailedValidation`.
 - **Fix:** `velero restore describe <name> --details` and `velero restore logs <name>`. The name
   is in `status.providerRefs` of the `Restore`.
-  Reason: [Failure reasons](/reference/failure-reasons/).
+  Reason: [`RestoreFailed`](/reference/failure-reasons/#restorefailed).

@@ -43,10 +43,10 @@ description: What bret cannot do with Kopiur, and fixes for known errors.
 
 - **Cause:** no `Succeeded` `Snapshot` matches the `backupSelector` of the named source.
 - **Fix:** check the labels with `kubectl get snapshot --show-labels`, and the phase.
-  Reason: [Failure reasons](/reference/failure-reasons/).
+  Reason: [`BackupNotFound`](/reference/failure-reasons/#backupnotfound).
 
 ### Restore fails with `SourceMismatch`
 
 - **Cause:** the `Snapshot` backs up another PVC than the `sourcePVC` of the source.
 - **Fix:** select the `Snapshots` of that PVC, for example by its policy label.
-  Reason: [Failure reasons](/reference/failure-reasons/).
+  Reason: [`SourceMismatch`](/reference/failure-reasons/#sourcemismatch).

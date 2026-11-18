@@ -70,6 +70,7 @@ export default defineConfig({
 					items: [
 						{ label: 'API', slug: 'reference/api' },
 						{ label: 'Failure reasons', slug: 'reference/failure-reasons' },
+						{ label: 'Metrics and events', slug: 'reference/metrics-and-events' },
 					],
 				},
 				{

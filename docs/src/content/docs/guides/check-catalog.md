@@ -12,9 +12,32 @@ One folder per app. Each holds the same files:
 ## Test status (kind, Kopiur round trip, 2026-11-14/15)
 
 A PASS means two things. The round trip passed. The negative test (broken canary) failed, as expected.
-Harness: `hack/check-test/roundtrip.sh APP`. Details: `docs/testing-checks.md`.
+Harness: `hack/check-test/roundtrip.sh APP`. Details: [Test a check by hand](/guides/test-a-check/).
 
 Every app below passed, except `minimal`, which is an example. Each README has the details.
+
+| App | Status | Volumes (`sourcePVC` -> mount) | What it checks |
+|---|---|---|---|
+| [elasticsearch](https://github.com/linogics/bret-operator/tree/main/checks/elasticsearch) | PASS | `data` -> `/usr/share/elasticsearch/data` | Single-node start, cluster yellow, canary doc sha256. |
+| [gitea](https://github.com/linogics/bret-operator/tree/main/checks/gitea) | PASS | `data` -> `/data` | `gitea web` boot, `/api/healthz` pass, canary repo raw file sha256. |
+| [grafana](https://github.com/linogics/bret-operator/tree/main/checks/grafana) | PASS | `data` -> `/var/lib/grafana` | Server boot, `/api/health` database ok, canary dashboard via admin API. |
+| [home-assistant](https://github.com/linogics/bret-operator/tree/main/checks/home-assistant) | PASS | `data` -> `/config` | Recorder DB integrity (read-only), canary file sha256, HTTP 401 from `/api/`. |
+| [jellyfin](https://github.com/linogics/bret-operator/tree/main/checks/jellyfin) | PASS | `config` -> `/config`, `media` -> `/media` | `/health` Healthy, canary media file sha256. |
+| [keycloak](https://github.com/linogics/bret-operator/tree/main/checks/keycloak) | PASS | `data` -> `/var/lib/postgresql/data` | `kc.sh start` against restored DB (Liquibase), `/health/ready` UP, canary realm OIDC discovery. |
+| [mariadb](https://github.com/linogics/bret-operator/tree/main/checks/mariadb) | PASS | `data` -> `/var/lib/mysql` | Start mariadbd, `mariadb-check` on all DBs, canary row. |
+| [minimal](https://github.com/linogics/bret-operator/tree/main/checks/minimal) | Example | `data` -> `/data` | The SHA-256 of the canary file matches the stored hash. |
+| [mongodb](https://github.com/linogics/bret-operator/tree/main/checks/mongodb) | PASS | `data` -> `/data/db` | `mongod --fork` on restored dbpath, `validate full` on canary collection, canary sha256. |
+| [mysql](https://github.com/linogics/bret-operator/tree/main/checks/mysql) | PASS | `data` -> `/var/lib/mysql` | Start mysqld on restored datadir, `mysqlcheck --check` on all DBs, canary row. |
+| [n8n](https://github.com/linogics/bret-operator/tree/main/checks/n8n) | PASS | `data` -> `/home/node/.n8n` | Decrypted credential and workflow export contain the canary (proves `N8N_ENCRYPTION_KEY`), app `/healthz` ok. |
+| [nextcloud](https://github.com/linogics/bret-operator/tree/main/checks/nextcloud) | PASS | `html` -> `/var/www/html`, `pgdata` -> `/var/lib/postgresql/data` | `occ status` (DB reachable), `occ integrity:check-core`, canary: `oc_filecache.size` equals the file size on disk. |
+| [pihole](https://github.com/linogics/bret-operator/tree/main/checks/pihole) | PASS | `etc-pihole` -> `/etc/pihole`, `dnsmasq` -> `/etc/dnsmasq.d` | Gravity.db integrity and canary adlist, canary DNS line in custom.list, `pihole-FTL dnsmasq-test`. |
+| [postgres](https://github.com/linogics/bret-operator/tree/main/checks/postgres) | PASS | `data` -> `/var/lib/postgresql/data` | Start with crash recovery, `pg_amcheck --heapallindexed` on every DB, canary row sha256. |
+| [prometheus](https://github.com/linogics/bret-operator/tree/main/checks/prometheus) | PASS | `data` -> `/prometheus` | `promtool tsdb list`, server ready, `max_over_time(bret_canary_seq[3650d])` equals seeded value. |
+| [rabbitmq](https://github.com/linogics/bret-operator/tree/main/checks/rabbitmq) | PASS | `data` -> `/var/lib/rabbitmq` | Server boot, `await_startup`, `check_running`, `check_local_alarms`, canary queue message count. |
+| [redis](https://github.com/linogics/bret-operator/tree/main/checks/redis) | PASS | `data` -> `/data` | Server load (refuses corrupt RDB/AOF), canary key sha256. |
+| [uptime-kuma](https://github.com/linogics/bret-operator/tree/main/checks/uptime-kuma) | PASS | `data` -> `/app/data` | Read-only `integrity_check` and canary monitor row via the app's own sqlite3 module, server boot, entry-page. |
+| [vaultwarden](https://github.com/linogics/bret-operator/tree/main/checks/vaultwarden) | PASS | `data` -> `/data` | Python `integrity_check` (read-only), canary user row, app boots and `/alive` 200. |
+| [wordpress](https://github.com/linogics/bret-operator/tree/main/checks/wordpress) | PASS | `html` -> `/var/www/html`, `mysql` -> `/var/lib/mysql` | MariaDB ping, canary post content equals sha256 of the uploaded file. |
 
 Caveats that apply to every result:
 
