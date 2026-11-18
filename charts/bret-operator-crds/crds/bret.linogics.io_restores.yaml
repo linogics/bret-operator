@@ -52,7 +52,9 @@ spec:
           metadata:
             type: object
           spec:
-            description: Spec is the desired state of the restore.
+            description: |-
+              Spec is the desired state of the restore. It cannot change after creation, so the status always
+              describes the backups in the spec.
             properties:
               keepOnFailure:
                 default: false
@@ -82,6 +84,9 @@ spec:
                 description: RestoreWindow is the deadline for this attempt. It covers
                   the restore, image pulls and the check.
                 type: string
+                x-kubernetes-validations:
+                - message: restoreWindow must be at least 1m, 0s means the default
+                  rule: duration(self) == duration('0s') || duration(self) >= duration('1m')
               sources:
                 description: Sources are the backups to restore from, each with its
                   scratch volume.
@@ -280,6 +285,8 @@ spec:
             - sources
             type: object
             x-kubernetes-validations:
+            - message: spec is immutable, create a new Restore
+              rule: self == oldSelf
             - message: sourcePVC must be unique across sources
               rule: self.sources.all(s, self.sources.exists_one(o, o.sourcePVC ==
                 s.sourcePVC))

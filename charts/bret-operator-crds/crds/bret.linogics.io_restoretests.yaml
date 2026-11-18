@@ -90,6 +90,9 @@ spec:
                 default: 45m
                 description: RestoreWindow is the deadline for each attempt.
                 type: string
+                x-kubernetes-validations:
+                - message: restoreWindow must be at least 1m, 0s means the default
+                  rule: duration(self) == duration('0s') || duration(self) >= duration('1m')
               retries:
                 default: {}
                 description: Retries defines how failed attempts are retried.
