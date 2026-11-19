@@ -53,3 +53,27 @@ jobs:
           if [ -n "$unformatted" ]; then
             echo "Run gofmt on:"; echo "$unformatted"; exit 1
           fi
+
+  docs-lint:
+    name: Docs lint
+    needs: guard
+    if: needs.guard.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install dependencies
+        working-directory: docs
+        run: npm ci
+
+      - name: Biome and astro check
+        working-directory: docs
+        run: npm run lint
