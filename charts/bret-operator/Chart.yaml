@@ -24,5 +24,5 @@ dependencies:
     version: ">=0.0.0-0"
     repository: "file://../bret-operator-crds"
 maintainers:
-  - name: Tobias M.
+  - name: linogics
     url: https://github.com/linogics

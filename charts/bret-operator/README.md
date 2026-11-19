@@ -10,7 +10,7 @@ Kubernetes operator that tests backups by restoring them from Velero, VolSync or
 
 | Name | Email | Url |
 | ---- | ------ | --- |
-| Tobias M. |  | <https://github.com/linogics> |
+| linogics |  | <https://github.com/linogics> |
 
 ## Source Code
 
