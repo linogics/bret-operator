@@ -313,4 +313,4 @@ hack/check-test/roundtrip.sh minimal checks/minimal/seed.yaml checks/minimal/res
 ## Catalog
 
 [Check catalog](/guides/check-catalog/) lists the app checks, the volumes each one
-needs, the canary it uses, and its test status.
+needs and the canary it uses.
