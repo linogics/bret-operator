@@ -1,21 +1,13 @@
 ---
 title: bret
 description: bret tests your Kubernetes backups. It restores a backup into a scratch volume and runs a check against the restored data.
-template: splash
 hero:
   tagline: Test your Kubernetes backups. bret restores a backup into a scratch volume, runs your check against the data and reports the result.
   image:
     file: ../../assets/bret.png
-  actions:
-    - text: Quickstart
-      link: /start/quickstart/
-      icon: right-arrow
-    - text: Add to an existing setup
-      link: /providers/
-      variant: minimal
 ---
 
-import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <CardGrid>
 	<Card title="Proves a backup restores" icon="approve-check">
@@ -43,10 +35,9 @@ runs your check and records the result.
 ```d2 title="Flow from your objects through bret and the provider to the check result"
 direction: down
 you: You create {
-  grid-columns: 3
+  grid-columns: 2
   rc: "RestoreCheck\ncheck pod template"
   rt: "RestoreTest\nschedule, policy, retries"
-  r: "Restore\none attempt"
 }
 bret: bret controllers
 provider: "Provider restore object (one of)" {
@@ -69,12 +60,3 @@ provider -> scratch
 scratch -> check
 check -> results
 ```
-
-## Where to go next
-
-<CardGrid>
-	<LinkCard title="Quickstart" description="From an empty kind cluster to a first passing restore test." href="/start/quickstart/" />
-	<LinkCard title="Add bret to an existing setup" description="Pick your backup tool and follow its checklist." href="/providers/" />
-	<LinkCard title="API reference" description="Every field of RestoreCheck, Restore and RestoreTest." href="/reference/api/" />
-	<LinkCard title="Failure reasons" description="What each reason means and how to fix it." href="/reference/failure-reasons/" />
-</CardGrid>

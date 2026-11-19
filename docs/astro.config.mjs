@@ -3,6 +3,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import d2 from 'astro-d2';
 import starlightLinksValidator from 'starlight-links-validator';
+import d2Theme from './src/d2-theme.mjs';
 
 const provider = (name, dir) => ({
 	label: name,
@@ -18,12 +19,24 @@ export default defineConfig({
 	site: 'https://bret-operator.linogics.io',
 	integrations: [
 		// d2 must run before starlight so diagrams exist when pages render.
-		d2({ layout: 'elk', pad: 20, theme: { default: '0', dark: '200' } }),
+		d2Theme(),
+		d2({
+			layout: 'elk',
+			pad: 20,
+			theme: { default: '0', dark: '200' },
+			fonts: {
+				regular: './src/assets/fonts/JetBrainsMono-Regular.ttf',
+				italic: './src/assets/fonts/JetBrainsMono-Italic.ttf',
+				bold: './src/assets/fonts/JetBrainsMono-Bold.ttf',
+				semibold: './src/assets/fonts/JetBrainsMono-SemiBold.ttf',
+			},
+		}),
 		starlight({
 			title: 'bret',
 			description: 'bret tests your Kubernetes backups by restoring them and running a check.',
 			logo: { src: './src/assets/bret.png' },
 			favicon: '/bret.png',
+			customCss: ['./src/styles/theme.css'],
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/linogics/bret-operator' }],
 			editLink: { baseUrl: 'https://github.com/linogics/bret-operator/edit/main/docs/' },
 			lastUpdated: true,
@@ -32,6 +45,7 @@ export default defineConfig({
 				{
 					label: 'Start',
 					items: [
+						{ label: 'Introduction', link: '/' },
 						{ label: 'Quickstart', slug: 'start/quickstart' },
 						{ label: 'Installation', slug: 'start/installation' },
 					],
