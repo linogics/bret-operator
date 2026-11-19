@@ -1,10 +1,12 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+
 import starlight from '@astrojs/starlight';
+import { defineConfig } from 'astro/config';
 import d2 from 'astro-d2';
 import starlightLinksValidator from 'starlight-links-validator';
 import d2Theme from './src/d2-theme.mjs';
 
+/** @param {string} name @param {string} dir */
 const provider = (name, dir) => ({
 	label: name,
 	items: [
