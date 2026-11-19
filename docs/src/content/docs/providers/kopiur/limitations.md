@@ -5,8 +5,6 @@ description: What bret cannot do with Kopiur, and fixes for known errors.
 
 ## Limits
 
-- **Alpha.** Kopiur and its bret provider are young. Upstream issue `kopiur#233` affects restores
-  and is still open.
 - **No point in time across PVCs.** Each `Snapshot` holds one PVC. The restored PVCs of one run
   can be minutes apart. See [Point in time across PVCs](/providers/shared-setup/#point-in-time-across-pvcs).
 - **Credentials Secret next to the Restore.** Kopiur reads the repository credentials only in the

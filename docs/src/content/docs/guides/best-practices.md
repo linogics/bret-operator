@@ -72,7 +72,6 @@ Rules for backups and restore tests.
   backup metadata only.
 - Pin tool and image versions. Use pinned image tags in checks. Check tags marked unverified in
   [Check catalog](/guides/check-catalog/) need a test run before use.
-- Upstream issue `kopiur#233` affects Kopiur restores. Review its results with care.
 
 ## Data apps
 

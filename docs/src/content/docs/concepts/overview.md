@@ -23,7 +23,7 @@ A typical setup has one `RestoreCheck` per application. It also has one `Restore
 app, with one source per PVC.
 
 The diagram shows how the objects refer to each other. Solid arrows create an object, dashed
-arrows only name it. Objects in the namespace of the `Restore` get it as their owner, so deleting
+arrows only reference it. Objects in the namespace of the `Restore` get it as their owner, so deleting
 the `Restore` deletes them. Objects in other namespaces (the Velero scratch namespace) are found by
 name and label and removed by the `bret.linogics.io/cleanup` finalizer.
 
@@ -48,8 +48,8 @@ velero: "Velero only" {
   }
 }
 rt -> r: creates
-rt -> rc: names {style.stroke-dash: 4}
-r -> rc: names {style.stroke-dash: 4}
+rt -> rc: references {style.stroke-dash: 4}
+r -> rc: references {style.stroke-dash: 4}
 r -> yours: "creates, owns"
 r -> velero: creates
 ```
@@ -76,7 +76,7 @@ It does not:
 
 | Provider | Backup the operator reads | Native object created | Restore done when |
 |---|---|---|---|
-| `kopiur` (alpha) | `Snapshot`, phase `Succeeded`; one PVC each | `kopiur.home-operations.com/v1alpha1` `Restore` | `status.phase` is `Completed` and condition `Ready` is `True` |
+| `kopiur` | `Snapshot`, phase `Succeeded`; one PVC each | `kopiur.home-operations.com/v1alpha1` `Restore` | `status.phase` is `Completed` and condition `Ready` is `True` |
 | `volsync` | `ReplicationSource`, its `status.lastSyncTime`; one PVC each | `volsync.backube/v1alpha1` `ReplicationDestination` with a manual trigger, pinned with `restoreAsOf` | `status.latestImage.kind` is `PersistentVolumeClaim` |
 | `velero` | `Backup` in the Velero namespace, phase `Completed`; every PVC of the namespace | `velero.io/v1` `Restore` into a scratch namespace | `status.phase` is `Completed`, `PartiallyFailed`, `Failed` or `FailedValidation` |
 

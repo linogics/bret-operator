@@ -4,8 +4,7 @@ description: How bret restores Kopiur Snapshots with the Kopiur volume populator
 ---
 
 Kopiur backs up PVCs with Kopia. Each `Snapshot` holds one PVC. bret restores each `Snapshot`
-into a scratch PVC through a Kopiur `Restore` and runs the check against all of them. Kopiur
-support in bret is alpha.
+into a scratch PVC through a Kopiur `Restore` and runs the check against all of them.
 
 ```d2 title="bret restores each Kopiur Snapshot into a scratch PVC through a Kopiur Restore"
 direction: down
@@ -54,7 +53,6 @@ percent headroom and at least 1Gi. Details:
 ## Install Kopiur
 
 Skip this if Kopiur already runs. Install Kopiur with its Helm chart into `kopiur-system`, as the
-Kopiur docs describe. Tested with Kopiur 0.11.0 on kind with Kubernetes 1.37. Upstream issue
-`kopiur#233` affects restores and is still open.
+Kopiur docs describe. Tested with Kopiur 0.11.0 on kind with Kubernetes 1.37.
 
 The provider is on by default in the bret chart (`providers.kopiur.enabled: true`).
