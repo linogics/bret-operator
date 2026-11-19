@@ -14,16 +14,15 @@ bret tests your Kubernetes backups. It restores a backup from Velero, VolSync or
 Kopiur into a scratch volume. It runs your check in a throwaway pod. Then it records the result. An app with several volumes, such as wordpress with `html` and
 `mysql`, is restored and checked as one unit.
 
-## Quick links
+## Documentation
 
-- [Getting started](docs/getting-started.md): from an empty cluster to a first check.
-- [Installation](docs/installation.md): Helm chart or plain manifests.
-- [Backup providers](docs/providers/README.md): Kopiur, VolSync and Velero, each with a tested
-  WordPress + MariaDB example.
-- [Concepts](docs/concepts.md): what the operator does and the rules it follows.
-- [Checks](docs/checks.md): how to write a check. App drafts are in
-  [checks/](checks/README.md).
-- [API reference](docs/reference/api.md): generated from the Go types.
+Everything is on **[bret-operator.linogics.io](https://bret-operator.linogics.io/)**, with search:
+
+- [Quickstart](https://bret-operator.linogics.io/start/quickstart/): from an empty cluster to a first check.
+- [Backup providers](https://bret-operator.linogics.io/providers/): Velero, VolSync and Kopiur compared, with a checklist for
+  an existing setup.
+- [Check catalog](https://bret-operator.linogics.io/guides/check-catalog/): ready-made checks for 20 apps.
+- [API reference](https://bret-operator.linogics.io/reference/api/): generated from the Go types.
 
 ## Install
 
@@ -39,7 +38,7 @@ make test lint          # unit tests and linter
 make docs helm-sync     # regenerate docs, chart CRDs and RBAC
 ```
 
-See [docs/development.md](docs/development.md) and [docs/releasing.md](docs/releasing.md).
+See [Development](https://bret-operator.linogics.io/contributing/development/) and [Releasing](https://bret-operator.linogics.io/contributing/releasing/).
 
 ## License
 

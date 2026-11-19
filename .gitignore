@@ -51,3 +51,9 @@ docs/superpowers/
 .superpowers/
 .claude/
 .codegraph/
+
+# Docs site
+docs/node_modules/
+docs/dist/
+docs/.astro/
+docs/public/d2/

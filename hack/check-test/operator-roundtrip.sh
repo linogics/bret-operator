@@ -7,7 +7,7 @@
 #   PROVIDER   kopiur, volsync or velero.
 #   negative   apply negative/restore.yaml (one source only), expect Failed.
 # Needs the operator, the backup tool and the S3 endpoint from
-# docs/development.md.
+# https://bret-operator.linogics.io/contributing/development/
 # env: NS namespace (default bret-PROVIDER). KEEP=1 keeps it.
 #      TIMEOUT per wait (default 900s). VELERO_NS (default velero).
 #      S3_ACCESS_KEY, S3_SECRET_KEY, REPO_PASSWORD: test credentials.

@@ -5,9 +5,9 @@ Check the manager:
   kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "bret-operator.fullname" . }}
 
 CRDs installed: restores, restoretests, restorechecks (bret.linogics.io/v1alpha1).
-Helm installs CRDs once. It does not upgrade or delete them. See docs/installation.md.
+Helm installs CRDs once. It does not upgrade or delete them. See https://bret-operator.linogics.io/start/installation/
 
-Next steps: docs/getting-started.md
+Next steps: https://bret-operator.linogics.io/start/quickstart/
 {{- if .Values.metrics.enabled }}
 
 Metrics: service {{ include "bret-operator.fullname" . }}-metrics on port {{ .Values.metrics.port }}.
