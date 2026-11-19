@@ -29,7 +29,7 @@ kopiur -> scratch
 
 | | Velero | VolSync | Kopiur |
 |---|---|---|---|
-| Maturity in bret | Supported | Supported | Alpha |
+| Maturity in bret | Supported | Supported | Supported |
 | Helm switch | `providers.velero.enabled`, off by default | `providers.volsync.enabled`, off by default | `providers.kopiur.enabled`, on by default |
 | Backup object bret reads | `Backup`, phase `Completed` | `ReplicationSource`, its `status.lastSyncTime` | `Snapshot`, phase `Succeeded` |
 | One backup holds | Every PVC of the namespace | One PVC | One PVC |

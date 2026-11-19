@@ -29,8 +29,7 @@ the whole release, so renew it before it runs out.
    notes. Tell users to apply the CRDs first (see [Installation](/start/installation/#upgrading)).
 4. The version you tag is a valid semantic version. Use `-rc.1` suffixes for pre-releases. The
    workflow marks those as pre-releases on GitHub.
-5. The check catalog status in [Check catalog](/guides/check-catalog/) matches what you
-   claim in the release notes.
+5. The status in each `checks/<app>/README.md` matches what you claim in the release notes.
 
 ## Cut the release
 

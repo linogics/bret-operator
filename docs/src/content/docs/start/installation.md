@@ -133,28 +133,6 @@ helm upgrade bret-operator oci://ghcr.io/linogics/charts/bret-operator --version
 
 Server-side apply avoids the size limit on the `last-applied` annotation for large CRDs.
 
-### Upgrading to multi-volume sources
-
-- Recreate every existing `Restore`, `RestoreTest` and `RestoreCheck` in the new shape. Old
-  objects have no `sources`: a `Restore` ends `Failed` with `SourceMissing`, and a `RestoreTest`
-  blocks and starts no runs.
-- The keys of the `bret.linogics.io/mover-uid` annotation are now `sourcePVC` values. Old keys
-  are ignored without an error, and the mover falls back to the `runAsUser` of the container.
-- `RestoreTest` `afterBackup` watermarks reset once. They moved to `status.lastHandledBackups`.
-
-### Upgrading to RestoreTest for all providers
-
-- A Velero `Restore` source needs `sourcePVC`, like the other providers. List one source per
-  PVC, all with the same `backupRef`.
-- The Velero selectors moved from `sources[].labelSelector` and `sources[].orLabelSelectors` to
-  `spec.velero.labelSelector` and `spec.velero.orLabelSelectors`.
-- `RestoreTest` `status.pendingBackups` changed from a map to a list of
-  `{sourcePVC, name, createdAt}` entries, like `lastHandledBackups`. The operator cannot read a
-  `RestoreTest` that still holds the old map, and logs an error for it until you recreate it.
-  Recreate every `RestoreTest` that has a queued run.
-- A `backupSelector.name` must now name a finished backup. Before, the name was used as is, even
-  for a Kopiur `Snapshot` that had not succeeded. Now the test waits with `BackupNotFound`.
-
 ## Uninstalling
 
 ```bash

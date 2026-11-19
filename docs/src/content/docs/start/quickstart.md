@@ -32,11 +32,12 @@ helm install bret-operator oci://ghcr.io/linogics/charts/bret-operator \
   --version 0.1.0 \
   --namespace bret-operator-system \
   --create-namespace \
+  --set providers.kopiur.enabled=true \
   --set providers.volsync.enabled=true \
   --set providers.velero.enabled=true
 ```
 
-Kopiur is on by default. Enable only the tools you run. Check the installation:
+Enable only the tools you run. Check the installation:
 
 ```bash
 kubectl -n bret-operator-system get deploy

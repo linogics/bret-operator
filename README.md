@@ -16,12 +16,12 @@ Kopiur into a scratch volume. It runs your check in a throwaway pod. Then it rec
 
 ## Documentation
 
-Everything is on **[bret-operator.linogics.io](https://bret-operator.linogics.io/)**, with search:
+Everything is available on **[bret-operator.linogics.io](https://bret-operator.linogics.io/)**:
 
 - [Quickstart](https://bret-operator.linogics.io/start/quickstart/): from an empty cluster to a first check.
 - [Backup providers](https://bret-operator.linogics.io/providers/): Velero, VolSync and Kopiur compared, with a checklist for
   an existing setup.
-- [Check catalog](https://bret-operator.linogics.io/guides/check-catalog/): ready-made checks for 20 apps.
+- [Check catalog](https://bret-operator.linogics.io/guides/check-catalog/): ready-made checks for several apps.
 - [API reference](https://bret-operator.linogics.io/reference/api/): generated from the Go types.
 
 ## Install
@@ -32,11 +32,6 @@ helm install bret-operator oci://ghcr.io/linogics/charts/bret-operator \
 ```
 
 ## Develop
-
-```bash
-make test lint          # unit tests and linter
-make docs helm-sync     # regenerate docs, chart CRDs and RBAC
-```
 
 See [Development](https://bret-operator.linogics.io/contributing/development/) and [Releasing](https://bret-operator.linogics.io/contributing/releasing/).
 
