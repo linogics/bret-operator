@@ -178,36 +178,103 @@ check, in `checks/<app>/seed.yaml`.
 
 A check can read a Secret, for example for a database password, an admin token, or an encryption
 key. The diagram shows where the check pod runs, and so where the Secret must be. Here your
-namespace is `data`.
+namespace is `my-data-namespace`.
 
 ```d2 title="Where the check pod runs and where its Secret must be, per provider"
-grid-columns: 1
 one: "Kopiur, VolSync: one namespace" {
-  data: data {
-    grid-columns: 3
-    rt: RestoreTest
-    rc: RestoreCheck
-    r: Restore
-    pod: check pod
-    secret: Secret
-  }
-  data.pod -> data.secret: reads
-}
-two: "Velero: two namespaces" {
-  direction: down
-  data: data {
-    grid-columns: 2
-    rt: RestoreTest
-    rc: RestoreCheck
-    r: Restore
-    secret: Secret
-  }
-  scratch: "bret-scratch-<hash>" {
-    pod: check pod
-    secret: Secret
+  style.font-size: 24
+  top: 0
+  left: 0
+  data: my-data-namespace {
+    style.font-size: 24
+    top: 0
+    left: 0
+    rt: RestoreTest {
+      top: 0
+      left: 0
+      width: 160
+      height: 80
+    }
+    rc: RestoreCheck {
+      top: 0
+      left: 280
+      width: 160
+      height: 80
+    }
+    r: Restore {
+      top: 0
+      left: 560
+      width: 160
+      height: 80
+    }
+    pod: check pod {
+      top: 120
+      left: 0
+      width: 160
+      height: 80
+    }
+    secret: Secret {
+      top: 120
+      left: 280
+      width: 160
+      height: 80
+    }
     pod -> secret: reads
   }
-  data.secret -> scratch.secret: copied by operator
+}
+two: "Velero: two namespaces" {
+  style.font-size: 24
+  top: 520
+  left: 0
+  data: my-data-namespace {
+    style.font-size: 24
+    top: 0
+    left: 0
+    rt: RestoreTest {
+      top: 0
+      left: 0
+      width: 160
+      height: 80
+    }
+    rc: RestoreCheck {
+      top: 0
+      left: 280
+      width: 160
+      height: 80
+    }
+    r: Restore {
+      top: 0
+      left: 560
+      width: 160
+      height: 80
+    }
+    secret: Secret {
+      top: 120
+      left: 280
+      width: 160
+      height: 80
+    }
+  }
+  scratch: "bret-scratch-<hash>" {
+    label.near: top-left
+    style.font-size: 24
+    top: 380
+    left: 0
+    pod: check pod {
+      top: 0
+      left: 0
+      width: 160
+      height: 80
+    }
+    secret: Secret {
+      top: 0
+      left: 280
+      width: 160
+      height: 80
+    }
+    pod -> secret: reads
+  }
+  data.secret -> scratch.secret: "copied by\noperator"
 }
 ```
 

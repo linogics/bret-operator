@@ -23,7 +23,7 @@ export default defineConfig({
 		// d2 must run before starlight so diagrams exist when pages render.
 		d2Theme(),
 		d2({
-			layout: 'elk',
+			layout: 'tala',
 			pad: 20,
 			theme: { default: '0', dark: '200' },
 			fonts: {

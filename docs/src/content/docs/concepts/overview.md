@@ -28,29 +28,87 @@ the `Restore` deletes them. Objects in other namespaces (the Velero scratch name
 name and label and removed by the `bret.linogics.io/cleanup` finalizer.
 
 ```d2 title="How RestoreTest, Restore, RestoreCheck and the objects bret creates refer to each other"
-direction: down
-rt: RestoreTest
-rc: RestoreCheck
-r: "Restore\n(one per attempt)"
-yours: "Restore namespace" {
-  grid-columns: 1
-  native: "VolSync or Kopiur\nrestore object"
-  pvc: scratch PVC
-  pod: check pod
+rt: RestoreTest {
+  top: 0
+  left: 280
+  width: 220
+  height: 80
 }
-velero: "Velero only" {
-  grid-columns: 1
-  vr: "Velero Restore\nin the Velero namespace"
+rc: RestoreCheck {
+  top: 0
+  left: 660
+  width: 160
+  height: 80
+}
+r: "Restore\n(one per attempt)" {
+  top: 140
+  left: 280
+  width: 220
+  height: 100
+}
+yours: my-restore-namespace {
+  style.font-size: 24
+  top: 300
+  left: 0
+  native: "VolSync or Kopiur\nrestore object" {
+    top: 0
+    left: 0
+    width: 220
+    height: 100
+  }
+  pvc: scratch PVC {
+    top: 140
+    left: 0
+    width: 220
+    height: 80
+  }
+  pod: check pod {
+    top: 280
+    left: 0
+    width: 220
+    height: 80
+  }
+  pod -> pvc: mounts
+}
+velero: Velero only {
+  style.font-size: 24
+  top: 300
+  left: 420
+  vr: "Velero Restore\nin the velero\nnamespace" {
+    top: 0
+    left: 0
+    width: 280
+    height: 100
+  }
   scratch: "bret-scratch-<hash>" {
-    grid-columns: 1
-    pvc: restored PVC
-    pod: check pod
+    style.font-size: 24
+    top: 140
+    left: 0
+    pvc: restored PVC {
+      top: 0
+      left: 0
+      width: 160
+      height: 80
+    }
+    pod: check pod {
+      top: 140
+      left: 0
+      width: 160
+      height: 80
+    }
+    pod -> pvc: mounts
   }
 }
 rt -> r: creates
-rt -> rc: references {style.stroke-dash: 4}
-r -> rc: references {style.stroke-dash: 4}
-r -> yours: "creates, owns"
+rt -- rc: {
+  style.stroke-dash: 4
+  source-arrowhead.label: references
+}
+r -- rc: {
+  style.stroke-dash: 4
+  source-arrowhead.label: references
+}
+r -> yours: creates
 r -> velero: creates
 ```
 
