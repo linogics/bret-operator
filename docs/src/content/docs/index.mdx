@@ -33,30 +33,90 @@ bret does not move backup data. It drives the restore object of Velero, VolSync 
 runs your check and records the result.
 
 ```d2 title="Flow from your objects through bret and the provider to the check result"
-direction: down
 you: You create {
-  grid-columns: 2
-  rc: "RestoreCheck\ncheck pod template"
-  rt: "RestoreTest\nschedule, policy, retries"
+  style.font-size: 24
+  top: 0
+  left: 110
+  rc: "RestoreCheck\ncheck pod template" {
+    top: 0
+    left: 0
+    width: 220
+    height: 100
+  }
+  rt: "RestoreTest\nschedule, policy,\nretries" {
+    top: 0
+    left: 260
+    width: 220
+    height: 100
+  }
 }
-bret: bret controllers
-provider: "Provider restore object (one of)" {
-  grid-columns: 3
-  velero: Velero Restore
-  volsync: VolSync ReplicationDestination
-  kopiur: Kopiur Restore
+bret: bret controllers {
+  top: 280
+  left: 310
+  width: 200
+  height: 80
 }
-scratch: "Scratch volume (PVC)\nnever the app volume"
-check: "Check pod <restore>-check\nexit code 0 = pass"
+provider: "Provider restore object\n(one of)" {
+  style.font-size: 24
+  top: 420
+  left: 0
+  velero: Velero Restore {
+    top: 0
+    left: 0
+    width: 180
+    height: 100
+  }
+  volsync: "VolSync\nReplicationDestination" {
+    top: 0
+    left: 220
+    width: 260
+    height: 100
+  }
+  kopiur: Kopiur Restore {
+    top: 0
+    left: 520
+    width: 180
+    height: 100
+  }
+}
+scratch: "Scratch volume (PVC)\nnever the app volume" {
+  top: 700
+  left: 290
+  width: 240
+  height: 100
+}
+check: "Check pod\n<restore>-check\nexit code 0 = pass" {
+  top: 860
+  left: 300
+  width: 220
+  height: 100
+}
 results: Results {
-  grid-columns: 1
-  status: "status: Restore phase, RestoreTest lastRun"
-  events: "Events: RestoreStarted, CheckPassed, ..."
-  metrics: "Prometheus: bret_restore_runs_total, ..."
+  style.font-size: 24
+  top: 1020
+  left: 210
+  status: "status: Restore phase,\nRestoreTest lastRun" {
+    top: 0
+    left: 0
+    width: 280
+    height: 100
+  }
+  events: "Events: RestoreStarted,\nCheckPassed, ..." {
+    top: 140
+    left: 0
+    width: 280
+    height: 100
+  }
+  metrics: "Prometheus:\nbret_restore_runs_total,\n..." {
+    top: 280
+    left: 0
+    width: 280
+    height: 100
+  }
 }
-you -> bret
-bret -> provider
-provider -> scratch
-scratch -> check
-check -> results
+you -> bret: read by
+bret -> provider: creates
+provider -> scratch: restores into
+scratch -> check: mounted by
+check -> results: reports
 ```

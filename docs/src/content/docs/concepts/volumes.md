@@ -10,14 +10,39 @@ An app often has more than one PVC. The default example here is nextcloud with t
 (or `RestoreTest`) has one source for each. `sourcePVC` is the key that ties them together.
 
 ```d2 title="RestoreCheck volumes and Restore sources matched by sourcePVC"
-direction: down
 check: "RestoreCheck.restoredVolumes[]" {
-  html: "html -> /var/www/html"
-  pgdata: "pgdata -> /var/lib/postgresql/data"
+  style.font-size: 24
+  top: 0
+  left: 0
+  html: "html ->\n/var/www/html" {
+    top: 0
+    left: 0
+    width: 320
+    height: 100
+  }
+  pgdata: "pgdata ->\n/var/lib/postgresql/data" {
+    top: 140
+    left: 0
+    width: 320
+    height: 100
+  }
 }
 restore: "Restore.sources[]" {
-  html: "html (backupRef: html-1)"
-  pgdata: "pgdata (backupRef: pgdata-1)"
+  style.font-size: 24
+  top: 0
+  left: 640
+  html: "html\n(backupRef: html-1)" {
+    top: 0
+    left: 0
+    width: 260
+    height: 100
+  }
+  pgdata: "pgdata\n(backupRef: pgdata-1)" {
+    top: 140
+    left: 0
+    width: 260
+    height: 100
+  }
 }
 check.html <-> restore.html: sourcePVC
 check.pgdata <-> restore.pgdata: sourcePVC
@@ -72,21 +97,58 @@ The diagram shows how a `Restore` picks the size of its scratch volume, and whic
 when it cannot.
 
 ```d2 title="How a Restore picks the scratch volume size"
-direction: down
-set: "size set?" {shape: diamond}
-known: "source size known?" {shape: diamond}
-unknown: SizeUnknown
-auto: "autoExpand (default: percentage 10, min 1Gi)\nclamp(source x (100 + percentage) / 100, min, max)"
-cap: "source size known,\nand size below it?" {shape: diamond}
-insufficient: InsufficientCapacity
-resolved: "status.resolvedSize\n(resolved once)"
-set -> cap: yes, use it
-set -> known: no
-known -> unknown: no
-known -> auto: yes
-auto -> cap
-cap -> insufficient: yes
-cap -> resolved: no
+set: "size set?" {
+  shape: diamond
+  top: 0
+  left: 0
+  width: 400
+  height: 120
+}
+known: "source size\nknown?" {
+  shape: diamond
+  top: 180
+  left: 0
+  width: 400
+  height: 140
+}
+unknown: SizeUnknown {
+  top: 210
+  left: 560
+  width: 240
+  height: 80
+}
+auto: "autoExpand\n(default: percentage 10,\nmin 1Gi)\nclamp(source x\n(100 + percentage) / 100,\nmin, max)" {
+  top: 380
+  left: 0
+  width: 400
+  height: 160
+}
+cap: "source size\nknown, and size\nbelow it?" {
+  shape: diamond
+  top: 600
+  left: 0
+  width: 400
+  height: 220
+}
+insufficient: InsufficientCapacity {
+  top: 680
+  left: 560
+  width: 240
+  height: 80
+}
+resolved: "status.resolvedSize\n(resolved once)" {
+  top: 880
+  left: 0
+  width: 400
+  height: 100
+}
+set -> cap: "yes, use it"
+set -> known: "no"
+known -> unknown: "no"
+known -> auto: "yes"
+auto -> cap: size
+cap -> insufficient: "yes"
+cap -> resolved: "no"
 ```
 
 `size` is optional on every source (Kopiur and VolSync). The size is resolved for each source. With

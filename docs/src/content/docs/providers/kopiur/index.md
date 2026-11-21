@@ -7,21 +7,59 @@ Kopiur backs up PVCs with Kopia. Each `Snapshot` holds one PVC. bret restores ea
 into a scratch PVC through a Kopiur `Restore` and runs the check against all of them.
 
 ```d2 title="bret restores each Kopiur Snapshot into a scratch PVC through a Kopiur Restore"
-direction: down
-s3: "S3 bucket\nKopia repository" {shape: cylinder}
-ns: "your namespace" {
-  snap: "Snapshot\n(one PVC, read by bret)"
-  creds: "repository credentials Secret"
-  r: "bret Restore"
-  kr: "Kopiur Restore\npopulator target"
-  pvc: "scratch PVC\ndataSourceRef: Kopiur Restore"
-  pod: "check pod"
-  r -> snap: "reads PVC, size"
+ns: my-app-namespace {
+  style.font-size: 24
+  top: 0
+  left: 0
+  r: bret Restore {
+    top: 0
+    left: 580
+    width: 200
+    height: 100
+  }
+  snap: "Snapshot\n(one PVC,\nread by bret)" {
+    top: 0
+    left: 940
+    width: 260
+    height: 100
+  }
+  pod: check pod {
+    top: 160
+    left: 0
+    width: 140
+    height: 100
+  }
+  pvc: "scratch PVC\ndataSourceRef:\nKopiur Restore" {
+    top: 160
+    left: 260
+    width: 180
+    height: 100
+  }
+  kr: "Kopiur Restore\npopulator target" {
+    top: 160
+    left: 580
+    width: 200
+    height: 100
+  }
+  creds: "repository\ncredentials Secret" {
+    top: 160
+    left: 940
+    width: 260
+    height: 100
+  }
+  r -> snap: "reads PVC,\nsize"
   r -> kr: creates
   r -> pvc: creates
   kr -> creds: uses
   kr -> pvc: populates
   pod -> pvc: mounts
+}
+s3: "S3 bucket\nKopia repository" {
+  shape: cylinder
+  top: 440
+  left: 640
+  width: 200
+  height: 120
 }
 s3 -> ns.kr: data
 ```

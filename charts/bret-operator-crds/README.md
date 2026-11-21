@@ -10,7 +10,7 @@ CustomResourceDefinitions of bret-operator (Restore, RestoreTest, RestoreCheck).
 
 | Name | Email | Url |
 | ---- | ------ | --- |
-| Tobias M. |  | <https://github.com/linogics> |
+| linogics |  | <https://github.com/linogics> |
 
 ## Source Code
 

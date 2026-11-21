@@ -8,20 +8,58 @@ bret treats the last sync of a `ReplicationSource` as its backup. It restores th
 scratch PVC with a `ReplicationDestination` and runs the check against all restored PVCs.
 
 ```d2 title="bret restores each ReplicationSource into a scratch PVC with a ReplicationDestination"
-direction: down
-s3: "S3 bucket\none restic repository per PVC" {shape: cylinder}
-ns: "your namespace" {
-  rs: "ReplicationSource\n(one per PVC, read by bret)"
-  secret: "restic repository Secret"
-  r: "bret Restore"
-  rd: "ReplicationDestination\nmanual trigger, restoreAsOf"
-  pvc: "scratch PVC\n<restore>-<sourcePVC>-<hash>"
-  pod: "check pod"
-  r -> rs: "reads repository,\nsourcePVC, lastSyncTime"
+ns: my-app-namespace {
+  style.font-size: 24
+  top: 0
+  left: 0
+  r: bret Restore {
+    top: 0
+    left: 640
+    width: 280
+    height: 100
+  }
+  rs: "ReplicationSource\n(one per PVC,\nread by bret)" {
+    top: 0
+    left: 1120
+    width: 220
+    height: 100
+  }
+  pod: check pod {
+    top: 160
+    left: 0
+    width: 140
+    height: 100
+  }
+  pvc: "scratch PVC\n<restore>-\n<sourcePVC>-<hash>" {
+    top: 160
+    left: 260
+    width: 220
+    height: 100
+  }
+  rd: "ReplicationDestination\nmanual trigger,\nrestoreAsOf" {
+    top: 160
+    left: 640
+    width: 280
+    height: 100
+  }
+  secret: "restic repository\nSecret" {
+    top: 160
+    left: 1120
+    width: 220
+    height: 100
+  }
+  r -> rs: "reads repository,\nsourcePVC,\nlastSyncTime"
   r -> rd: creates
   rd -> secret: uses
-  rd -> pvc: "restores into"
+  rd -> pvc: "restores\ninto"
   pod -> pvc: mounts
+}
+s3: "S3 bucket\none restic repository\nper PVC" {
+  shape: cylinder
+  top: 440
+  left: 700
+  width: 280
+  height: 160
 }
 s3 -> ns.rd: data
 ```

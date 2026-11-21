@@ -35,16 +35,40 @@ rt -> rt: "lastRun =\nSucceeded"
 The diagram shows the phases of one `Restore`, with the retry and keep rules that apply after it ends.
 
 ```d2 title="Restore phases from Pending to Succeeded, Failed or Canceled"
-direction: down
-pending: "Pending\nRestore created, cleanup finalizer added"
-running: "Running\nnative restore, then check pod"
-succeeded: Succeeded
-failed: Failed
-canceled: Canceled
-pending -> running
+pending: "Pending\nRestore created,\ncleanup finalizer\nadded" {
+  top: 0
+  left: 220
+  width: 220
+  height: 120
+}
+running: "Running\nnative restore,\nthen check pod" {
+  top: 180
+  left: 220
+  width: 220
+  height: 100
+}
+succeeded: Succeeded {
+  top: 340
+  left: 0
+  width: 140
+  height: 80
+}
+failed: Failed {
+  top: 340
+  left: 260
+  width: 140
+  height: 80
+}
+canceled: Canceled {
+  top: 340
+  left: 520
+  width: 140
+  height: 80
+}
+pending -> running: starts
 running -> succeeded: check exits 0
-running -> failed: restore or check fails
-running -> canceled: restoreWindow ends
+running -> failed: "restore or\ncheck fails"
+running -> canceled: "restoreWindow\nends"
 ```
 
 In a terminal phase, cleanup runs after the status is stored:
@@ -119,29 +143,91 @@ backup (`triggers.afterBackup.delay`), and manual (`triggers.manual` with the an
 The diagram shows how a trigger becomes a run, and how a run becomes a `RunResult`.
 
 ```d2 title="How a trigger becomes a run and a run becomes a RunResult"
-direction: down
-cron: cron tick
-backup: backup + delay
-runnow: run-now annotation
-busy: "Run already in progress?" {shape: diamond}
-cron -> busy
-backup -> busy
-runnow -> busy
-policy: overlapPolicy {
-  skip: "Skip\nEvent RunSkipped"
-  queue: "Queue\nkeep one pending run"
-  replace: "Replace\nEvent RunReplaced,\ndelete running Restore"
+triggers: Triggers {
+  style.font-size: 24
+  top: 0
+  left: 0
+  cron: cron tick {
+    top: 0
+    left: 0
+    width: 140
+    height: 80
+  }
+  backup: backup + delay {
+    top: 0
+    left: 180
+    width: 200
+    height: 80
+  }
+  runnow: run-now annotation {
+    top: 0
+    left: 420
+    width: 220
+    height: 80
+  }
 }
-start: "start one Restore\n<test>-<run>-a<n>"
-busy -> start: no
-busy -> policy: yes
-policy.queue -> start: when the run ends
-policy.replace -> start
-retry: "Restore Failed and\nattempt <= retries.count?" {shape: diamond}
+busy: "Run already\nin progress?" {
+  shape: diamond
+  top: 260
+  left: 240
+  width: 280
+  height: 140
+}
+policy: overlapPolicy {
+  style.font-size: 24
+  top: 260
+  left: 700
+  skip: "Skip\nEvent RunSkipped" {
+    top: 0
+    left: 0
+    width: 240
+    height: 100
+  }
+  queue: "Queue\nkeep one pending run" {
+    top: 140
+    left: 0
+    width: 240
+    height: 100
+  }
+  replace: "Replace\nEvent RunReplaced,\ndelete running\nRestore" {
+    top: 280
+    left: 0
+    width: 240
+    height: 120
+  }
+}
+start: "start one Restore\n<test>-<run>-a<n>" {
+  top: 460
+  left: 240
+  width: 280
+  height: 100
+}
+retry: "Restore Failed\nand attempt <=\nretries.count?" {
+  shape: diamond
+  top: 780
+  left: 180
+  width: 400
+  height: 220
+}
+wait: "wait\nretries.backoff" {
+  top: 840
+  left: 700
+  width: 240
+  height: 100
+}
+result: "RunResult:\nSucceeded or Failed\n(status.lastRun)" {
+  top: 1060
+  left: 240
+  width: 280
+  height: 100
+}
+triggers -> busy: fires
+busy -> start: "no"
+busy -> policy: "yes"
+policy.queue -> start: "when the\nrun ends"
+policy.replace -> start: at once
 start -> retry: Restore ends
-wait: wait retries.backoff
-retry -> wait: yes
-wait -> start: "next attempt a<n+1>"
-result: "RunResult: Succeeded or Failed\n(status.lastRun)"
-retry -> result: no
+retry -> wait: "yes"
+wait -> start: "next attempt\na<n+1>"
+retry -> result: "no"
 ```

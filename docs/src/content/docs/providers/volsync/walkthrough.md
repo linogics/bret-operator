@@ -198,23 +198,64 @@ VolSync has no object per backup. The backup is the last sync of a `ReplicationS
 What bret creates:
 
 ```d2 title="Objects bret reads and creates for a VolSync restore"
-direction: down
-backup: "backup namespace\n(backupRef.namespace, else the Restore namespace)" {
+restore: my-restore-namespace {
+  style.font-size: 24
+  top: 0
+  left: 60
+  secret: "repository Secret\n(must be here)" {
+    top: 0
+    left: 0
+    width: 220
+    height: 100
+  }
+  rd: ReplicationDestination {
+    top: 0
+    left: 260
+    width: 260
+    height: 100
+  }
+  pvc: scratch PVC {
+    top: 0
+    left: 680
+    width: 160
+    height: 100
+  }
+  pod: check pod {
+    top: 0
+    left: 960
+    width: 140
+    height: 100
+  }
+  rd -> pvc: "restores\ninto"
+  pod -> pvc: mounts
+}
+backup: "backupRef.namespace, else\nthe Restore namespace" {
+  style.font-size: 24
+  top: 280
+  left: 0
   rs: ReplicationSource {
-    repo: restic.repository
-    src: sourcePVC
+    style.font-size: 24
+    top: 0
+    left: 0
+    repo: restic.repository {
+      top: 0
+      left: 0
+      width: 220
+      height: 80
+    }
+    src: sourcePVC {
+      top: 0
+      left: 260
+      width: 260
+      height: 80
+    }
   }
 }
-restore: Restore namespace {
-  secret: "repository Secret\n(must be here)"
-  rd: ReplicationDestination
-  pvc: scratch PVC
-  pod: check pod
-  rd -> pvc
-  pvc -> pod
+backup.rs.repo -- restore.secret: {
+  style.stroke-dash: 4
+  source-arrowhead.label: references
 }
-backup.rs.repo -> restore.secret
-backup.rs.src -> restore.rd
+backup.rs.src -> restore.rd: restored by
 ```
 
 Mover UID: the annotation `bret.linogics.io/mover-uid`, else `runAsUser` of the first check
