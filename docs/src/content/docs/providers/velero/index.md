@@ -8,26 +8,70 @@ only the PVCs of that `Backup` into a scratch namespace and runs the check again
 and its namespace are never touched.
 
 ```d2 title="bret restores the PVCs of a Velero Backup into a scratch namespace and runs the check there"
-direction: down
-s3: "S3 bucket\nbackup data" {shape: cylinder}
-velero: "velero namespace" {
-  backup: "Backup\n(read by bret)"
-  restore: "Velero Restore\nPVCs and PVs only"
+app: my-app-namespace {
+  style.font-size: 24
+  top: 0
+  left: 0
+  rc: RestoreCheck {
+    top: 0
+    left: 0
+    width: 180
+    height: 80
+  }
+  r: bret Restore {
+    top: 0
+    left: 300
+    width: 180
+    height: 80
+  }
 }
-app: "your namespace" {
-  r: "bret Restore"
-  rc: RestoreCheck
+velero: velero namespace {
+  style.font-size: 24
+  top: 100
+  left: 760
+  backup: "Backup\n(read by bret)" {
+    top: 0
+    left: 0
+    width: 220
+    height: 100
+  }
+  restore: "Velero Restore\nPVCs and PVs only" {
+    top: 140
+    left: 0
+    width: 220
+    height: 100
+  }
+}
+s3: "S3 bucket\nbackup data" {
+  shape: cylinder
+  top: 280
+  left: 1220
+  width: 180
+  height: 140
 }
 scratch: "bret-scratch-<hash>" {
-  pvc: "restored PVCs\n(source names)"
-  pod: "check pod"
+  style.font-size: 24
+  top: 520
+  left: 0
+  pod: check pod {
+    top: 0
+    left: 0
+    width: 180
+    height: 100
+  }
+  pvc: "restored PVCs\n(source names)" {
+    top: 0
+    left: 300
+    width: 180
+    height: 100
+  }
   pod -> pvc: mounts
 }
-app.r -> velero.backup: "checks volume data"
+app.r -> velero.backup: "checks volume\ndata"
 app.r -> velero.restore: creates
 s3 -> velero.restore: data
 velero.restore -> scratch.pvc: restores
-app.rc -> scratch.pod: "template, Secrets copied"
+app.rc -> scratch.pod: "template,\nSecrets copied"
 ```
 
 ## How it works

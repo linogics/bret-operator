@@ -176,23 +176,66 @@ All fields: [Schedule restore tests](/guides/restore-tests/).
 What bret creates. Here the `Restore` is in the namespace `wordpress`:
 
 ```d2 title="Objects bret reads and creates for a Velero restore"
-direction: down
-velero: velero namespace {
-  backup: Backup (read)
-  restore: Restore (created)
+app: wordpress {
+  style.font-size: 24
+  top: 0
+  left: 0
+  rt: RestoreTest {
+    top: 0
+    left: 0
+    width: 160
+    height: 80
+  }
+  rc: RestoreCheck {
+    top: 0
+    left: 200
+    width: 160
+    height: 80
+  }
+  r: Restore {
+    top: 0
+    left: 400
+    width: 220
+    height: 80
+  }
 }
-app: wordpress (your namespace) {
-  rt: RestoreTest
-  r: Restore
-  rc: RestoreCheck
+velero: velero namespace {
+  style.font-size: 24
+  top: 260
+  left: 400
+  restore: Restore (created) {
+    top: 0
+    left: 0
+    width: 220
+    height: 80
+  }
+  backup: Backup (read) {
+    top: 0
+    left: 260
+    width: 180
+    height: 80
+  }
 }
 scratch: "bret-scratch-<hash>" {
-  pvc: "restored PVC + PV\n(only those of wordpress)"
-  pod: "check pod\n+ copied Secrets, ConfigMaps"
+  style.font-size: 24
+  top: 520
+  left: 360
+  pvc: "restored PVC + PV\n(only those of\nwordpress)" {
+    top: 0
+    left: 0
+    width: 300
+    height: 100
+  }
+  pod: "check pod\n+ copied Secrets,\nConfigMaps" {
+    top: 140
+    left: 0
+    width: 300
+    height: 100
+  }
 }
 app.r -> velero.restore: creates
 velero.restore -> scratch.pvc: restores
-app -> scratch: copies pod-security labels
+app -> scratch: "copies pod-security\nlabels"
 ```
 
 `<hash>` is the first 12 hex characters of `sha256("<namespace>/<name>")`.

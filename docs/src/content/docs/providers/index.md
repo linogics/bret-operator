@@ -7,22 +7,52 @@ bret restores with a backup tool that you already run: Velero, VolSync or Kopiur
 backup data itself. It creates the restore object of the tool, waits for it, then runs your check.
 
 ```d2 title="bret drives the restore object of one of three backup tools, all reading from S3"
-direction: down
-bret: bret Restore
-velero: "Velero\nRestore"
-volsync: "VolSync\nReplicationDestination"
-kopiur: "Kopiur\nRestore"
-s3: "S3 bucket" {shape: cylinder}
-scratch: "scratch PVCs + check pod"
+bret: bret Restore {
+  top: 0
+  left: 400
+  width: 280
+  height: 80
+}
+velero: "Velero\nRestore" {
+  top: 140
+  left: 0
+  width: 280
+  height: 100
+}
+volsync: "VolSync\nReplicationDestination" {
+  top: 140
+  left: 400
+  width: 280
+  height: 100
+}
+kopiur: "Kopiur\nRestore" {
+  top: 140
+  left: 800
+  width: 280
+  height: 100
+}
+s3: S3 bucket {
+  shape: cylinder
+  top: 140
+  left: 1280
+  width: 160
+  height: 140
+}
+scratch: "scratch PVCs\n+ check pod" {
+  top: 300
+  left: 400
+  width: 280
+  height: 100
+}
 bret -> velero: creates
 bret -> volsync: creates
 bret -> kopiur: creates
 s3 -> velero: backup data
-s3 -> volsync
-s3 -> kopiur
+s3 -> volsync: backup data
+s3 -> kopiur: backup data
 velero -> scratch: restores
-volsync -> scratch
-kopiur -> scratch
+volsync -> scratch: restores
+kopiur -> scratch: restores
 ```
 
 ## Compare providers
