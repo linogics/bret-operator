@@ -39,7 +39,7 @@ func TestRestoreWithoutSourcesFails(t *testing.T) {
 		t.Fatalf("phase = %q, reason = %q, want Failed/%s", got.Status.Phase, readyReason(got), reasonSourceMissing)
 	}
 
-	if got.Status.Message != "the Restore has no sources; recreate it in the new shape" {
+	if got.Status.Message != "the Restore has no sources. Recreate it in the new shape" {
 		t.Errorf("message = %q", got.Status.Message)
 	}
 }

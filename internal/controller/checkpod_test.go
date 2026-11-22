@@ -295,3 +295,40 @@ func TestValidateCheckDuplicateSourcePVC(t *testing.T) {
 		t.Error("duplicate sourcePVC: want error")
 	}
 }
+
+func TestValidateCheckVolumeNameClash(t *testing.T) {
+	t.Parallel()
+
+	bp := checkPodCheck()
+	bp.Spec.ScratchVolumes = append(bp.Spec.ScratchVolumes, bp.Spec.ScratchVolumes[0])
+	bp.Spec.ScratchVolumes[1].MountPath = "/other"
+
+	if err := validateCheck(bp); err == nil {
+		t.Error("duplicate scratch volume: want error")
+	}
+
+	bp = checkPodCheck()
+	bp.Spec.Volumes = append(bp.Spec.Volumes, corev1.Volume{Name: "scratch-" + dnsLabel(testWorkArea)})
+
+	if err := validateCheck(bp); err == nil {
+		t.Error("spec.volumes name equal to a generated scratch volume: want error")
+	}
+
+	bp = checkPodCheck()
+	bp.Spec.Volumes = append(bp.Spec.Volumes, corev1.Volume{Name: restoredVolumeName(bp.Spec.RestoredVolumes[0].SourcePVC)})
+
+	if err := validateCheck(bp); err == nil {
+		t.Error("spec.volumes name equal to a generated restored volume: want error")
+	}
+}
+
+func TestValidateCheckEmptyScratchMountPath(t *testing.T) {
+	t.Parallel()
+
+	bp := checkPodCheck()
+	bp.Spec.ScratchVolumes[0].MountPath = ""
+
+	if err := validateCheck(bp); err == nil {
+		t.Error("scratch volume without mountPath: want error")
+	}
+}

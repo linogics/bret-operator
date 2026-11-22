@@ -134,17 +134,17 @@ It does not:
 
 | Provider | Backup the operator reads | Native object created | Restore done when |
 |---|---|---|---|
-| `kopiur` | `Snapshot`, phase `Succeeded`; one PVC each | `kopiur.home-operations.com/v1alpha1` `Restore` | `status.phase` is `Completed` and condition `Ready` is `True` |
-| `volsync` | `ReplicationSource`, its `status.lastSyncTime`; one PVC each | `volsync.backube/v1alpha1` `ReplicationDestination` with a manual trigger, pinned with `restoreAsOf` | `status.latestImage.kind` is `PersistentVolumeClaim` |
-| `velero` | `Backup` in the Velero namespace, phase `Completed`; every PVC of the namespace | `velero.io/v1` `Restore` into a scratch namespace | `status.phase` is `Completed`, `PartiallyFailed`, `Failed` or `FailedValidation` |
+| `kopiur` | `Snapshot`, phase `Succeeded`, one PVC each | `kopiur.home-operations.com/v1alpha1` `Restore` | `status.phase` is `Completed` and condition `Ready` is `True` |
+| `volsync` | `ReplicationSource`, its `status.lastSyncTime`, one PVC each | `volsync.backube/v1alpha1` `ReplicationDestination` with a manual trigger, pinned with `restoreAsOf` | `status.latestImage.kind` is `PersistentVolumeClaim` |
+| `velero` | `Backup` in the Velero namespace, phase `Completed`, every PVC of the namespace | `velero.io/v1` `Restore` into a scratch namespace | `status.phase` is `Completed`, `PartiallyFailed`, `Failed` or `FailedValidation` |
 
 Every source names its `sourcePVC`, for all three. Setup, the namespaces each tool uses, and how
 the backups are picked are on the tool pages: [Kopiur](/providers/kopiur/),
 [VolSync](/providers/volsync/), [Velero](/providers/velero/).
 
 Enable providers in the Helm chart with `providers.<name>.enabled`. Kopiur is on by
-default. Velero and VolSync are off by default. A `Restore` or `RestoreTest` for a disabled
-provider stops with reason `ProviderUnsupported`.
+default. Velero and VolSync are off by default. A `Restore` for a disabled provider ends `Failed`
+with reason `ProviderUnsupported`. A `RestoreTest` for it waits with that reason.
 
 
 ## Scope
