@@ -23,7 +23,7 @@ func (r *RestoreReconciler) sourceSize(
 	src restorev1alpha1.RestoreSource,
 ) (*resource.Quantity, error) {
 	backup := src.BackupRef
-	namespace := backupNamespace(restore, src)
+	namespace := restore.Namespace
 
 	switch restore.Spec.Provider {
 	case restorev1alpha1.ProviderKopiur:

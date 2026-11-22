@@ -19,9 +19,8 @@ The `ReplicationDestination` that bret creates lives in the `Restore` namespace 
 Secret that `spec.restic.repository` names. If the Secret is not there, the `Restore` fails with
 `RepositoryMissing`.
 
-A `RestoreTest` reads `ReplicationSource` objects in its own namespace, so the Secret is
-already there. A `Restore` made by hand can name a `ReplicationSource` in another namespace with
-`backupRef.namespace`. Then copy the Secret into the `Restore` namespace.
+bret reads the `ReplicationSource` in the `Restore` namespace only, so the Secret is already
+there. A `Restore` cannot name a backup in another namespace.
 
 ## 3. Set the mover UID
 

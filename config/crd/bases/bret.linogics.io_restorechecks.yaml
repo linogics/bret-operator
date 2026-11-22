@@ -3887,6 +3887,7 @@ spec:
                     mountPath:
                       description: MountPath is where the scratch volume is mounted
                         in every container.
+                      minLength: 1
                       type: string
                     name:
                       description: Name is the name of the scratch volume.
@@ -3911,6 +3912,9 @@ spec:
                   - size
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               securityContext:
                 description: SecurityContext is the pod-level security context. For
                   example, fsGroup or runAsUser applies to all containers.

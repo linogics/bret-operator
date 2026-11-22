@@ -35,12 +35,11 @@ const (
 	RestorePhaseCanceled RestorePhase = "Canceled"
 )
 
-// BackupRef points to a backup object in the provider's namespace.
+// BackupRef points to a backup object. Kopiur and VolSync read it in the Restore namespace.
+// Velero reads it in the Velero namespace. A Restore never reads backups of another tenant namespace.
 type BackupRef struct {
 	// Name is the name of the backup object.
 	Name string `json:"name"`
-	// Namespace is the namespace of the backup object.
-	Namespace string `json:"namespace,omitempty"`
 }
 
 // RestoreSource identifies one backup a Restore reads from and the scratch volume it writes into.

@@ -9,8 +9,8 @@ const (
 	labelRestoreTest = "restoretest"
 	labelNamespace   = "namespace"
 
-	// metricsFinalizer removes the RestoreTest's metric series when the RestoreTest is deleted or renamed.
-	metricsFinalizer = "bret.linogics.io/metrics"
+	// legacyMetricsFinalizer was added by older releases. The controller only removes it.
+	legacyMetricsFinalizer = "bret.linogics.io/metrics"
 )
 
 // restoreTestLastSuccess holds the Unix time of the last run of a RestoreTest that passed.

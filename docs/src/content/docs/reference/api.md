@@ -62,7 +62,8 @@ _Appears in:_
 
 
 
-BackupRef points to a backup object in the provider's namespace.
+BackupRef points to a backup object. Kopiur and VolSync read it in the Restore namespace.
+Velero reads it in the Velero namespace. A Restore never reads backups of another tenant namespace.
 
 
 
@@ -72,7 +73,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `name` _string_ | Name is the name of the backup object. |  |  |
-| `namespace` _string_ | Namespace is the namespace of the backup object. |  |  |
 
 
 #### BackupSelector
@@ -458,6 +458,8 @@ _Appears in:_
 | `retries` _[Retries](#retries)_ | Retries defines how failed attempts are retried. | \{  \} |  |
 | `keepOnFailure` _boolean_ | KeepOnFailure keeps the check pod and restore objects after the final attempt fails. | false |  |
 | `overlapPolicy` _[OverlapPolicy](#overlappolicy)_ | OverlapPolicy decides what happens when a trigger fires during a run. | Skip | Enum: [Skip Queue Replace] <br /> |
+| `successfulRunsHistoryLimit` _integer_ | SuccessfulRunsHistoryLimit is how many Restores of passed runs are kept. Older ones are deleted. | 3 | Minimum: 0 <br /> |
+| `failedRunsHistoryLimit` _integer_ | FailedRunsHistoryLimit is how many Restores of failed or canceled runs are kept. Older ones are deleted,<br />together with the objects they retained. | 3 | Minimum: 0 <br /> |
 
 
 #### RestoreTestStatus
@@ -477,7 +479,7 @@ _Appears in:_
 | `lastSuccess` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | LastSuccess is the time of the last run that passed. It drives the success metric. |  |  |
 | `nextRun` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | NextRun is when the next cron run is scheduled. |  |  |
 | `lastHandledBackups` _[HandledBackup](#handledbackup) array_ | LastHandledBackups is the newest backup that an afterBackup trigger used. Only newer backups start a run. |  |  |
-| `retainedResources` _string array_ | RetainedResources lists objects kept after a failed run. They help debugging. |  |  |
+| `retainedResources` _string array_ | RetainedResources lists the Restores whose objects were kept after a failed run. They help debugging.<br />A Restore that no longer exists is dropped from the list. |  |  |
 | `currentRestore` _string_ | CurrentRestore is the Restore of the run in progress. It is empty when no run is in progress. |  |  |
 | `retryAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#time-v1-meta)_ | RetryAt is when the next attempt of the run in progress is created. |  |  |
 | `pendingBackups` _[HandledBackup](#handledbackup) array_ | PendingBackups are the backups of the queued run, one per source. The run waits for the run in progress.<br />It applies to overlap policy Queue. |  |  |
@@ -552,7 +554,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `name` _string_ | Name is the name of the scratch volume. |  | MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
-| `mountPath` _string_ | MountPath is where the scratch volume is mounted in every container. |  |  |
+| `mountPath` _string_ | MountPath is where the scratch volume is mounted in every container. |  | MinLength: 1 <br /> |
 | `storageClassName` _string_ | StorageClassName is the storage class for the scratch PVC. Empty means the cluster default. |  |  |
 | `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#quantity-resource-api)_ | Size is the requested capacity of the scratch PVC, for example 20Gi. |  |  |
 

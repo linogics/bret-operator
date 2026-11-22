@@ -85,3 +85,16 @@ func TestPollIntervalDefault(t *testing.T) {
 		t.Errorf("configured poll interval %v, want 7s", got)
 	}
 }
+
+// A RestoreTest of an older release carries the metrics finalizer. The controller drops it.
+func TestRestoreTestDropsLegacyFinalizer(t *testing.T) {
+	test := newRestoreTestObject()
+	test.Finalizers = []string{legacyMetricsFinalizer}
+
+	f := newRestoreTestFixture(t, test)
+	f.run()
+
+	if got := f.test().Finalizers; len(got) != 0 {
+		t.Fatalf("finalizers = %v, want none", got)
+	}
+}

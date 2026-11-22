@@ -36,15 +36,6 @@ var (
 // kopiurRestoreGVK is the Kopiur Restore kind. It is used as unstructured. Kopiur is not a Go dependency.
 var kopiurRestoreGVK = schema.GroupVersionKind{Group: kopiurGroup, Version: apiVersionAlpha1, Kind: "Restore"}
 
-// backupNamespace is the namespace of the backup object of a source. It is backupRef.namespace, or else the Restore namespace.
-func backupNamespace(restore *restorev1alpha1.Restore, src restorev1alpha1.RestoreSource) string {
-	if ns := src.BackupRef.Namespace; ns != "" {
-		return ns
-	}
-
-	return restore.Namespace
-}
-
 // restoreLabels labels every object that an attempt creates. Cleanup uses them to find the objects.
 func restoreLabels(restore *restorev1alpha1.Restore) map[string]string {
 	return map[string]string{restoreLabel: restore.Name}
@@ -56,7 +47,7 @@ func kopiurRestoreObject(restore *restorev1alpha1.Restore, src restorev1alpha1.R
 
 	spec := map[string]any{
 		"source": map[string]any{
-			"snapshotRef": map[string]any{keyName: backup.Name, keyNamespace: backupNamespace(restore, src)},
+			"snapshotRef": map[string]any{keyName: backup.Name, keyNamespace: restore.Namespace},
 		},
 		"target": map[string]any{"populator": map[string]any{}},
 		"policy": map[string]any{"onMissingSnapshot": "Fail"},
@@ -219,7 +210,7 @@ func (r *RestoreReconciler) verifyKopiurSources(ctx context.Context, restore *re
 	for _, src := range restore.Spec.Sources {
 		snap := &unstructured.Unstructured{}
 		snap.SetGroupVersionKind(snapshotGVK)
-		snap.SetNamespace(backupNamespace(restore, src))
+		snap.SetNamespace(restore.Namespace)
 		snap.SetName(src.BackupRef.Name)
 
 		if err := r.getObject(ctx, snap); err != nil {

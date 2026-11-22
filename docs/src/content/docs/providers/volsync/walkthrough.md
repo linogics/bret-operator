@@ -229,7 +229,7 @@ restore: my-restore-namespace {
   rd -> pvc: "restores\ninto"
   pod -> pvc: mounts
 }
-backup: "backupRef.namespace, else\nthe Restore namespace" {
+backup: "the Restore namespace" {
   style.font-size: 24
   top: 280
   left: 0
