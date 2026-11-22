@@ -44,7 +44,7 @@ func (r *RestoreReconciler) ensure(ctx context.Context, restore *restorev1alpha1
 		return false, err
 	}
 
-	// Objects in another namespace cannot have an owner; their cleanup finds them by name and label.
+	// Objects in another namespace cannot have an owner. Their cleanup finds them by name and label.
 	if obj.GetNamespace() == restore.Namespace {
 		err = controllerutil.SetControllerReference(restore, obj, r.Scheme)
 		if err != nil {
@@ -68,7 +68,7 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 
 	pvcs := &corev1.PersistentVolumeClaimList{}
 
-	err := r.List(ctx, pvcs, client.InNamespace(restore.Namespace), client.MatchingLabels(restoreLabels(restore)))
+	err := r.listObjects(ctx, pvcs, client.InNamespace(restore.Namespace), client.MatchingLabels(restoreLabels(restore)))
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,17 @@ func (r *RestoreReconciler) cleanup(ctx context.Context, restore *restorev1alpha
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVelero && r.providerEnabled(restorev1alpha1.ProviderVelero) {
-		objs = append(objs, r.veleroStub(restore), veleroScratchNamespace(restore))
+		// Ownership is read before the Velero Restore goes, because it can be the only proof.
+		owned, ownErr := r.ownsScratch(ctx, restore)
+		if ownErr != nil {
+			return ownErr
+		}
+
+		if owned {
+			objs = append(objs, veleroScratchNamespace(restore))
+		}
+
+		objs = append(objs, r.veleroStub(restore))
 	}
 
 	if restore.Spec.Provider == restorev1alpha1.ProviderVolSync && r.providerEnabled(restorev1alpha1.ProviderVolSync) {
@@ -120,7 +130,7 @@ func (r *RestoreReconciler) cleanupObject(ctx context.Context, obj client.Object
 		return ignoreUncleanable(err)
 	}
 
-	// Cluster-scoped objects (the Velero scratch Namespace) are created by Velero and carry no label.
+	// The Velero scratch Namespace may carry no label. cleanup adds it only after ownsScratch.
 	if _, ours := obj.GetLabels()[restoreLabel]; !ours && obj.GetNamespace() != "" {
 		return nil
 	}
