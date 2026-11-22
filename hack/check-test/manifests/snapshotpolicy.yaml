@@ -1,0 +1,16 @@
+# One SnapshotPolicy per volume. roundtrip.sh sets the name, the PVC and the mover.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: volume
+spec:
+  repository:
+    kind: Repository
+    name: primary
+  sources:
+    - pvc:
+        name: volume
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-hostpath-snapclass
+  retention:
+    keepDaily: 1

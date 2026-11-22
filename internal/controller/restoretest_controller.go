@@ -97,17 +97,23 @@ type completedBackup struct {
 func (r *RestoreTestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	test := &restorev1alpha1.RestoreTest{}
 	if err := r.Get(ctx, req.NamespacedName, test); err != nil {
+		if apierrors.IsNotFound(err) {
+			// The test is gone, so its metric series goes too.
+			restoreTestLastSuccess.DeleteLabelValues(req.Name, req.Namespace)
+		}
+
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if !test.DeletionTimestamp.IsZero() {
-		return ctrl.Result{}, r.finalize(ctx, test)
-	}
-
-	if controllerutil.AddFinalizer(test, metricsFinalizer) {
+	// Older releases added a finalizer. Drop it so the test is not blocked when the operator is gone.
+	if controllerutil.RemoveFinalizer(test, legacyMetricsFinalizer) {
 		if err := r.Update(ctx, test); err != nil {
 			return ctrl.Result{}, err
 		}
+	}
+
+	if !test.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, nil
 	}
 
 	result, err := r.advance(ctx, test)
@@ -129,18 +135,6 @@ func (r *RestoreTestReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return result, err
 }
 
-// finalize removes the metric series of a deleted or renamed RestoreTest, then releases it.
-func (r *RestoreTestReconciler) finalize(ctx context.Context, test *restorev1alpha1.RestoreTest) error {
-	if !controllerutil.ContainsFinalizer(test, metricsFinalizer) {
-		return nil
-	}
-
-	restoreTestLastSuccess.DeleteLabelValues(test.Name, test.Namespace)
-	controllerutil.RemoveFinalizer(test, metricsFinalizer)
-
-	return client.IgnoreNotFound(r.Update(ctx, test))
-}
-
 // advance settles a finished run, then starts or queues the next run when a trigger is due.
 func (r *RestoreTestReconciler) advance(ctx context.Context, test *restorev1alpha1.RestoreTest) (ctrl.Result, error) {
 	// Tests read the backup objects of their provider. They need the provider and its rights.
@@ -151,7 +145,7 @@ func (r *RestoreTestReconciler) advance(ctx context.Context, test *restorev1alph
 	}
 
 	if len(test.Spec.Sources) == 0 {
-		r.blockTest(test, reasonSourceMissing, "the RestoreTest has no sources; recreate it in the new shape")
+		r.blockTest(test, reasonSourceMissing, "the RestoreTest has no sources. Recreate it in the new shape")
 
 		return ctrl.Result{}, nil
 	}
@@ -254,7 +248,89 @@ func (r *RestoreTestReconciler) settle(
 
 	setTestReady(test, status, string(result), restore.Status.Message)
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, r.pruneHistory(ctx, test)
+}
+
+// defaultHistoryLimit matches the CRD default. Objects built in Go carry no CRD default.
+const defaultHistoryLimit = 3
+
+// historyLimit is the limit, or the default when unset.
+func historyLimit(limit *int32) int {
+	if limit == nil {
+		return defaultHistoryLimit
+	}
+
+	return int(*limit)
+}
+
+// pruneHistory deletes the Restores of finished runs beyond the history limits, oldest first.
+// Their finalizer removes the objects they retained. RetainedResources keeps only Restores that remain.
+func (r *RestoreTestReconciler) pruneHistory(ctx context.Context, test *restorev1alpha1.RestoreTest) error {
+	list := &restorev1alpha1.RestoreList{}
+
+	err := r.List(ctx, list, client.InNamespace(test.Namespace), client.MatchingLabels{testLabel: test.Name})
+	if err != nil {
+		return err
+	}
+
+	var passed, failed []*restorev1alpha1.Restore
+
+	for i := range list.Items {
+		restore := &list.Items[i]
+
+		if restore.Name == test.Status.CurrentRestore || !isTerminal(restore.Status.Phase) || !restore.DeletionTimestamp.IsZero() {
+			continue
+		}
+
+		if restore.Status.Phase == restorev1alpha1.RestorePhaseSucceeded {
+			passed = append(passed, restore)
+		} else {
+			failed = append(failed, restore)
+		}
+	}
+
+	kept := map[string]bool{}
+
+	for _, group := range []struct {
+		restores []*restorev1alpha1.Restore
+		limit    int
+	}{
+		{passed, historyLimit(test.Spec.SuccessfulRunsHistoryLimit)},
+		{failed, historyLimit(test.Spec.FailedRunsHistoryLimit)},
+	} {
+		sort.Slice(group.restores, func(i, j int) bool {
+			a, b := group.restores[i], group.restores[j]
+			if !a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+				return a.CreationTimestamp.After(b.CreationTimestamp.Time)
+			}
+
+			return a.Name > b.Name
+		})
+
+		for i, restore := range group.restores {
+			if i < group.limit {
+				kept[restore.Name] = true
+
+				continue
+			}
+
+			if err := client.IgnoreNotFound(r.Delete(ctx, restore)); err != nil {
+				return err
+			}
+		}
+	}
+
+	retained := test.Status.RetainedResources[:0]
+
+	for _, name := range test.Status.RetainedResources {
+		if kept[name] {
+			retained = append(retained, name)
+		}
+	}
+
+	test.Status.RetainedResources = retained
+
+	return nil
 }
 
 // deleteEarlierAttempts deletes the other Restores of the run. Their finalizer removes the retained objects.
@@ -363,7 +439,7 @@ func (r *RestoreTestReconciler) runTriggers(ctx context.Context, test *restorev1
 	}
 
 	// Another trigger may be due. Check again right away.
-	return ctrl.Result{Requeue: true}, nil //nolint:staticcheck // immediate requeue; RequeueAfter has no zero-delay form
+	return ctrl.Result{Requeue: true}, nil //nolint:staticcheck // immediate requeue, RequeueAfter has no zero-delay form
 }
 
 // nextTrigger returns the first due trigger, or nil. It also returns how long to wait for the next one, zero for none.
@@ -717,7 +793,7 @@ func (r *RestoreTestReconciler) createRestore(
 		b := backups[src.SourcePVC]
 		rs := restorev1alpha1.RestoreSource{
 			SourcePVC:     src.SourcePVC,
-			BackupRef:     restorev1alpha1.BackupRef{Name: b.Name, Namespace: test.Namespace},
+			BackupRef:     restorev1alpha1.BackupRef{Name: b.Name},
 			RestoreTarget: src.RestoreTarget,
 		}
 

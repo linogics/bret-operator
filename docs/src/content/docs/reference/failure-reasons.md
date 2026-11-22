@@ -18,7 +18,7 @@ on [Metrics and events](/reference/metrics-and-events/).
 
 | Ends the `Restore` as `Failed` | Waits and retries on its own | Blocks the `RestoreTest` |
 |---|---|---|
-| `SourceMissing`, `SourceMismatch`, `BackupUnsupported`, `RestoredVolumeMissing`, `RepositoryMissing`, `CheckRefMissing`, `SizeUnknown`, `InsufficientCapacity`, `RestoreFailed`, `ProviderUnsupported` (Velero check) | `CheckNotFound`, `CheckUnsupported`, `ProviderUnsupported` (provider disabled), `RestoreNameInUse` | `BackupNotFound`, `BackupSelectorAmbiguous`, `InvalidCron`, `ProviderUnsupported`, `SourceMissing` |
+| `SourceMissing`, `SourceMismatch`, `BackupUnsupported`, `RestoredVolumeMissing`, `RepositoryMissing`, `CheckRefMissing`, `SizeUnknown`, `InsufficientCapacity`, `RestoreFailed`, `ProviderUnsupported` | `CheckNotFound`, `CheckUnsupported`, `RestoreNameInUse` | `BackupNotFound`, `BackupSelectorAmbiguous`, `InvalidCron`, `ProviderUnsupported`, `SourceMissing` |
 
 A `Failed` attempt of a `RestoreTest` is retried until `retries.count` runs out. Fix the cause
 first, or every retry fails the same way. `RestoreCanceled` ends the attempt as `Canceled` and
@@ -92,12 +92,12 @@ is not retried.
 
 - **Shows on:** `Restore` or `RestoreTest` `Ready=False`.
 - **Means:** one of two things.
-  - The provider of `spec.provider` is disabled in the chart (`providers.<name>.enabled`). The
-    object waits.
+  - The provider of `spec.provider` is disabled in the chart (`providers.<name>.enabled`). A
+    `Restore` ends `Failed`. A `RestoreTest` waits and starts no run.
   - Velero: the check uses `serviceAccountName`, `hostPath`, or a configMap, secret, projected or
     persistentVolumeClaim volume. Those do not work in the scratch namespace. The `Restore` ends
     `Failed`.
-- **Fix:** enable the provider, or pass Secrets to a Velero check with `env` or `envFrom`. See
+- **Fix:** enable the provider and recreate the `Restore`, or pass Secrets to a Velero check with `env` or `envFrom`. See
   [Velero limitations](/providers/velero/limitations/).
 
 ## `RepositoryMissing`

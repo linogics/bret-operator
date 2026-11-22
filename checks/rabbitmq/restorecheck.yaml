@@ -34,7 +34,7 @@ spec:
           # Start the broker in the background and stop it on exit.
           rabbitmq-server -detached
           trap 'rabbitmqctl stop >/dev/null 2>&1 || true' EXIT
-          # Epmd registration lags the detach; wait for the node to answer before the CLI calls.
+          # Epmd registration lags the detach. Wait for the node to answer before the CLI calls.
           for i in $(seq 1 120); do
             rabbitmq-diagnostics -q ping >/dev/null 2>&1 && break
             sleep 1

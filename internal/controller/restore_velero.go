@@ -266,6 +266,29 @@ func veleroScratchNamespace(restore *restorev1alpha1.Restore) *corev1.Namespace 
 	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: veleroScratchName(restore)}}
 }
 
+// ownsScratch reports whether the scratch namespace belongs to the Restore. It does when it carries the restore
+// label, or when the Velero Restore of the Restore still exists. Velero creates the namespace without a label,
+// and a Velero restore that failed early leaves it unlabeled.
+func (r *RestoreReconciler) ownsScratch(ctx context.Context, restore *restorev1alpha1.Restore) (bool, error) {
+	ns := veleroScratchNamespace(restore)
+
+	if err := r.getObject(ctx, ns); err != nil {
+		return false, ignoreUncleanable(err)
+	}
+
+	if ns.Labels[restoreLabel] == restore.Name {
+		return true, nil
+	}
+
+	vr := r.veleroStub(restore)
+
+	if err := r.getObject(ctx, vr); err != nil {
+		return false, ignoreUncleanable(err)
+	}
+
+	return vr.GetLabels()[restoreLabel] == restore.Name, nil
+}
+
 // reconcileVelero creates the Velero Restore. It runs the check pod in the scratch namespace once Velero completes.
 func (r *RestoreReconciler) reconcileVelero(
 	ctx context.Context,
@@ -396,6 +419,7 @@ func (r *RestoreReconciler) checkVelero(
 
 // copyPodSecurity puts the pod-security labels of the Restore namespace on the scratch namespace.
 // The check pod then runs under the same admission rules as in the tenant namespace.
+// It also labels the namespace with the Restore, which marks it as ours for cleanup.
 func (r *RestoreReconciler) copyPodSecurity(ctx context.Context, restore *restorev1alpha1.Restore, scratch *corev1.Namespace) error {
 	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: restore.Namespace}}
 	if err := r.getObject(ctx, tenant); err != nil {
@@ -404,13 +428,15 @@ func (r *RestoreReconciler) copyPodSecurity(ctx context.Context, restore *restor
 
 	base := scratch.DeepCopy()
 
+	if scratch.Labels == nil {
+		scratch.Labels = map[string]string{}
+	}
+
+	scratch.Labels[restoreLabel] = restore.Name
+
 	for k, v := range tenant.Labels {
 		if !strings.HasPrefix(k, podSecurityPrefix) {
 			continue
-		}
-
-		if scratch.Labels == nil {
-			scratch.Labels = map[string]string{}
 		}
 
 		scratch.Labels[k] = v

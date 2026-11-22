@@ -483,7 +483,7 @@ func TestVeleroClaimsUseAPIReader(t *testing.T) {
 	c, r, restore := completedVelero(t, veleroTwoVolumeCheck())
 	ctx := context.Background()
 
-	// The claims exist only for the API reader; the cache client never sees them.
+	// The claims exist only for the API reader. The cache client never sees them.
 	other, _ := fakeRestoreClient(t)
 
 	for _, n := range []string{htmlName, testPGData} {
@@ -498,5 +498,46 @@ func TestVeleroClaimsUseAPIReader(t *testing.T) {
 
 	if err := c.Get(ctx, client.ObjectKey{Name: checkPodName(restore), Namespace: veleroScratchName(restore)}, &corev1.Pod{}); err != nil {
 		t.Fatalf("check pod not created from API reader claims: %v", err)
+	}
+}
+
+func TestOwnsScratch(t *testing.T) {
+	ctx := context.Background()
+	restore := newTestRestore()
+	restore.Spec.Provider = restorev1alpha1.ProviderVelero
+
+	c, r := fakeRestoreClient(t, restore, veleroScratchNamespace(restore))
+
+	if owned, err := r.ownsScratch(ctx, restore); err != nil || owned {
+		t.Fatalf("unlabeled namespace without a Velero Restore: owned %v, %v, want false", owned, err)
+	}
+
+	if err := c.Create(ctx, r.veleroRestoreObject(restore)); err != nil {
+		t.Fatal(err)
+	}
+
+	if owned, err := r.ownsScratch(ctx, restore); err != nil || !owned {
+		t.Fatalf("namespace of our Velero Restore: owned %v, %v, want true", owned, err)
+	}
+}
+
+func TestCopyPodSecurityLabelsScratch(t *testing.T) {
+	ctx := context.Background()
+	restore := newTestRestore()
+	scratch := veleroScratchNamespace(restore)
+
+	c, r := fakeRestoreClient(t, restore, scratch, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}})
+
+	if err := r.copyPodSecurity(ctx, restore, scratch); err != nil {
+		t.Fatal(err)
+	}
+
+	stored := &corev1.Namespace{}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(scratch), stored); err != nil {
+		t.Fatal(err)
+	}
+
+	if stored.Labels[restoreLabel] != restore.Name {
+		t.Fatalf("labels = %v, want %s=%s", stored.Labels, restoreLabel, restore.Name)
 	}
 }

@@ -251,14 +251,27 @@ Default `false`. When `true` and the last attempt failed, the operator keeps:
 - the scratch volume, so the restored data stays readable.
 
 The kept objects get the label `bret.linogics.io/retained: "true"`. The `RestoreTest` lists them
-in `status.retainedResources`. The operator does not remove them automatically. v1 has no TTL
-(`retainedFor` is not implemented). Inspect them, then delete the `Restore`. Its finalizer deletes
-the check pod, the provider objects, the Velero scratch namespace and the PVCs.
+in `status.retainedResources`. They stay until `failedRunsHistoryLimit` prunes their `Restore`, or
+until you delete it. v1 has no TTL (`retainedFor` is not implemented). Inspect them, then delete
+the `Restore`. Its finalizer deletes the check pod, the provider objects, the Velero scratch
+namespace and the PVCs.
 
 When the run settles, the operator removes earlier failed attempts. Only the last attempt is kept.
 
 Turn it on for a check that you still debug. Leave it off in a long-running schedule. Otherwise,
-failed runs pile up volumes.
+failed runs keep up to `failedRunsHistoryLimit` sets of volumes.
+
+### History limits
+
+Every finished run leaves its `Restore` behind. The operator keeps the newest ones and deletes the
+older ones, like a `CronJob` does with its Jobs.
+
+| Field | Default | Keeps |
+|---|---|---|
+| `successfulRunsHistoryLimit` | `3` | `Restore` objects of passed runs |
+| `failedRunsHistoryLimit` | `3` | `Restore` objects of failed or canceled runs, with the objects `keepOnFailure` kept |
+
+`0` keeps none. Pruning runs each time a run settles.
 
 ### overlapPolicy
 

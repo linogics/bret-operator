@@ -93,7 +93,8 @@ Setup that applies to all three (CSI snapshots, S3, point in time, throttling) i
 
 All three work with the same check. The check does not care which tool made the data.
 
-A `Restore` or `RestoreTest` for a disabled provider stops with reason `ProviderUnsupported`.
+A `Restore` for a disabled provider ends `Failed` with reason `ProviderUnsupported`. A
+`RestoreTest` for it waits with that reason and starts no run.
 
 ## The walkthrough example
 

@@ -116,6 +116,15 @@ type RestoreTestSpec struct {
 	// OverlapPolicy decides what happens when a trigger fires during a run.
 	// +kubebuilder:default=Skip
 	OverlapPolicy OverlapPolicy `json:"overlapPolicy,omitempty"`
+	// SuccessfulRunsHistoryLimit is how many Restores of passed runs are kept. Older ones are deleted.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=3
+	SuccessfulRunsHistoryLimit *int32 `json:"successfulRunsHistoryLimit,omitempty"`
+	// FailedRunsHistoryLimit is how many Restores of failed or canceled runs are kept. Older ones are deleted,
+	// together with the objects they retained.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=3
+	FailedRunsHistoryLimit *int32 `json:"failedRunsHistoryLimit,omitempty"`
 }
 
 // LastRun records the outcome of the most recent run.
@@ -150,7 +159,8 @@ type RestoreTestStatus struct {
 	// +listType=map
 	// +listMapKey=sourcePVC
 	LastHandledBackups []HandledBackup `json:"lastHandledBackups,omitempty"`
-	// RetainedResources lists objects kept after a failed run. They help debugging.
+	// RetainedResources lists the Restores whose objects were kept after a failed run. They help debugging.
+	// A Restore that no longer exists is dropped from the list.
 	RetainedResources []string `json:"retainedResources,omitempty"`
 	// CurrentRestore is the Restore of the run in progress. It is empty when no run is in progress.
 	CurrentRestore string `json:"currentRestore,omitempty"`

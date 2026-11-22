@@ -46,7 +46,7 @@ func matchSources(restore *restorev1alpha1.Restore, bp *restorev1alpha1.RestoreC
 		parts = append(parts, fmt.Sprintf("Restore sources %s are not restored volumes of check %s", strings.Join(extra, ", "), bp.Name))
 	}
 
-	return errors.New(strings.Join(parts, "; "))
+	return errors.New(strings.Join(parts, ". "))
 }
 
 // without returns the entries of a that b does not contain.

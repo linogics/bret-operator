@@ -24,6 +24,7 @@ type ScratchVolume struct {
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
 	Name string `json:"name"`
 	// MountPath is where the scratch volume is mounted in every container.
+	// +kubebuilder:validation:MinLength=1
 	MountPath string `json:"mountPath"`
 	// StorageClassName is the storage class for the scratch PVC. Empty means the cluster default.
 	StorageClassName string `json:"storageClassName,omitempty"`
@@ -44,6 +45,8 @@ type RestoreCheckSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	Containers []corev1.Container `json:"containers"`
 	// ScratchVolumes are PVCs created for each attempt. They provide staging space and are deleted after the attempt.
+	// +listType=map
+	// +listMapKey=name
 	ScratchVolumes []ScratchVolume `json:"scratchVolumes,omitempty"`
 	// Volumes are extra volumes for the check pod. For example, ConfigMaps or Secrets.
 	Volumes []corev1.Volume `json:"volumes,omitempty"`

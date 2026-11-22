@@ -58,6 +58,10 @@ func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
 		}
 	}
 
+	if err := validateVolumeNames(bp); err != nil {
+		return err
+	}
+
 	mounts := map[string]bool{}
 
 	paths := make([]string, 0, len(bp.Spec.RestoredVolumes)+len(bp.Spec.ScratchVolumes))
@@ -70,6 +74,10 @@ func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
 	}
 
 	for _, p := range paths {
+		if p == "" {
+			return fmt.Errorf("check %s: a restored or scratch volume has no mountPath", bp.Name)
+		}
+
 		if mounts[p] {
 			return fmt.Errorf("check %s: mountPath %q is used twice", bp.Name, p)
 		}
@@ -83,8 +91,44 @@ func validateCheck(bp *restorev1alpha1.RestoreCheck) error {
 
 	for _, v := range bp.Spec.Volumes {
 		if v.HostPath != nil {
-			return fmt.Errorf("check %s: volume %q is a hostPath; set annotation %s=\"true\" to allow it",
+			return fmt.Errorf("check %s: volume %q is a hostPath. Set annotation %s=\"true\" to allow it",
 				bp.Name, v.Name, allowHostPathAnnotation)
+		}
+	}
+
+	return nil
+}
+
+// validateVolumeNames rejects pod volume names that are used twice. The pod holds the generated
+// restored and scratch volumes next to spec.volumes, so a clash would only fail at pod creation.
+func validateVolumeNames(bp *restorev1alpha1.RestoreCheck) error {
+	names := make(map[string]string, len(bp.Spec.RestoredVolumes)+len(bp.Spec.ScratchVolumes)+len(bp.Spec.Volumes))
+
+	add := func(name, owner string) error {
+		if prev, ok := names[name]; ok {
+			return fmt.Errorf("check %s: volume name %q of %s clashes with %s", bp.Name, name, owner, prev)
+		}
+
+		names[name] = owner
+
+		return nil
+	}
+
+	for _, rv := range bp.Spec.RestoredVolumes {
+		if err := add(restoredVolumeName(rv.SourcePVC), "restored volume "+rv.SourcePVC); err != nil {
+			return err
+		}
+	}
+
+	for _, sv := range bp.Spec.ScratchVolumes {
+		if err := add("scratch-"+dnsLabel(sv.Name), "scratch volume "+sv.Name); err != nil {
+			return err
+		}
+	}
+
+	for _, v := range bp.Spec.Volumes {
+		if err := add(v.Name, "spec.volumes"); err != nil {
+			return err
 		}
 	}
 

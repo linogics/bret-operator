@@ -174,31 +174,6 @@ func TestVolSyncRestoreSizeUnknownFails(t *testing.T) {
 	}
 }
 
-func TestVolSyncSourceInBackupNamespace(t *testing.T) {
-	restore := volsyncTestRestore()
-	restore.Spec.Sources[0].BackupRef.Namespace = "backups"
-
-	src := volsyncSource()
-	src.SetNamespace("backups")
-	_ = unstructured.SetNestedField(src.Object, testDataName, "spec", "sourcePVC")
-
-	pvc := &corev1.PersistentVolumeClaim{}
-	pvc.Namespace, pvc.Name = "backups", testDataName // none in the Restore namespace
-	pvc.Spec.Resources.Requests = corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("2Gi")}
-
-	_, r := fakeRestoreClient(t, restore, src, pvc, volsyncSecret())
-
-	size, err := r.sourceSize(context.Background(), restore, restore.Spec.Sources[0])
-	if err != nil || size == nil || size.Cmp(resource.MustParse("2Gi")) != 0 {
-		t.Fatalf("sourceSize = %v, %v; want 2Gi", size, err)
-	}
-
-	repo, _, err := r.volsyncRepository(context.Background(), restore, restore.Spec.Sources[0])
-	if err != nil || repo != testRepoSecret {
-		t.Fatalf("volsyncRepository = %q, %v; want repo-secret", repo, err)
-	}
-}
-
 func twoVolSyncSources() (restore *restorev1alpha1.Restore, objs []client.Object) {
 	restore = twoSourceRestore()
 	restore.Spec.Provider = restorev1alpha1.ProviderVolSync

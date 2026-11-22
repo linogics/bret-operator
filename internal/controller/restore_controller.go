@@ -148,7 +148,9 @@ func (r *RestoreReconciler) finalize(ctx context.Context, restore *restorev1alph
 
 // advance runs one step of the attempt and reports how the reconciler should be requeued.
 func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha1.Restore) (ctrl.Result, error) {
+	// Enabling a provider restarts the operator, so waiting would not help. The attempt fails visibly instead.
 	if !r.providerEnabled(restore.Spec.Provider) {
+		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
 		r.block(restore, reasonProviderUnsupported, fmt.Sprintf("provider %s is disabled or not supported", restore.Spec.Provider))
 
 		return ctrl.Result{}, nil
@@ -156,7 +158,7 @@ func (r *RestoreReconciler) advance(ctx context.Context, restore *restorev1alpha
 
 	if len(restore.Spec.Sources) == 0 {
 		restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
-		r.block(restore, reasonSourceMissing, "the Restore has no sources; recreate it in the new shape")
+		r.block(restore, reasonSourceMissing, "the Restore has no sources. Recreate it in the new shape")
 
 		return ctrl.Result{}, nil
 	}
@@ -378,7 +380,8 @@ func (r *RestoreReconciler) check(
 	if err != nil {
 		r.block(restore, reasonCheckUnsupported, err.Error())
 
-		return ctrl.Result{}, nil
+		// Pods are not watched. The requeue picks up a fixed check or runs into the deadline.
+		return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
 	}
 
 	pod.Namespace = namespace
@@ -411,9 +414,10 @@ func (r *RestoreReconciler) finishedCheck(ctx context.Context, restore *restorev
 	}
 
 	for _, ns := range namespaces {
-		pod := &corev1.Pod{}
+		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: checkPodName(restore)}}
 
-		err := r.Get(ctx, client.ObjectKey{Namespace: ns, Name: checkPodName(restore)}, pod)
+		// The API reader starts no cluster-wide Pod informer.
+		err := r.getObject(ctx, pod)
 		if apierrors.IsNotFound(err) || err == nil && pod.Labels[restoreLabel] != restore.Name {
 			continue
 		}

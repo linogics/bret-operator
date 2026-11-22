@@ -54,6 +54,14 @@ spec:
           spec:
             description: Spec is the desired state of the test.
             properties:
+              failedRunsHistoryLimit:
+                default: 3
+                description: |-
+                  FailedRunsHistoryLimit is how many Restores of failed or canceled runs are kept. Older ones are deleted,
+                  together with the objects they retained.
+                format: int32
+                minimum: 0
+                type: integer
               keepOnFailure:
                 default: false
                 description: KeepOnFailure keeps the check pod and restore objects
@@ -194,6 +202,13 @@ spec:
                 x-kubernetes-list-map-keys:
                 - sourcePVC
                 x-kubernetes-list-type: map
+              successfulRunsHistoryLimit:
+                default: 3
+                description: SuccessfulRunsHistoryLimit is how many Restores of passed
+                  runs are kept. Older ones are deleted.
+                format: int32
+                minimum: 0
+                type: integer
               triggers:
                 description: Triggers defines what starts a run.
                 properties:
@@ -496,8 +511,9 @@ spec:
                   run. It keeps the name of the queued Restore stable across reconciles.
                 type: string
               retainedResources:
-                description: RetainedResources lists objects kept after a failed run.
-                  They help debugging.
+                description: |-
+                  RetainedResources lists the Restores whose objects were kept after a failed run. They help debugging.
+                  A Restore that no longer exists is dropped from the list.
                 items:
                   type: string
                 type: array

@@ -71,12 +71,12 @@ func volsyncDestinationObject(restore *restorev1alpha1.Restore, src restorev1alp
 }
 
 // volsyncRepository is the restic repository Secret name of the backup's ReplicationSource, and the PVC it backs up.
-// It is read in the backup namespace only. The Secret must exist in the Restore namespace.
+// Both are read in the Restore namespace only.
 // An empty repo means the source is not there. An empty sourcePVC means the source does not name one.
 func (r *RestoreReconciler) volsyncRepository(ctx context.Context, restore *restorev1alpha1.Restore, src restorev1alpha1.RestoreSource) (repo, sourcePVC string, err error) {
 	rs := &unstructured.Unstructured{}
 	rs.SetGroupVersionKind(replicationSourceGVK)
-	rs.SetNamespace(backupNamespace(restore, src))
+	rs.SetNamespace(restore.Namespace)
 	rs.SetName(src.BackupRef.Name)
 
 	if err := r.getObject(ctx, rs); err != nil {
@@ -142,7 +142,7 @@ func (r *RestoreReconciler) reconcileVolSync(
 
 		if sourcePVC != "" && sourcePVC != src.SourcePVC {
 			restore.Status.Phase = restorev1alpha1.RestorePhaseFailed
-			r.block(restore, reasonSourceMismatch, fmt.Sprintf("ReplicationSource %s/%s backs up PVC %q, but the source is %q", backupNamespace(restore, src), src.BackupRef.Name, sourcePVC, src.SourcePVC))
+			r.block(restore, reasonSourceMismatch, fmt.Sprintf("ReplicationSource %s/%s backs up PVC %q, but the source is %q", restore.Namespace, src.BackupRef.Name, sourcePVC, src.SourcePVC))
 
 			return ctrl.Result{}, nil
 		}

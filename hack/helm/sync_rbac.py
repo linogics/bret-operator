@@ -77,7 +77,7 @@ metadata:
 """
     )
     # Namespaces and events stay cluster-wide. Pods and PVCs are cluster-wide only with Velero on,
-    # because its scratch namespaces are not watched; otherwise they move to the per-namespace Roles.
+    # because its scratch namespaces are not watched. Otherwise they move to the per-namespace Roles.
     # controller-gen merges the secrets rights of VolSync and Velero into one rule. The Velero rule copies
     # into the unwatched scratch namespace, so it stays cluster-wide. VolSync only reads the repository
     # secret, so it gets its own get rule that goes with the cluster-wide rules or the per-namespace Roles.
