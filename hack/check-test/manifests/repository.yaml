@@ -1,0 +1,23 @@
+# Kopiur repository of the harness. roundtrip.sh sets the prefix per app.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: primary
+spec:
+  backend:
+    s3:
+      bucket: kopiur
+      prefix: bpt/
+      endpoint: versitygw.storage.svc.cluster.local:7070
+      region: us-east-1
+      tls:
+        disableTls: true
+      auth:
+        secretRef:
+          name: kopiur-repo-creds
+  encryption:
+    passwordSecretRef:
+      name: kopiur-repo-creds
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true

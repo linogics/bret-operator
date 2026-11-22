@@ -1,0 +1,14 @@
+# One Kopiur Restore per volume. roundtrip.sh sets the name, the snapshot and the mover.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: r-volume
+spec:
+  source:
+    snapshotRef:
+      name: volume-1
+  target:
+    populator: {}
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 5m

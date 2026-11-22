@@ -1,0 +1,16 @@
+# The PVC the Kopiur Restore populates. roundtrip.sh sets the name, the size and the Restore.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: r-volume
+spec:
+  storageClassName: csi-hostpath-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  dataSourceRef:
+    apiGroup: kopiur.home-operations.com
+    kind: Restore
+    name: r-volume

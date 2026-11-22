@@ -23,9 +23,10 @@ controllers, so you can test today.
 - A Kubernetes cluster that you can change. Do not run the harness against production.
 - `kubectl`, `python3` with PyYAML.
 - Kopiur installed, and an S3-compatible endpoint for its repository. The harness uses the
-  endpoint and credentials written in `roundtrip.sh`. Change them for your environment.
+  endpoint in `hack/check-test/manifests/repository.yaml` and the credentials in `roundtrip.sh`.
+  Change them for your environment.
 - A `VolumeSnapshotClass` named `csi-hostpath-snapclass` and a `StorageClass` named
-  `csi-hostpath-sc`. Change the names in `roundtrip.sh` and the seeds if yours differ.
+  `csi-hostpath-sc`. Change the names in `hack/check-test/manifests/` and the seeds if yours differ.
 - The test cluster setup is described in
   [Development](/contributing/development/) for the local setup.
 

@@ -56,106 +56,67 @@ cleanup() {
 	fi
 }
 
-apply_yaml() {
-	kubectl -n "$ns" apply -f - >/dev/null
+manifests=hack/check-test/manifests
+
+# Applies a static manifest with a JSON merge patch. The patch sets the values of one volume.
+apply_patched() {
+	local file=$1 patch=$2
+
+	kubectl patch --local -f "$manifests/$file" --type=merge -p "$patch" -o yaml \
+		| kubectl -n "$ns" apply -f - >/dev/null
 }
 
 kopiur_repo() {
-	cat <<-YAML
-		apiVersion: v1
-		kind: Secret
-		metadata: {name: kopiur-repo-creds}
-		type: Opaque
-		stringData:
-		  AWS_ACCESS_KEY_ID: "AKIDSPIKE"
-		  AWS_SECRET_ACCESS_KEY: "SECRETSPIKE12345"
-		  KOPIA_PASSWORD: "spike-kopia-pass"
-		---
-		apiVersion: kopiur.home-operations.com/v1alpha1
-		kind: Repository
-		metadata: {name: primary}
-		spec:
-		  backend:
-		    s3:
-		      bucket: kopiur
-		      prefix: bpt/$app/
-		      endpoint: versitygw.storage.svc.cluster.local:7070
-		      region: us-east-1
-		      tls: {disableTls: true}
-		      auth: {secretRef: {name: kopiur-repo-creds}}
-		  encryption:
-		    passwordSecretRef: {name: kopiur-repo-creds, key: KOPIA_PASSWORD}
-		  create: {enabled: true}
-	YAML
+	kubectl -n "$ns" create secret generic kopiur-repo-creds \
+		--from-literal=AWS_ACCESS_KEY_ID=AKIDSPIKE \
+		--from-literal=AWS_SECRET_ACCESS_KEY=SECRETSPIKE12345 \
+		--from-literal=KOPIA_PASSWORD=spike-kopia-pass >/dev/null || return 1
+
+	apply_patched repository.yaml \
+		"{\"spec\":{\"backend\":{\"s3\":{\"prefix\":\"bpt/$app/\"}}}}"
 }
 
 kopiur_policy() {
-	# args: volume key, mover block (may be empty)
-	cat <<-YAML
-		apiVersion: kopiur.home-operations.com/v1alpha1
-		kind: SnapshotPolicy
-		metadata: {name: $1}
-		spec:
-		  repository: {kind: Repository, name: primary}
-		  sources:
-		    - pvc: {name: $1}
-		  copyMethod: Snapshot
-		  volumeSnapshotClassName: csi-hostpath-snapclass
-		  retention: {keepDaily: 1}
-		$2
-	YAML
+	# args: volume key, mover patch (may be null)
+	apply_patched snapshotpolicy.yaml \
+		"{\"metadata\":{\"name\":\"$1\"},\"spec\":{\"sources\":[{\"pvc\":{\"name\":\"$1\"}}],\"mover\":$2}}"
 }
 
 kopiur_snapshot() {
 	# args: volume key
-	cat <<-YAML
-		apiVersion: kopiur.home-operations.com/v1alpha1
-		kind: Snapshot
-		metadata: {name: $1-1}
-		spec: {policyRef: {name: $1}, deletionPolicy: Retain}
-	YAML
+	apply_patched snapshot.yaml \
+		"{\"metadata\":{\"name\":\"$1-1\"},\"spec\":{\"policyRef\":{\"name\":\"$1\"}}}"
 }
 
 kopiur_restore() {
-	# args: volume key, size, mover block (may be empty)
-	cat <<-YAML
-		apiVersion: kopiur.home-operations.com/v1alpha1
-		kind: Restore
-		metadata: {name: r-$1}
-		spec:
-		  source: {snapshotRef: {name: $1-1, namespace: $ns}}
-		  target: {populator: {}}
-		$3
-		  policy: {onMissingSnapshot: Fail, waitTimeout: 5m}
-		---
-		apiVersion: v1
-		kind: PersistentVolumeClaim
-		metadata: {name: r-$1}
-		spec:
-		  storageClassName: csi-hostpath-sc
-		  accessModes: ["ReadWriteOnce"]
-		  resources: {requests: {storage: $2}}
-		  dataSourceRef: {apiGroup: kopiur.home-operations.com, kind: Restore, name: r-$1}
-	YAML
+	# args: volume key, size, mover patch (may be null)
+	apply_patched restore.yaml \
+		"{\"metadata\":{\"name\":\"r-$1\"},\"spec\":{\"source\":{\"snapshotRef\":{\"name\":\"$1-1\",\"namespace\":\"$ns\"}},\"mover\":$3}}" \
+		|| return 1
+
+	apply_patched restored-pvc.yaml \
+		"{\"metadata\":{\"name\":\"r-$1\"},\"spec\":{\"resources\":{\"requests\":{\"storage\":\"$2\"}},\"dataSourceRef\":{\"name\":\"r-$1\"}}}"
 }
 
-mover_block() {
-	# args: uid, kind (policy or restore). Prints nothing when uid is empty.
+mover_patch() {
+	# args: uid, kind (policy or restore). Prints null when uid is empty, which leaves the mover unset.
 	local uid=$1 kind=$2 sc
 
 	if [[ -z $uid ]]; then
+		echo null
+
 		return 0
 	fi
 
-	sc="runAsUser: $uid, runAsGroup: $uid, runAsNonRoot: true"
+	sc="{\"runAsUser\":$uid,\"runAsGroup\":$uid,\"runAsNonRoot\":true}"
 
 	if [[ $kind == restore ]]; then
-		echo "  mover: {securityContext: {$sc}, podSecurityContext: {fsGroup: $uid}}"
+		echo "{\"securityContext\":$sc,\"podSecurityContext\":{\"fsGroup\":$uid}}"
 
 		return 0
 	fi
 
-	echo "  mover: {securityContext: {$sc}}"
+	echo "{\"securityContext\":$sc}"
 }
 
 main() {
@@ -176,11 +137,11 @@ main() {
 	done
 
 	# 1. Repository and one SnapshotPolicy per volume.
-	kopiur_repo | apply_yaml
+	kopiur_repo || return 1
 
 	for k in "${keys[@]}"; do
 		uid=$(python3 "$render" "$bp" --uid "$k")
-		kopiur_policy "$k" "$(mover_block "$uid" policy)" | apply_yaml
+		kopiur_policy "$k" "$(mover_patch "$uid" policy)" || return 1
 	done
 
 	# 2. Seed the source data.
@@ -200,13 +161,13 @@ main() {
 		size=$(kubectl -n "$ns" get pvc "$k" \
 			-o jsonpath='{.spec.resources.requests.storage}')
 
-		kopiur_snapshot "$k" | apply_yaml
+		kopiur_snapshot "$k" || return 1
 		wait_jsonpath "$ns" "snapshot.$kopiur" "$k-1" '{.status.phase}' Succeeded \
 			|| return 1
 
 		uid=$(python3 "$render" "$bp" --uid "$k")
-		kopiur_restore "$k" "$size" "$(mover_block "$uid" restore)" \
-			| apply_yaml
+		kopiur_restore "$k" "$size" "$(mover_patch "$uid" restore)" \
+			|| return 1
 		wait_jsonpath "$ns" "restore.$kopiur" "r-$k" '{.status.phase}' Completed \
 			|| return 1
 		wait_jsonpath "$ns" pvc "r-$k" '{.status.phase}' Bound || return 1

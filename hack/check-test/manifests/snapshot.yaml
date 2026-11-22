@@ -1,0 +1,9 @@
+# One Snapshot per volume. roundtrip.sh sets the name and the policy.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: volume-1
+spec:
+  policyRef:
+    name: volume
+  deletionPolicy: Retain
