@@ -37,7 +37,7 @@ Images were checked against public registries where noted. A `TAG UNVERIFIED` ma
   The canary names are in each YAML header.
 - **Native sidecars.** DB servers that an app needs at check time run as `initContainers` with
   `restartPolicy: Always` and a `startupProbe`. They keep running while the `containers` checks run.
-  They require k8s 1.29+. A plain init container runs before the checks and exits; a native sidecar
+  They require k8s 1.29+. A plain init container runs before the checks and exits. A native sidecar
   does not.
 - **Secrets.** Checks read credentials from Secrets. Each YAML names its Secrets (`*-db`,
   `grafana-admin`, `n8n-secrets`). The operator or user must provision them with the source values.

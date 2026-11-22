@@ -32,7 +32,7 @@ spec:
     - sourcePVC: pgdata
       mountPath: /var/lib/postgresql/data
   initContainers: []                         # run first, in order
-  containers:                                # the checks; all must exit 0
+  containers:                                # the checks, all must exit 0
     - name: check
       image: nextcloud:29-apache
       command: ["/bin/sh", "-c", "php occ status && ..."]
